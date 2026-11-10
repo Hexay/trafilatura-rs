@@ -26,7 +26,9 @@ fn main() {
     cfg.define("LIBXML2_WITH_ICONV", "ON");
     if os == "windows" {
         let lib = build_win_iconv(msvc);
-        cfg.define("Iconv_INCLUDE_DIR", PathBuf::from("win-iconv").canonicalize().unwrap());
+        // Not canonicalize(): its \\?\ prefix breaks MSVC include paths.
+        let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+        cfg.define("Iconv_INCLUDE_DIR", manifest.join("win-iconv"));
         cfg.define("Iconv_LIBRARY", lib);
     }
     // Release = -O3 -DNDEBUG (no fast-math, so no behaviour change).
