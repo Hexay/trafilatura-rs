@@ -1,0 +1,15 @@
+#include <libxml/HTMLparser.h>
+#include <libxml/HTMLtree.h>
+#include <libxml/tree.h>
+#include <libxml/parser.h>
+#include <libxml/parserInternals.h>
+#include <libxml/SAX2.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
+#include <libxml/xmlsave.h>
+#include <libxml/xmlIO.h>
+#include <libxml/dict.h>
+#include <libxml/xmlstring.h>
+#include <libxml/encoding.h>
+#include <libxml/xmlmemory.h>
+#include <libxml/valid.h>

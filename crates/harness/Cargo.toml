@@ -1,0 +1,12 @@
+[package]
+name = "harness"
+description = "Parity harness: per-stage hashes / final outputs of the Rust port on the exported corpus"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+trafex = { path = "../trafex" }
+serde_json = "1"
+sha1_smol = "1"

@@ -1,0 +1,12 @@
+[package]
+name = "trafex"
+description = "Byte-exact Rust port of trafilatura's text extraction"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+libxml2-sys = { path = "../libxml2-sys" }
+regex = "1"
+aho-corasick = "1"
+unicode-normalization = "0.1"

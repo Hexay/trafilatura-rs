@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/libxml2-sys", "crates/trafex", "crates/harness", "crates/trafex-py"]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+version = "0.1.0"
+
+[profile.release]
+debug = 1
+lto = "fat"
+codegen-units = 1

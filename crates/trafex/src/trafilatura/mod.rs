@@ -1,0 +1,20 @@
+//! Port of trafilatura 1.11 (reference/trafilatura), one Rust module per Python module (large ones split by
+//! responsibility into `<module>_<part>`).
+pub mod baseline;
+mod baseline_json;
+pub mod core;
+pub mod deduplication;
+pub mod external;
+pub mod htmlprocessing;
+pub mod htmlprocessing_convert;
+pub mod main_extractor;
+pub mod main_extractor_extract;
+pub mod main_extractor_lists;
+pub mod main_extractor_table;
+pub mod settings;
+mod tables;
+pub mod text;
+pub mod utils;
+pub mod xml;
+pub(crate) mod xml_unescape;
+pub mod xpaths;

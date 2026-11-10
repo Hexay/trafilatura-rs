@@ -1,0 +1,11 @@
+[package]
+name = "libxml2-sys"
+description = "Static libxml2 2.14.6 (the version lxml 6.1.3 bundles) with raw bindings"
+edition.workspace = true
+license = "MIT"
+version.workspace = true
+links = "xml2"
+build = "build.rs"
+
+[build-dependencies]
+cmake = "0.1"
