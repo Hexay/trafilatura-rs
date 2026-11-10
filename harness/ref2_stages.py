@@ -1,4 +1,4 @@
-"""Reference outputs from Python trafilatura 2.2.0 (~/work/t22venv) for the trafilatura2 parity harness.
+"""Reference outputs from Python trafilatura 2.2.0 (.venv-t22) for the trafilatura2 parity harness.
   ref2_stages.py stages docs.jsonl out.jsonl [cfg]        per-doc sha1 of each trafilatura_sequence stage (dedup off)
   ref2_stages.py final docs.jsonl out.jsonl [cfg]         extract() as in ref_stages.py (doc order, dedup per cfg)
   ref2_stages.py show docs.jsonl <i> <stage> [cfg]        print one stage's full serialization

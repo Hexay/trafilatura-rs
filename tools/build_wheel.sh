@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# On testbox: profile-guided abi3 wheel (tools/pgo.sh trains on the corpus and leaves /tmp/pgo.profdata; the
-# profile covers the trafex crate the extension module links). Output: ~/work/trafex/target/wheels/.
+# Release abi3 wheel into target/wheels/. PGO=1 first runs tools/pgo.sh and builds with its profile.
 set -euo pipefail
-cd ~/work/trafex
-bash tools/pgo.sh
-. ~/.cargo/env
-RUSTFLAGS="-Cprofile-use=/tmp/pgo.profdata" ~/work/amdahl/.venv/bin/maturin build --release -q
-ls -la target/wheels/
+. "$(dirname "$0")/env.sh"
+if [ "${PGO:-0}" = 1 ]; then
+  bash "$ROOT/tools/pgo.sh"
+  export RUSTFLAGS="-Cprofile-use=$D/pgo/pgo.profdata"
+fi
+(cd "$ROOT" && "$ROOT/.venv/bin/maturin" build --release -q)
+ls -la "$ROOT/target/wheels/"

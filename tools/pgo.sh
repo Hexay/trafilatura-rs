@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# On testbox: profile-guided build of the harness (Rust code only; libxml2 stays -O3). Trains on corpus docs
-# 5001-5600 (CC-MAIN-2023 half, disjoint from the 2885-doc benchmark), writes the binary to /tmp/h_pgo.
+# Profile-guided build of the harness (Rust code only; libxml2 stays -O3). Trains on corpus docs 5001-5600,
+# disjoint from the first 2885; leaves $D/pgo/pgo.profdata (used by tools/build_wheel.sh) and $D/pgo/harness.
+# RUSTFLAGS replaces the config's target rustflags, so these builds use the default linker.
 set -euo pipefail
-. ~/.cargo/env
-cd ~/work/trafex
-T=~/work/trafex-pgo-target
+. "$(dirname "$0")/env.sh"
+P=$D/pgo
+T=$ROOT/target/pgo
 PROF=$(ls "$(rustc --print sysroot)"/lib/rustlib/*/bin/llvm-profdata)
-rm -rf /tmp/pgo-data && mkdir -p /tmp/pgo-data
-sed -n 5001,5600p ~/work/trafex-data/docs.jsonl > /tmp/train.jsonl
-RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build -q --release -p harness --target-dir $T/gen
-taskset -c 11 $T/gen/release/harness bench /tmp/train.jsonl
-taskset -c 11 $T/gen/release/harness bench2 /tmp/train.jsonl
-"$PROF" merge -o /tmp/pgo.profdata /tmp/pgo-data
-RUSTFLAGS="-Cprofile-use=/tmp/pgo.profdata" cargo build -q --release -p harness --target-dir $T/use
-cp $T/use/release/harness /tmp/h_pgo
+rm -rf "$P" && mkdir -p "$P/raw"
+sed -n 5001,5600p "$D/docs.jsonl" > "$P/train.jsonl"
+RUSTFLAGS="-Cprofile-generate=$P/raw" cargo build -q --release -p harness --manifest-path "$ROOT/Cargo.toml" --target-dir "$T/gen"
+"$T/gen/release/harness" bench "$P/train.jsonl"
+"$T/gen/release/harness" bench2 "$P/train.jsonl"
+"$PROF" merge -o "$P/pgo.profdata" "$P/raw"
+RUSTFLAGS="-Cprofile-use=$P/pgo.profdata" cargo build -q --release -p harness --manifest-path "$ROOT/Cargo.toml" --target-dir "$T/use"
+cp "$T/use/release/harness" "$P/harness"
 echo PGODONE

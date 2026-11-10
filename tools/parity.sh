@@ -1,20 +1,44 @@
 #!/usr/bin/env bash
-# Sync, build, run the Rust harness on the corpus (CPU 5 under the shared lock) and compare with the reference.
-#   [LIMIT=N] tools/parity.sh [stages|final]      default: stages
-#   tools/parity.sh show <i> <stage>    diff one doc's stage output (reference vs Rust)
+# Rust outputs vs the tools/make_reference.sh references (build first: tools/dev.sh build). Usage:
+#   [LIMIT=N] tools/parity.sh [job ...]   job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | justext | readability
+#                                         default: every job; LIMIT compares only the first N docs
+#   tools/parity.sh show[2] <i> <stage> [cfg]   diff one doc's stage output (reference vs Rust)
+# TRAFEX_VERIFY_XPATH=1 cross-checks every fast-path XPath against libxml2 while running.
 set -euo pipefail
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-MODE=${1:-stages}
-"$ROOT/tools/dev.sh" cargo build --release -q -p harness 2>&1 | grep -E "^(error|warning)" -A6 || true
-D='~/work/trafex-data'
-PY='~/work/amdahl/.venv/bin/python'
-if [ "$MODE" = show ]; then
-  ssh testbox "cd ~/work/trafex && $PY harness/ref_stages.py show $D/docs.jsonl $2 $3 > /tmp/ref.out; \
-    target/release/harness show $D/docs.jsonl $2 $3 > /tmp/rust.out; diff <(fold -w 160 /tmp/ref.out) <(fold -w 160 /tmp/rust.out) | head -${LINES_MAX:-40}"
+. "$(dirname "$0")/env.sh"
+BIN=$(dirname "$H")
+DOCS=$D/docs.jsonl
+if [[ ${1:-} == show* ]]; then
+  ref=$ROOT/harness/ref_stages.py py=$PY
+  [ "$1" = show2 ] && ref=$ROOT/harness/ref2_stages.py py=$PY22
+  diff <("$py" "$ref" show "$DOCS" "${@:2}" 2>/dev/null | fold -w 160) <("$H" "$1" "$DOCS" "${@:2}" | fold -w 160) \
+    | head -n "${LINES_MAX:-40}" || true
   exit 0
 fi
-# LIMIT=N runs only the first N docs (compare.py compares the common subset).
-SRC="$D/docs.jsonl"
-[ -n "${LIMIT:-}" ] && SRC="<(head -n $LIMIT $D/docs.jsonl)"
-ssh testbox "cd ~/work/trafex && flock ~/bench-cpu5.lock taskset -c 5 target/release/harness $MODE $SRC $D/rust_$MODE.jsonl \
-  && $PY harness/compare.py $MODE $D/ref_$MODE.jsonl $D/rust_$MODE.jsonl"
+[ -n "${LIMIT:-}" ] && { head -n "$LIMIT" "$D/docs.jsonl" > "$D/docs_$LIMIT.jsonl"; DOCS=$D/docs_$LIMIT.jsonl; }
+
+run() {
+  local mode=${1%%:*} cfg=${1#*:}
+  [[ $1 == *:* ]] || cfg=
+  echo "== $1"
+  case $mode in
+    stages | final | stages2 | final2)
+      local tag=${mode%2}_$cfg ref=ref_
+      [[ $mode == *2 ]] && ref=ref2_
+      [ "$mode" = stages ] && tag=stages
+      "$H" "$mode" "$DOCS" "$D/rust${ref#ref}$tag.jsonl" $cfg
+      "$PY" "$ROOT/harness/compare.py" "$mode" "$D/$ref$tag.jsonl" "$D/rust${ref#ref}$tag.jsonl" ;;
+    justext | readability)
+      "$BIN/${mode}_parity" run "$DOCS" "$D/rust_$mode.jsonl"
+      "$PY" "$ROOT/harness/compare_$mode.py" "$D/ref_$mode.jsonl" "$D/rust_$mode.jsonl" ;;
+    *) echo "unknown job $1" >&2; return 2 ;;
+  esac
+}
+
+jobs=("$@")
+if [ ${#jobs[@]} -eq 0 ]; then
+  jobs=(stages justext readability stages2:balanced stages2:fineweb)
+  for c in "${CONFIGS[@]}"; do jobs+=("final:$c" "final2:$c"); done
+fi
+for j in "${jobs[@]}"; do run "$j"; done
+echo PARITYDONE

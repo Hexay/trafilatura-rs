@@ -1,30 +1,31 @@
-"""Write the parity corpus: every URLFilter-passing HTML record of the given WARCs as {"i", "url", "html"} JSONL.
-usage: export_docs.py out.jsonl a.warc.gz [b.warc.gz ...]"""
-import importlib.machinery
+"""Write the parity corpus: the first N URLFilter-passing HTML records of the given WARCs as {"i", "url", "html"} JSONL.
+usage: export_docs.py [--limit N] out.jsonl a.warc.gz [b.warc.gz ...]"""
+import argparse
 import json
-import sys
-import types
 from pathlib import Path
-
-# python-magic is only needed for records lacking WARC-Identified-Payload-Type; CC-MAIN records all have it.
-_magic = types.ModuleType("magic")
-_magic.__spec__ = importlib.machinery.ModuleSpec("magic", None)
-sys.modules.setdefault("magic", _magic)
 
 
 def main():
     from datatrove.pipeline.filters import URLFilter
     from datatrove.pipeline.readers import WarcReader
 
-    out, warcs = sys.argv[1], sys.argv[2:]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--limit", type=int, default=0, help="stop after N docs (0 = all)")
+    ap.add_argument("out")
+    ap.add_argument("warcs", nargs="+")
+    args = ap.parse_args()
     n = 0
-    with open(out, "w", encoding="utf-8") as f:
-        for warc in warcs:
+    with open(args.out, "w", encoding="utf-8") as f:
+        for warc in args.warcs:
             p = Path(warc).resolve()
             docs = URLFilter().run(WarcReader(str(p.parent), glob_pattern=p.name).run(None, 0, 1), 0, 1)
             for d in docs:
-                f.write(json.dumps({"i": n, "url": d.metadata.get("url"), "html": d.text}) + "\n")
+                f.write(json.dumps({"i": n, "url": d.metadata.get("url"), "id": d.id, "html": d.text}) + "\n")
                 n += 1
+                if n == args.limit:
+                    break
+            if n == args.limit:
+                break
     print(f"docs={n}")
 
 

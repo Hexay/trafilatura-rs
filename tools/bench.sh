@@ -1,28 +1,18 @@
 #!/usr/bin/env bash
-# On testbox: extraction time on the first N corpus docs (default 2885 = the CC-MAIN-2024 sample), CPU 5 under
-# the shared lock. Rust trafex vs stock trafilatura 1.11 vs trafilatura with the Python patches (research/).
-N=${1:-2885}
-D=~/work/trafex-data
-A=~/work/amdahl
-head -n "$N" $D/docs.jsonl > $D/bench_docs.jsonl
-run() { flock ~/bench-cpu5.lock taskset -c 5 "$@"; }
-echo "== rust"; run ~/work/trafex/target/release/harness bench $D/bench_docs.jsonl
-for mode in orig fused+lookup+readability; do
-  echo "== python $mode"
-  run $A/.venv/bin/python - "$mode" "$D/bench_docs.jsonl" <<'EOF' 2>&1 | grep -v -E "WARNING|INFO"
-import json, sys, time
-sys.path.insert(0, "/home/ubuntu/work/amdahl")
-import trafpatch
-trafpatch.apply(sys.argv[1])
-from trafilatura import extract
-pages = [json.loads(l)["html"] for l in open(sys.argv[2], encoding="utf-8")]
-t = time.perf_counter(); kept = 0
-for h in pages:
-    try:
-        kept += extract(h, favor_precision=True, include_comments=False, deduplicate=True) is not None
-    except Exception:
-        pass
-s = time.perf_counter() - t
-print(f"docs={len(pages)} kept={kept} extract={s:.2f}s = {1000*s/len(pages):.2f} ms/doc")
-EOF
+# Extraction benchmark on the first N corpus docs (default all): trafilatura 1.11 via datatrove's call, the same
+# call after trafex.install(), and rs-trafilatura. Measures per-doc CPU time and user-space instructions (perf
+# stat), never wall time; engines alternate within each of ROUNDS rounds so load drift on the shared box hits all.
+# Each run is a fresh process (trafilatura's dedup LRU is process-global). Usage: [ROUNDS=2] tools/bench.sh [N]
+# Needs the trafex wheel in .venv (tools/dev.sh py). Output: $D/bench/, report on stdout.
+set -euo pipefail
+. "$(dirname "$0")/env.sh"
+N=${1:-}
+B=$D/bench
+rm -rf "$B" && mkdir -p "$B"
+for r in $(seq "${ROUNDS:-2}"); do
+  for e in none trafilatura trafex rs; do
+    perf stat -e instructions:u -x, -o "$B/bench_${e}_r$r.perf" \
+      "$PY" "$ROOT/harness/bench_extract.py" "$e" "$D/docs.jsonl" "$B/bench_${e}_r$r.jsonl" $N 2> "$B/bench_${e}_r$r.err"
+  done
 done
+"$PY" "$ROOT/harness/bench_report.py" "$B"

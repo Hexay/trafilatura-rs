@@ -1,0 +1,25 @@
+# Reference/bench venv (.venv, Python 3.13). trafilatura + lxml + justext are the parity pins; datatrove itself
+# comes from DATATROVE_SRC via a .pth (tools/dev.sh setup), these are its runtime deps for the steps we use.
+trafilatura==1.11.0
+lxml==6.1.3
+lxml-html-clean==0.4.6
+justext==3.0.2
+courlan==1.4.0
+htmldate==1.11.0
+dill==0.4.1
+fsspec==2026.9.0
+huggingface-hub==2.4.0
+humanize==4.16.0
+loguru==0.7.3
+multiprocess==0.70.19
+numpy==2.5.4
+tqdm==4.70.1
+warcio==1.8.2
+faust-cchardet==3.2.0
+python-magic==0.4.27
+tldextract==5.4.0
+pyahocorasick==2.3.1
+fasteners==0.20
+rs-trafilatura==0.1.1
+maturin==1.16.0
+pytest
