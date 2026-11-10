@@ -45,7 +45,12 @@ tools/dev.sh build     # cargo build --release (harness bins)
 tools/dev.sh py        # maturin develop --release into .venv
 tools/dev.sh test      # cargo test
 tools/build_wheel.sh   # abi3 wheel in target/wheels (PGO=1 for profile-guided, via tools/pgo.sh)
+pytest tests           # parity vs trafilatura on tests/fixtures (needs the wheel + `.[test]` pins; CI runs this)
 ```
+
+Releases: `.github/workflows/release.yml` builds abi3 wheels (Linux x86_64/aarch64, macOS x86_64/arm64,
+Windows x64) and an sdist, smoke-tests each against trafilatura, and publishes to PyPI on a `v*` tag matching
+`pyproject.toml`'s version.
 
 ## Parity
 
