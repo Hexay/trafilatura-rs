@@ -1,19 +1,19 @@
 //! Stage replay of trafilatura 2.2.0's `trafilatura_sequence`, mirroring `run_stages` in harness/ref2_stages.py.
 use super::{config, exc_name, ser};
-use trafex::dom::{Ctx, Node};
-use trafex::py;
-use trafex::trafilatura::deduplication::Lru;
-use trafex::trafilatura::htmlprocessing::Env;
-use trafex::trafilatura::text::normalize_unicode;
-use trafex::trafilatura2::baseline::{baseline, html2txt};
-use trafex::trafilatura2::core::{escalate, escalation_due, forum_thread_page, prepare_tree};
-use trafex::trafilatura2::external::compare_extraction;
-use trafex::trafilatura2::htmlprocessing::prune_unwanted_nodes;
-use trafex::trafilatura2::main_extractor_extract::extract_content;
-use trafex::trafilatura2::settings::{Focus, Options};
-use trafex::trafilatura2::utils::load_html;
-use trafex::trafilatura2::xml::xmltotxt;
-use trafex::trafilatura2::xpaths::REMOVE_COMMENTS_XPATH;
+use trafilatura_rs::dom::{Ctx, Node};
+use trafilatura_rs::py;
+use trafilatura_rs::trafilatura::deduplication::Lru;
+use trafilatura_rs::trafilatura::htmlprocessing::Env;
+use trafilatura_rs::trafilatura::text::normalize_unicode;
+use trafilatura_rs::trafilatura2::baseline::{baseline, html2txt};
+use trafilatura_rs::trafilatura2::core::{escalate, escalation_due, forum_thread_page, prepare_tree};
+use trafilatura_rs::trafilatura2::external::compare_extraction;
+use trafilatura_rs::trafilatura2::htmlprocessing::prune_unwanted_nodes;
+use trafilatura_rs::trafilatura2::main_extractor_extract::extract_content;
+use trafilatura_rs::trafilatura2::settings::{Focus, Options};
+use trafilatura_rs::trafilatura2::utils::load_html;
+use trafilatura_rs::trafilatura2::xml::xmltotxt;
+use trafilatura_rs::trafilatura2::xpaths::REMOVE_COMMENTS_XPATH;
 
 fn triple((body, text, n): &(Node, String, usize)) -> String {
     format!("{}\x00{text}\x00{n}", ser(Some(*body)))
@@ -28,7 +28,7 @@ pub fn run_stages(html: &str, cfg: &str) -> Vec<(&'static str, String)> {
     let opts = Options { comments: false, dedup: false, ..config(cfg) };
     let mut lru = Lru::default();
     let mut stage = "forum";
-    let result = (|| -> trafex::dom::Result<()> {
+    let result = (|| -> trafilatura_rs::dom::Result<()> {
         let is_forum = forum_thread_page(tree);
         out.push((stage, if is_forum { "True" } else { "False" }.to_owned()));
         stage = "prune_raw";

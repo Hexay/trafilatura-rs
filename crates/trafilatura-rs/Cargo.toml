@@ -1,5 +1,5 @@
 [package]
-name = "trafex"
+name = "trafilatura-rs"
 description = "Byte-exact Rust port of trafilatura's text extraction"
 edition.workspace = true
 license.workspace = true

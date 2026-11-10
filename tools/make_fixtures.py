@@ -1,5 +1,5 @@
 """Pick the parity-test fixtures (tests/fixtures/pages.jsonl) from the corpus: ~30 varied pages under 2 MB.
-usage: make_fixtures.py $TRAFEX_DATA > tests/fixtures/pages.jsonl
+usage: make_fixtures.py $TRAFILATURA_RS_DATA > tests/fixtures/pages.jsonl
 Buckets cover each PEP-393 parser path, XML declarations, tables, empty results, config-sensitive pages and a
 same-host run (exercises deduplicate=True). Needs ref_final_{fineweb,balanced,recall}.jsonl (tools/make_reference.sh).
 """

@@ -1,7 +1,7 @@
 """Per-doc CPU time and output of one extractor over the corpus, in corpus order, single thread.
-usage: bench_extract.py {none|trafilatura|trafex|rs} docs.jsonl out.jsonl [n]
+usage: bench_extract.py {none|trafilatura|trafilatura_rs|rs} docs.jsonl out.jsonl [n]
   trafilatura  datatrove's Trafilatura(favour_precision=True).extract (trafilatura 1.11, dedup on)
-  trafex       the same call after trafex.install()
+  trafilatura_rs  the same call after trafilatura_rs.install()
   rs           rs_trafilatura.extract(html, favor_precision=True, include_comments=False).main_content
   none         no extraction (load/loop baseline for instruction counts)
 out.jsonl: {"i", "ns", "out"} per doc; summary on stdout (bench_report.py aggregates runs)."""
@@ -21,10 +21,10 @@ def extractor(engine):
         return lambda html: rs_trafilatura.extract(html, favor_precision=True, include_comments=False).main_content
     from datatrove.pipeline.extractors import Trafilatura
 
-    if engine == "trafex":
-        import trafex
+    if engine == "trafilatura_rs":
+        import trafilatura_rs
 
-        trafex.install()
+        trafilatura_rs.install()
     elif engine != "trafilatura":
         raise SystemExit(f"unknown engine {engine}")
     return Trafilatura(favour_precision=True).extract

@@ -1,5 +1,5 @@
 """Runs the fineweb config (deduplicate=True) over the fixtures in a fresh process, since both engines keep a
-process-global LRU. usage: dedup_worker.py <trafex|trafilatura> <passes>; prints the outputs as a JSON list."""
+process-global LRU. usage: dedup_worker.py <trafilatura_rs|trafilatura> <passes>; prints the outputs as a JSON list."""
 import json
 import sys
 

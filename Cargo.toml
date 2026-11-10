@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/libxml2-sys", "crates/trafex", "crates/harness", "crates/trafex-py"]
+members = ["crates/libxml2-sys", "crates/trafilatura-rs", "crates/harness", "crates/trafilatura-rs-py"]
 
 [workspace.package]
 edition = "2021"

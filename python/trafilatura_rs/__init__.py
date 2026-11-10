@@ -46,7 +46,7 @@ def extract(filecontent, **kwargs):
     """``trafilatura.extract`` for verified configurations; raises NotImplementedError otherwise."""
     rust = _rust_args(filecontent, kwargs)
     if rust is None:
-        raise NotImplementedError(f"trafex does not cover this call yet (verified: {sorted(VERIFIED)})")
+        raise NotImplementedError(f"trafilatura_rs does not cover this call yet (verified: {sorted(VERIFIED)})")
     return _extract(filecontent, **rust)
 
 

@@ -42,7 +42,7 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "sha1_smol",
- "trafex",
+ "trafilatura-rs",
 ]
 
 [[package]]
@@ -282,7 +282,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
-name = "trafex"
+name = "trafilatura-rs"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
@@ -292,11 +292,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "trafex-py"
+name = "trafilatura-rs-py"
 version = "0.1.0"
 dependencies = [
  "pyo3",
- "trafex",
+ "trafilatura-rs",
 ]
 
 [[package]]

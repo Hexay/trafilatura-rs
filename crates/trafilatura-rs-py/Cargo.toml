@@ -1,6 +1,6 @@
 [package]
-name = "trafex-py"
-description = "Python bindings for trafex (byte-exact trafilatura extraction)"
+name = "trafilatura-rs-py"
+description = "Python bindings for trafilatura-rs (byte-exact trafilatura extraction)"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
@@ -11,5 +11,5 @@ name = "_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-trafex = { path = "../trafex" }
+trafilatura-rs = { path = "../trafilatura-rs" }
 pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310"] }

@@ -1,6 +1,6 @@
 # Sourced by tools/*.sh: paths shared by the local dev, reference, parity and bench scripts.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-D=${TRAFEX_DATA:-/srv/agents/cache/trafex-data}
+D=${TRAFILATURA_RS_DATA:-/srv/agents/cache/trafilatura-rs-data}
 PY=$ROOT/.venv/bin/python
 PY22=$ROOT/.venv-t22/bin/python
 H=${HARNESS:-$ROOT/target/release/harness}

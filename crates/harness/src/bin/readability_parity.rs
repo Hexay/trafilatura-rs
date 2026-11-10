@@ -3,9 +3,9 @@
 //!   readability_parity show docs.jsonl <i> [tr]
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use trafex::dom::{Ctx, Error, Method};
-use trafex::readability::{try_readability, Document};
-use trafex::trafilatura::utils::load_html;
+use trafilatura_rs::dom::{Ctx, Error, Method};
+use trafilatura_rs::readability::{try_readability, Document};
+use trafilatura_rs::trafilatura::utils::load_html;
 
 fn exc_name(e: &Error) -> String {
     let name = match e {

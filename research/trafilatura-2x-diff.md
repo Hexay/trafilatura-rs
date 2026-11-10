@@ -2,7 +2,7 @@
 
 Scope: `extract(html, include_comments=False, output_format="txt")` with the 5 parity configs (fineweb,
 balanced, recall, fast, notables); no metadata, comments, links, images, formatting, target_language.
-"same" = pure refactor (typing, formatting, renames). The Rust port (`crates/trafex/src/trafilatura2`) reuses
+"same" = pure refactor (typing, formatting, renames). The Rust port (`crates/trafilatura-rs/src/trafilatura2`) reuses
 1.11 code only where this says "same".
 
 Environment: both versions pin lxml 6.1.3 / libxml2 2.14.6, jusText 3.0.2, Python 3.12.3. The jusText stoplist

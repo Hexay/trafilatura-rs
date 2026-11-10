@@ -1,5 +1,5 @@
-"""Generate crates/trafex/src/py/tables.rs from the reference interpreter (Python 3.12 = Unicode 15.0).
-usage: gen_unicode_tables.py > crates/trafex/src/py/tables.rs"""
+"""Generate crates/trafilatura-rs/src/py/tables.rs from the reference interpreter (Python 3.12 = Unicode 15.0).
+usage: gen_unicode_tables.py > crates/trafilatura-rs/src/py/tables.rs"""
 import re
 import sys
 import unicodedata

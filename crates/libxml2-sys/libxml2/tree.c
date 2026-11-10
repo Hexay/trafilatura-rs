@@ -1837,7 +1837,7 @@ xmlNewDocProp(xmlDocPtr doc, const xmlChar *name, const xmlChar *value) {
     memset(cur, 0, sizeof(xmlAttr));
     cur->type = XML_ATTRIBUTE_NODE;
 
-    /* trafex: see crates/libxml2-sys/PATCHES.md */
+    /* trafilatura-rs: see crates/libxml2-sys/PATCHES.md */
     if ((doc != NULL) && (doc->dict != NULL) && (xmlDictOwns(doc->dict, name) == 1))
 	cur->name = name;
     else if ((doc != NULL) && (doc->dict != NULL))
@@ -4178,7 +4178,7 @@ xmlStaticCopyNode(xmlNodePtr node, xmlDocPtr doc, xmlNodePtr parent,
     else if (node->name == xmlStringComment)
 	ret->name = xmlStringComment;
     else if (node->name != NULL) {
-        /* trafex: see crates/libxml2-sys/PATCHES.md */
+        /* trafilatura-rs: see crates/libxml2-sys/PATCHES.md */
         if ((doc != NULL) && (doc->dict != NULL) && (xmlDictOwns(doc->dict, node->name) == 1))
 	    ret->name = node->name;
         else if ((doc != NULL) && (doc->dict != NULL))

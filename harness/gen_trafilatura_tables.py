@@ -1,5 +1,6 @@
-"""Generate crates/trafex/src/trafilatura/tables.rs from the reference interpreter: html.unescape's tables and the
-Unicode decimal digits int() accepts.  usage: gen_trafilatura_tables.py > crates/trafex/src/trafilatura/tables.rs"""
+"""Generate crates/trafilatura-rs/src/trafilatura/tables.rs from the reference interpreter: html.unescape's tables
+and the Unicode decimal digits int() accepts.
+usage: gen_trafilatura_tables.py > crates/trafilatura-rs/src/trafilatura/tables.rs"""
 import html
 import sys
 import unicodedata

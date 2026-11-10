@@ -3,7 +3,7 @@
 #   [LIMIT=N] tools/parity.sh [job ...]   job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | justext | readability
 #                                         default: every job; LIMIT compares only the first N docs
 #   tools/parity.sh show[2] <i> <stage> [cfg]   diff one doc's stage output (reference vs Rust)
-# TRAFEX_VERIFY_XPATH=1 cross-checks every fast-path XPath against libxml2 while running.
+# TRAFILATURA_RS_VERIFY_XPATH=1 cross-checks every fast-path XPath against libxml2 while running.
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 BIN=$(dirname "$H")

@@ -9,7 +9,7 @@ import statistics
 import sys
 from collections import defaultdict
 
-ENGINES = ["trafilatura", "trafex", "rs"]
+ENGINES = ["trafilatura", "trafilatura_rs", "rs"]
 
 
 def load(path):
@@ -43,21 +43,21 @@ def main():
     ndocs = len(runs["trafilatura"][0])
     stats = {}
     print(f"docs={ndocs} rounds={ {e: len(runs[e]) for e in ENGINES if e in runs} }")
-    print(f"{'engine':<12} {'mean ms':>8} {'p50 ms':>7} {'p99 ms':>7} {'CPU s':>7} {'Minstr/doc':>11}")
+    print(f"{'engine':<14} {'mean ms':>8} {'p50 ms':>7} {'p99 ms':>7} {'CPU s':>7} {'Minstr/doc':>11}")
     for e in ENGINES:
         if e not in runs:
             continue
         ms = sorted(min(r[k]["ns"] for r in runs[e]) / 1e6 for k in range(ndocs))
         mi = (min(instr[e]) - base) / ndocs / 1e6 if instr.get(e) else float("nan")
         stats[e] = (statistics.fmean(ms), mi)
-        print(f"{e:<12} {stats[e][0]:8.2f} {ms[len(ms) // 2]:7.2f} {ms[int(len(ms) * 0.99)]:7.2f} "
+        print(f"{e:<14} {stats[e][0]:8.2f} {ms[len(ms) // 2]:7.2f} {ms[int(len(ms) * 0.99)]:7.2f} "
               f"{sum(ms) / 1e3:7.1f} {mi:11.1f}")
     t_ms, t_mi = stats["trafilatura"]
-    for e in ("trafex", "rs"):
+    for e in ("trafilatura_rs", "rs"):
         if e in stats:
             print(f"speedup {e} vs trafilatura: CPU {t_ms / stats[e][0]:.2f}x, instructions {t_mi / stats[e][1]:.2f}x")
     ref = runs["trafilatura"][0]
-    for e in ("trafex", "rs"):
+    for e in ("trafilatura_rs", "rs"):
         if e not in runs:
             continue
         out = runs[e][0]

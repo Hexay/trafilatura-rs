@@ -1,6 +1,6 @@
 //! Native evaluation of the XPath shapes trafilatura runs millions of times, returning exactly libxml2's node-set.
 //! Expressions are classified once per string (see `Plan`); anything unrecognised stays on libxml2.
-//! `TRAFEX_VERIFY_XPATH=1` evaluates both ways on every call and panics on any difference.
+//! `TRAFILATURA_RS_VERIFY_XPATH=1` evaluates both ways on every call and panics on any difference.
 use super::raw::P;
 use super::{cstr, Node, ELEMENT};
 use libxml2_sys as ffi;
@@ -10,7 +10,7 @@ mod pred;
 mod pred_parse;
 pub(crate) use pred::{parse_step, Step};
 
-pub(crate) static VERIFY: LazyLock<bool> = LazyLock::new(|| std::env::var_os("TRAFEX_VERIFY_XPATH").is_some());
+pub(crate) static VERIFY: LazyLock<bool> = LazyLock::new(|| std::env::var_os("TRAFILATURA_RS_VERIFY_XPATH").is_some());
 
 pub(crate) enum Plan {
     /// `.//*[(self::a or ...)][atom or ...]` (and `.//tag`, unions of `.//tag`): descendants in document order.

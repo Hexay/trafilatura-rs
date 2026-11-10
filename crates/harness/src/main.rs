@@ -4,18 +4,18 @@ mod v2;
 
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use trafex::dom::{Ctx, Error, Method, Node};
-use trafex::trafilatura::baseline::baseline;
-use trafex::trafilatura::core::Extractor;
-use trafex::trafilatura::deduplication::Lru;
-use trafex::trafilatura::external::compare_extraction;
-use trafex::trafilatura::htmlprocessing::{prune_unwanted_nodes, tree_cleaning, Env};
-use trafex::trafilatura::htmlprocessing_convert::convert_tags;
-use trafex::trafilatura::main_extractor_extract::extract_content;
-use trafex::trafilatura::settings::{Focus, Options};
-use trafex::trafilatura::text::normalize_unicode;
-use trafex::trafilatura::xml::xmltotxt;
-use trafex::trafilatura::xpaths::REMOVE_COMMENTS_XPATH;
+use trafilatura_rs::dom::{Ctx, Error, Method, Node};
+use trafilatura_rs::trafilatura::baseline::baseline;
+use trafilatura_rs::trafilatura::core::Extractor;
+use trafilatura_rs::trafilatura::deduplication::Lru;
+use trafilatura_rs::trafilatura::external::compare_extraction;
+use trafilatura_rs::trafilatura::htmlprocessing::{prune_unwanted_nodes, tree_cleaning, Env};
+use trafilatura_rs::trafilatura::htmlprocessing_convert::convert_tags;
+use trafilatura_rs::trafilatura::main_extractor_extract::extract_content;
+use trafilatura_rs::trafilatura::settings::{Focus, Options};
+use trafilatura_rs::trafilatura::text::normalize_unicode;
+use trafilatura_rs::trafilatura::xml::xmltotxt;
+use trafilatura_rs::trafilatura::xpaths::REMOVE_COMMENTS_XPATH;
 
 fn ser(n: Option<Node>) -> String {
     n.map_or_else(|| "None".to_owned(), |n| n.tostring(Method::Xml, true))
@@ -40,13 +40,13 @@ fn exc_name(e: &Error) -> String {
 fn run_stages(html: &str) -> Vec<(&'static str, String)> {
     let ctx = Ctx::new();
     let mut out = Vec::new();
-    let tree = trafex::trafilatura::utils::load_html(&ctx, html);
+    let tree = trafilatura_rs::trafilatura::utils::load_html(&ctx, html);
     out.push(("load", ser(tree)));
     let Some(tree) = tree else { return out };
     let opts = Options { focus: Focus::Precision, comments: false, dedup: false, ..Options::default() };
     let mut lru = Lru::default();
     let mut stage = "clean";
-    let result = (|| -> trafex::dom::Result<()> {
+    let result = (|| -> trafilatura_rs::dom::Result<()> {
         let tree_backup = tree.deep_copy(&ctx);
         let cleaned = tree_cleaning(&ctx, tree, &opts)?;
         out.push((stage, ser(Some(cleaned))));
@@ -110,12 +110,12 @@ fn docs(path: &str) -> impl Iterator<Item = (u64, String)> {
     })
 }
 
-type Extract = Box<dyn FnMut(&str) -> trafex::dom::Result<Option<String>>>;
+type Extract = Box<dyn FnMut(&str) -> trafilatura_rs::dom::Result<Option<String>>>;
 
 /// `extract()` of trafilatura 1.11 (`v2` false) or 2.2.0 with the given options.
 fn extractor(v2: bool, opts: Options) -> Extract {
     if v2 {
-        let mut e = trafex::trafilatura2::core::Extractor::new(opts);
+        let mut e = trafilatura_rs::trafilatura2::core::Extractor::new(opts);
         Box::new(move |h| e.extract(h))
     } else {
         let mut e = Extractor::new(opts);

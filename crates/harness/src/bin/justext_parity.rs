@@ -2,8 +2,8 @@
 //!                                                    justext_parity show docs.jsonl <i>
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use trafex::dom::{Ctx, Error};
-use trafex::justext::{custom_justext_full as custom_justext, Paragraph, Stoplist};
+use trafilatura_rs::dom::{Ctx, Error};
+use trafilatura_rs::justext::{custom_justext_full as custom_justext, Paragraph, Stoplist};
 
 fn esc(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\n', "\\n")
@@ -62,7 +62,7 @@ fn exc_name(e: &Error) -> &'static str {
 /// None when load_html rejects the page; `Err` carries "EXC:<type>".
 fn run(html: &str) -> Option<Result<String, String>> {
     let ctx = Ctx::new();
-    let tree = trafex::trafilatura::utils::load_html(&ctx, html)?;
+    let tree = trafilatura_rs::trafilatura::utils::load_html(&ctx, html)?;
     let stoplist = Stoplist::jt();
     Some(custom_justext(tree, stoplist).map(|ps| dump(&ps, stoplist)).map_err(|e| format!("EXC:{}", exc_name(&e))))
 }

@@ -1,14 +1,14 @@
-//! `trafex._core`: extraction entry points. Python-level argument checking and the trafilatura monkeypatch live
-//! in python/trafex/__init__.py.
+//! `trafilatura_rs._core`: extraction entry points. Python-level argument checking and the trafilatura monkeypatch live
+//! in python/trafilatura_rs/__init__.py.
 use pyo3::exceptions::{
     PyAssertionError, PyAttributeError, PyIndexError, PyKeyError, PyRuntimeError, PyTypeError, PyValueError,
 };
 use pyo3::prelude::*;
 use std::sync::{LazyLock, Mutex};
-use trafex::dom::Error;
-use trafex::trafilatura::core;
-use trafex::trafilatura::deduplication::Lru;
-use trafex::trafilatura::settings::{Focus, Options};
+use trafilatura_rs::dom::Error;
+use trafilatura_rs::trafilatura::core;
+use trafilatura_rs::trafilatura::deduplication::Lru;
+use trafilatura_rs::trafilatura::settings::{Focus, Options};
 
 /// trafilatura keeps its deduplication LRU module-global; so does the module-level `extract`.
 static GLOBAL_LRU: LazyLock<Mutex<Lru>> = LazyLock::new(|| Mutex::new(Lru::default()));

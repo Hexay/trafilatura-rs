@@ -4,7 +4,8 @@ from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pages.jsonl"
 
-# extract() keyword sets of trafex.VERIFIED; fineweb is datatrove's Trafilatura call. Mirrors harness/ref_stages.py.
+# extract() keyword sets of trafilatura_rs.VERIFIED; fineweb is datatrove's Trafilatura call.
+# Mirrors harness/ref_stages.py.
 CONFIGS = {
     "fineweb": {"favor_precision": True, "deduplicate": True},
     "balanced": {},
@@ -21,10 +22,10 @@ def pages():
 
 def run(engine, html, kwargs):
     """One extract() call; an exception becomes 'EXC:<type>' since its type is part of the compared output."""
-    if engine == "trafex":
-        import trafex
+    if engine == "trafilatura_rs":
+        import trafilatura_rs
 
-        fn = trafex.extract
+        fn = trafilatura_rs.extract
     else:
         from trafilatura import extract as fn
     try:

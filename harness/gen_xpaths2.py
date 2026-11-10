@@ -1,4 +1,5 @@
-"""Print crates/trafex/src/trafilatura2/xpaths.rs from trafilatura 2.2.0's XPath objects (run with .venv-t22)."""
+"""Print crates/trafilatura-rs/src/trafilatura2/xpaths.rs from trafilatura 2.2.0's XPath objects
+(run with .venv-t22)."""
 from trafilatura import external, settings, xpaths
 
 LISTS = ["BODY_XPATH", "REMOVE_COMMENTS_XPATH", "OVERALL_DISCARD_XPATH", "TEASER_DISCARD_XPATH",
