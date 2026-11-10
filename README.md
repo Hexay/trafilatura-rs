@@ -73,3 +73,7 @@ Full corpus (10,666 docs), 2026-11-10, loaded 16-core box:
 | trafilatura 1.11 | 17.93 | 11.19 | 110.83 | 261.7 | 1x | — |
 | trafex | 1.92 | 1.25 | 11.85 | 23.2 | 9.3x / 11.3x | 10666/10666 |
 | rs-trafilatura 0.1.1 | 12.24 | 7.66 | 81.88 | 181.8 | 1.5x / 1.4x | 171/10666 exact, 974 whitespace-normalized |
+
+rs-trafilatura is a different extractor, not a port: it never returns None, separates paragraphs with `\n\n`, and
+selects different content (248/10666 equal with None == "", 172 of them both empty; 637 equal after collapsing
+newline runs; median difflib similarity ~0.67 on the first 400 docs).
