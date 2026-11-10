@@ -49,7 +49,7 @@ pub(crate) fn make_element(ctx: &Ctx, tag: &str, html: bool) -> Result<Node> {
 pub(crate) unsafe fn new_xml_doc() -> *mut ffi::xmlDoc {
     let doc = ffi::xmlNewDoc(ptr::null());
     if (*doc).encoding.is_null() {
-        (*doc).encoding = ffi::xmlStrdup(b"UTF-8\0".as_ptr());
+        (*doc).encoding = ffi::xmlStrdup(c"UTF-8".as_ptr().cast());
     }
     doc
 }
@@ -202,9 +202,6 @@ impl Node {
 
     /// `parent.index(child)`.
     pub fn index(self, child: Node) -> Result<usize> {
-        self.children()
-            .iter()
-            .position(|&c| c == child)
-            .ok_or_else(|| Error::Value("Element is not in list".into()))
+        self.children().iter().position(|&c| c == child).ok_or_else(|| Error::Value("Element is not in list".into()))
     }
 }

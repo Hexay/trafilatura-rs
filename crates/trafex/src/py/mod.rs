@@ -2,13 +2,24 @@
 //! lacks U+001C..U+001F; `regex`'s `\s`/`\w` use other Unicode properties), and those edges change output.
 
 pub mod re;
+#[rustfmt::skip]
 mod tables;
 
 use std::sync::LazyLock;
 
 fn in_table(table: &[(u32, u32)], c: char) -> bool {
     let c = c as u32;
-    table.binary_search_by(|&(lo, hi)| if hi < c { std::cmp::Ordering::Less } else if lo > c { std::cmp::Ordering::Greater } else { std::cmp::Ordering::Equal }).is_ok()
+    table
+        .binary_search_by(|&(lo, hi)| {
+            if hi < c {
+                std::cmp::Ordering::Less
+            } else if lo > c {
+                std::cmp::Ordering::Greater
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
+        .is_ok()
 }
 
 /// re `\w` (str patterns).
@@ -30,9 +41,8 @@ pub fn is_printable(c: char) -> bool {
 
 /// Python re `\w` as a `regex` character-class body: `format!("[{}]", *WORD_CLASS)` for `\w`, `[^...]` for `\W`.
 /// Rust's own `\w` also matches combining marks, which Python's does not.
-pub static WORD_CLASS: LazyLock<String> = LazyLock::new(|| {
-    tables::WORD.iter().map(|&(a, b)| format!(r"\x{{{a:x}}}-\x{{{b:x}}}")).collect()
-});
+pub static WORD_CLASS: LazyLock<String> =
+    LazyLock::new(|| tables::WORD.iter().map(|&(a, b)| format!(r"\x{{{a:x}}}-\x{{{b:x}}}")).collect());
 
 /// `str.isspace()` / re `\s` (Unicode 15.0): bidi class WS, B or S, or category Zs.
 pub fn is_space(c: char) -> bool {

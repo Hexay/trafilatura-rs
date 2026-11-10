@@ -5,7 +5,23 @@ use crate::dom::{Ctx, Error, Node, Result};
 pub(crate) const REND_TAGS: &[&str] = &["em", "i", "b", "strong", "u", "kbd", "samp", "tt", "var", "sub", "sup"];
 pub(crate) const REND_VALUES: &[&str] = &["#i", "#i", "#b", "#b", "#u", "#t", "#t", "#t", "#t", "#sub", "#sup"];
 pub(crate) const CONVERSION_TAGS: &[&str] = &[
-    "dl", "ol", "ul", "h1", "h2", "h3", "h4", "h5", "h6", "br", "hr", "blockquote", "pre", "q", "del", "s", "strike",
+    "dl",
+    "ol",
+    "ul",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "br",
+    "hr",
+    "blockquote",
+    "pre",
+    "q",
+    "del",
+    "s",
+    "strike",
     "details",
 ];
 
@@ -95,7 +111,8 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         for elem in tree.iter(REND_TAGS) {
             elem.clear_attrs();
             let i = REND_TAGS.iter().position(|&t| t == elem.tag());
-            let rend = i.map(|i| REND_VALUES[i]).ok_or_else(|| Error::Runtime(format!("KeyError: {:?}", elem.tag())))?;
+            let rend =
+                i.map(|i| REND_VALUES[i]).ok_or_else(|| Error::Runtime(format!("KeyError: {:?}", elem.tag())))?;
             elem.set("rend", Some(rend))?;
             elem.set_tag("hi")?;
         }

@@ -9,8 +9,15 @@ use std::sync::LazyLock;
 
 const JSON_TEXT_KEYS: &[&str] = &["articleBody", "reviewBody"];
 const DESCRIPTION_TYPES: &[&str] = &["Product", "VideoObject"];
-const JSON_HOOKS: &[&str] =
-    &["articleBody", "reviewBody", "recipeInstructions", "acceptedAnswer", "\"Product\"", "\"VideoObject\"", "\"HowTo\""];
+const JSON_HOOKS: &[&str] = &[
+    "articleBody",
+    "reviewBody",
+    "recipeInstructions",
+    "acceptedAnswer",
+    "\"Product\"",
+    "\"VideoObject\"",
+    "\"HowTo\"",
+];
 const HTML_TAG_NAMES: &str = "a|abbr|address|article|aside|b|blockquote|body|br|caption|cite|code|dd|del|div|dl|dt|\
     em|figcaption|figure|footer|h[1-6]|head|header|hr|html|i|img|ins|kbd|li|main|mark|nav|\
     ol|p|pre|q|quote|s|section|small|span|strong|sub|summary|sup|table|tbody|td|tfoot|th|\
@@ -37,7 +44,7 @@ fn type_mentions(v: &Value, t: &str) -> bool {
     }
 }
 
-fn str_value<'a>(v: Option<&'a Value>) -> Option<&'a str> {
+fn str_value(v: Option<&Value>) -> Option<&str> {
     v.and_then(Value::as_str)
 }
 

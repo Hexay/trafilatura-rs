@@ -95,7 +95,12 @@ impl Node {
         let fast = plan.nodes(self);
         if *VERIFY {
             let lib = self.lib_nodes(expr, &e)?;
-            assert!(fast == lib, "fast path differs from libxml2 for {expr}\nfast={}\nlib={}", describe(&fast), describe(&lib));
+            assert!(
+                fast == lib,
+                "fast path differs from libxml2 for {expr}\nfast={}\nlib={}",
+                describe(&fast),
+                describe(&lib)
+            );
         }
         Ok(fast)
     }

@@ -9,10 +9,16 @@ pub enum Value {
     /// Truthiness of the int/float.
     Number(bool),
     /// Decoded string; `lone_surrogate` marks strings Python could hold but never encode to UTF-8.
-    Str { s: String, lone_surrogate: bool },
+    Str {
+        s: String,
+        lone_surrogate: bool,
+    },
     List(bool),
     /// Only the last "articleBody" member is kept (Python dicts keep the last duplicate).
-    Dict { non_empty: bool, article_body: Option<Box<Value>> },
+    Dict {
+        non_empty: bool,
+        article_body: Option<Box<Value>>,
+    },
 }
 
 // CPython raises RecursionError (an Exception, caught by baseline's except) near its 1000-frame limit.

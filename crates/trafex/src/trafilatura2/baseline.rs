@@ -12,9 +12,40 @@ pub type Extraction = (Node, String, usize);
 
 const MIN_CONTENT_LENGTH: usize = 100;
 const BLOCK_ELEMS: &[&str] = &[
-    "address", "article", "aside", "blockquote", "br", "dd", "div", "dl", "dt", "figcaption", "figure", "footer",
-    "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section",
-    "summary", "table", "td", "th", "tr", "ul",
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "br",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "summary",
+    "table",
+    "td",
+    "th",
+    "tr",
+    "ul",
 ];
 
 /// `basic_cleaning`.
@@ -76,10 +107,8 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<Extraction> {
             return Ok(r);
         }
     }
-    let paragraphs: Vec<String> = tree
-        .iter(&["blockquote", "code", "p", "pre", "q", "quote"])
-        .map(|e| trim(&e.text_content()))
-        .collect();
+    let paragraphs: Vec<String> =
+        tree.iter(&["blockquote", "code", "p", "pre", "q", "quote"]).map(|e| trim(&e.text_content())).collect();
     if let Some(r) = attempt(ctx, paragraphs, true)? {
         return Ok(r);
     }

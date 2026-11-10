@@ -2,7 +2,9 @@
 //! (element text rendering lives in xml_text, markdown-only rewrites in xml_markdown).
 use super::utils::{is_last_element_in_cell, is_last_element_in_item};
 use super::xml_markdown::{collapse_emphasis, convert_math_tree};
-use super::xml_text::{consumes_inline_children, escape_cell, heading_prefix, image_markup, list_marker, replace_element_text};
+use super::xml_text::{
+    consumes_inline_children, escape_cell, heading_prefix, image_markup, list_marker, replace_element_text,
+};
 use crate::dom::{Ctx, Node, Result};
 use crate::py;
 use crate::trafilatura::text::sanitize;
@@ -36,7 +38,14 @@ fn truthy(s: &Option<String>) -> bool {
 }
 
 /// `process_element`.
-pub fn process_element(ctx: &Ctx, el: Node, out: &mut Vec<String>, fmt: bool, in_cell: bool, in_item: bool) -> Result<()> {
+pub fn process_element(
+    ctx: &Ctx,
+    el: Node,
+    out: &mut Vec<String>,
+    fmt: bool,
+    in_cell: bool,
+    in_item: bool,
+) -> Result<()> {
     let tag = el.tag();
     let in_cell = in_cell || tag == "cell";
     let in_item = in_item || tag == "item";

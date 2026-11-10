@@ -50,7 +50,7 @@ pub fn load_html(ctx: &Ctx, html: &str) -> Option<Node> {
         }
         Err(_) => None,
     };
-    if tree.is_none_or(|t| t.len() < 1) && !fallback_parse {
+    if tree.is_none_or(|t| t.is_empty()) && !fallback_parse {
         tree = fromstring_bytes(ctx, &html);
     }
     tree.filter(|t| !(check_flag && t.len() < 2))

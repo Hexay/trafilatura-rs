@@ -25,8 +25,11 @@ pub fn repair_faulty_html<'a>(html: &'a str, beginning: &str) -> Cow<'a, str> {
     let bytes = html.as_bytes();
     let has_invalid = bytes.iter().any(|&b| b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r'))
         || bytes.windows(3).any(|w| w[0] == 0xef && w[1] == 0xbf && w[2] >= 0xbe);
-    let mut s: Cow<str> =
-        if has_invalid { Cow::Owned(html.chars().filter(|&c| !invalid_xml_char(c)).collect()) } else { Cow::Borrowed(html) };
+    let mut s: Cow<str> = if has_invalid {
+        Cow::Owned(html.chars().filter(|&c| !invalid_xml_char(c)).collect())
+    } else {
+        Cow::Borrowed(html)
+    };
     if beginning.contains("doctype") {
         let (first, rest) = s.split_once('\n').unwrap_or((&s, ""));
         let fixed = DOCTYPE_TAG.replacen(first, 1, "");
@@ -59,7 +62,7 @@ pub fn load_html(ctx: &Ctx, html: &str) -> Option<Node> {
         }
         Err(_) => None,
     };
-    if tree.is_none_or(|t| t.len() < 1) && !fallback_parse {
+    if tree.is_none_or(|t| t.is_empty()) && !fallback_parse {
         tree = fromstring_bytes(ctx, &html);
     }
     tree.filter(|t| !(check_flag && t.len() < 2))

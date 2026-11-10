@@ -15,7 +15,12 @@ use std::collections::HashSet;
 const NOT_AT_THE_END: &[&str] = &["head", "ref"];
 
 /// `prune_unwanted_sections`.
-pub fn prune_unwanted_sections(env: &mut Env, tree: Node, potential_tags: &PotentialTags, keep_teasers: bool) -> Result<Node> {
+pub fn prune_unwanted_sections(
+    env: &mut Env,
+    tree: Node,
+    potential_tags: &PotentialTags,
+    keep_teasers: bool,
+) -> Result<Node> {
     let ctx = env.ctx;
     let favor_precision = env.opts.focus == Focus::Precision;
     let mut tree = prune_unwanted_nodes(ctx, tree, &OVERALL_DISCARD_XPATH, true)?;
@@ -73,7 +78,8 @@ pub fn recover_wild_text(env: &mut Env, tree: Node, result_body: Node, potential
         let under_cap = existing_len <= DEDUPE_SCAN_CAP;
         let text_len = py::len(&text);
         if !text.is_empty()
-            && (existing_elems.contains(&text) || (text_len > MIN_DUPLICATE_LENGTH && under_cap && existing.contains(&text)))
+            && (existing_elems.contains(&text)
+                || (text_len > MIN_DUPLICATE_LENGTH && under_cap && existing.contains(&text)))
         {
             continue;
         }

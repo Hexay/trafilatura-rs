@@ -87,9 +87,10 @@ pub fn replace_element_text(element: Node, include_formatting: bool) -> Result<S
                 let number = match element.get("rend") {
                     None => 2,
                     Some(rend) => {
-                        let second = rend.chars().nth(1).ok_or_else(|| {
-                            Error::Runtime("IndexError: string index out of range".into())
-                        })?;
+                        let second = rend
+                            .chars()
+                            .nth(1)
+                            .ok_or_else(|| Error::Runtime("IndexError: string index out of range".into()))?;
                         py_int(&second.to_string()).ok().and_then(|n| usize::try_from(n).ok()).unwrap_or(2)
                     }
                 };
@@ -103,7 +104,8 @@ pub fn replace_element_text(element: Node, include_formatting: bool) -> Result<S
                 }
             }
             "code" => {
-                elem_text = if elem_text.contains('\n') { format!("```\n{elem_text}\n```") } else { format!("`{elem_text}`") };
+                elem_text =
+                    if elem_text.contains('\n') { format!("```\n{elem_text}\n```") } else { format!("`{elem_text}`") };
             }
             _ => {}
         }

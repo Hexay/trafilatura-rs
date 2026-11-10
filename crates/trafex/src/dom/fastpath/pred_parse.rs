@@ -150,10 +150,9 @@ fn parse_preds(body: &str) -> Option<(Vec<AttrTests>, Vec<UnionTest>)> {
             }
         } else if let Some(c) = EQUALS.captures(atom) {
             group(&mut groups, c[1].as_bytes(), None).4.push(c[3].as_bytes().to_vec());
-        } else if let Some(c) = PRESENT.captures(atom) {
-            group(&mut groups, c[1].as_bytes(), None).5 = true;
         } else {
-            return None;
+            let c = PRESENT.captures(atom)?;
+            group(&mut groups, c[1].as_bytes(), None).5 = true;
         }
     }
     let tests = groups

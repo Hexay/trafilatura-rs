@@ -43,7 +43,8 @@ fn json_article_text(ctx: &Ctx, script_text: &str) -> Result<Option<String>> {
         }
         Value::Str { s, .. } => {
             if s.contains("<p>") {
-                let tree = load_html(ctx, &s).ok_or_else(|| attribute_error("'NoneType' object has no attribute 'text_content'"))?;
+                let tree = load_html(ctx, &s)
+                    .ok_or_else(|| attribute_error("'NoneType' object has no attribute 'text_content'"))?;
                 Ok(Some(trim(&tree.text_content())))
             } else {
                 Ok(Some(trim(&s)))

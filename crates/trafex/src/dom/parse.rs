@@ -143,7 +143,7 @@ impl Ctx {
     fn parse_buffer(&self, buf: &[u8], enc: Option<&str>, opts: ParserOpts) -> Result<Option<Node>> {
         let enc_c = enc.map(|e| CString::new(e).unwrap());
         unsafe {
-            let ctxt = ffi::htmlCreateMemoryParserCtxt(b"dummy\0".as_ptr() as *const c_char, 5);
+            let ctxt = ffi::htmlCreateMemoryParserCtxt(c"dummy".as_ptr(), 5);
             assert!(!ctxt.is_null(), "out of memory");
             ffi::xmlCtxtSetErrorHandler(ctxt, Some(ignore_error), ptr::null_mut());
             let sax = (*ctxt).sax;
@@ -182,7 +182,7 @@ impl Ctx {
             self.adopt_doc(doc);
             intern_names(self.dict, doc);
             if (*doc).encoding.is_null() {
-                (*doc).encoding = ffi::xmlStrdup(b"UTF-8\0".as_ptr());
+                (*doc).encoding = ffi::xmlStrdup(c"UTF-8".as_ptr().cast());
             }
             Ok(Node::from_raw(ffi::xmlDocGetRootElement(doc)))
         }

@@ -115,9 +115,20 @@ unsafe fn first_attr<'a>(n: P, is_name: impl Fn(*const ffi::xmlChar) -> bool) ->
 }
 
 impl Step {
-    pub(crate) fn new(tags: Option<Vec<String>>, tests: Vec<AttrTests>, unions: Vec<UnionTest>, tag_only: bool) -> Step {
-        let resolved =
-            Resolved { dict: ptr::null_mut(), generation: 0, missing_at: None, tags: vec![], attrs: vec![], unions: vec![] };
+    pub(crate) fn new(
+        tags: Option<Vec<String>>,
+        tests: Vec<AttrTests>,
+        unions: Vec<UnionTest>,
+        tag_only: bool,
+    ) -> Step {
+        let resolved = Resolved {
+            dict: ptr::null_mut(),
+            generation: 0,
+            missing_at: None,
+            tags: vec![],
+            attrs: vec![],
+            unions: vec![],
+        };
         Step { tags, tests, unions, tag_only, resolved: RefCell::new(resolved) }
     }
 
@@ -139,11 +150,15 @@ impl Step {
         if self.tag_only {
             return true;
         }
-        self.tests.iter().zip(&r.attrs).any(|(t, &attr)| {
-            !attr.is_null() && first_attr(n, |name| name == attr).is_some_and(|v| t.test(&v))
-        }) || self.unions.iter().zip(&r.unions).any(|(u, names)| {
-            u.test(&first_attr(n, |name| names.contains(&name)).unwrap_or(Cow::Borrowed(&[])))
-        })
+        self.tests
+            .iter()
+            .zip(&r.attrs)
+            .any(|(t, &attr)| !attr.is_null() && first_attr(n, |name| name == attr).is_some_and(|v| t.test(&v)))
+            || self
+                .unions
+                .iter()
+                .zip(&r.unions)
+                .any(|(u, names)| u.test(&first_attr(n, |name| names.contains(&name)).unwrap_or(Cow::Borrowed(&[]))))
     }
 
     unsafe fn matches_by_string(&self, n: P) -> bool {
@@ -154,9 +169,10 @@ impl Step {
             }
         }
         self.tag_only
-            || self.tests.iter().any(|t| {
-                first_attr(n, |name| cstr(name).as_bytes() == &t.name[..]).is_some_and(|v| t.test(&v))
-            })
+            || self
+                .tests
+                .iter()
+                .any(|t| first_attr(n, |name| cstr(name).as_bytes() == &t.name[..]).is_some_and(|v| t.test(&v)))
             || self.unions.iter().any(|u| {
                 let v = first_attr(n, |name| u.names.iter().any(|w| cstr(name).as_bytes() == &w[..]));
                 u.test(&v.unwrap_or(Cow::Borrowed(&[])))

@@ -90,7 +90,8 @@ pub(crate) fn plan_first(expr: &str) -> Option<Plan> {
         .iter()
         .map(|b| {
             let b = b.trim();
-            let b = b.strip_suffix("[1]").map_or(b, |s| s.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(s));
+            let b =
+                b.strip_suffix("[1]").map_or(b, |s| s.strip_prefix('(').and_then(|s| s.strip_suffix(')')).unwrap_or(s));
             parse_step(b.trim())
         })
         .collect();

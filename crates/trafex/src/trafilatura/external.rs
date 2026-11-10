@@ -12,8 +12,10 @@ use crate::readability::try_readability;
 pub const SANITIZED_XPATH: &str = ".//aside|.//audio|.//button|.//fieldset|.//figure|.//footer|.//iframe|.//input|\
     .//label|.//link|.//nav|.//noindex|.//noscript|.//object|.//option|.//select|.//source|.//svg|.//time";
 
-const TEI_VALID_TAGS: &[&str] =
-    &["ab", "body", "cell", "code", "del", "div", "graphic", "head", "hi", "item", "lb", "list", "p", "quote", "ref", "row", "table"];
+const TEI_VALID_TAGS: &[&str] = &[
+    "ab", "body", "cell", "code", "del", "div", "graphic", "head", "hi", "item", "lb", "list", "p", "quote", "ref",
+    "row", "table",
+];
 
 pub type Extraction = (Node, String, usize);
 
@@ -85,8 +87,8 @@ pub fn compare_extraction(env: &mut Env, tree: Node, backup_tree: Node, own: Ext
     if opts.focus == Focus::Precision {
         backup_tree = prune_unwanted_nodes(ctx, backup_tree, &OVERALL_DISCARD_XPATH, false)?;
     }
-    let algo = try_readability(ctx, backup_tree)
-        .ok_or_else(|| Error::Type("Type 'NoneType' cannot be serialized.".into()))?;
+    let algo =
+        try_readability(ctx, backup_tree).ok_or_else(|| Error::Type("Type 'NoneType' cannot be serialized.".into()))?;
     let algo_text = trim(&algo.tostring(Method::Text, true));
     let len_algo = py::len(&algo_text);
     let min2 = opts.min_extracted_size * 2;

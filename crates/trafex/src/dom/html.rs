@@ -17,9 +17,46 @@ static FULL_HTML_BYTES: LazyLock<regex::bytes::Regex> =
     LazyLock::new(|| regex::bytes::Regex::new(r"(?i-u)^[\t\n\x0B\x0C\r ]*<(?:html|!doctype)").unwrap());
 
 const BLOCK_TAGS: &[&str] = &[
-    "address", "blockquote", "center", "del", "div", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "ins", "isindex",
-    "noscript", "p", "pre", "dir", "dl", "dt", "dd", "li", "menu", "ol", "ul", "table", "caption", "colgroup", "col",
-    "thead", "tfoot", "tbody", "tr", "td", "th", "fieldset", "form", "legend", "optgroup", "option",
+    "address",
+    "blockquote",
+    "center",
+    "del",
+    "div",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "ins",
+    "isindex",
+    "noscript",
+    "p",
+    "pre",
+    "dir",
+    "dl",
+    "dt",
+    "dd",
+    "li",
+    "menu",
+    "ol",
+    "ul",
+    "table",
+    "caption",
+    "colgroup",
+    "col",
+    "thead",
+    "tfoot",
+    "tbody",
+    "tr",
+    "td",
+    "th",
+    "fieldset",
+    "form",
+    "legend",
+    "optgroup",
+    "option",
 ];
 
 fn is_blank(s: &Option<String>) -> bool {
@@ -146,11 +183,8 @@ fn replace_single(ctx: &Ctx, parent: Node, old: Node, elements: &[Node]) -> Resu
     unsafe {
         let neighbour = raw::previous_element(old.raw());
         remove_node(ctx, old.raw());
-        let anchor = if neighbour.is_null() {
-            raw::find_child_forwards(parent.raw(), 0)
-        } else {
-            raw::next_element(neighbour)
-        };
+        let anchor =
+            if neighbour.is_null() { raw::find_child_forwards(parent.raw(), 0) } else { raw::next_element(neighbour) };
         if anchor.is_null() {
             return parent.extend(elements);
         }

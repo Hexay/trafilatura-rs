@@ -36,11 +36,7 @@ impl Tags {
             let doc = (*node).doc;
             if !doc.is_null() && !(*doc).dict.is_null() {
                 t.dict = (*doc).dict;
-                t.interned = t
-                    .names
-                    .iter()
-                    .map(|n| ffi::xmlDictExists(t.dict, n.as_ptr(), n.len() as i32))
-                    .collect();
+                t.interned = t.names.iter().map(|n| ffi::xmlDictExists(t.dict, n.as_ptr(), n.len() as i32)).collect();
             }
         }
         t

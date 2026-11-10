@@ -49,9 +49,9 @@ pub fn handle_lists(env: &mut Env, element: Node) -> Result<Option<Node>> {
             if let Some(processed) = process_node(env, child)? {
                 new_child_elem.set_text(processed.text().as_deref())?;
                 if let Some(tail) = processed.tail().filter(|t| !py::strip(t).is_empty()) {
-                    let text = new_child_elem
-                        .text()
-                        .ok_or_else(|| Error::Type("unsupported operand type(s) for +=: 'NoneType' and 'str'".into()))?;
+                    let text = new_child_elem.text().ok_or_else(|| {
+                        Error::Type("unsupported operand type(s) for +=: 'NoneType' and 'str'".into())
+                    })?;
                     new_child_elem.set_text(Some(&format!("{text} {tail}")))?;
                 }
                 processed_element.append(new_child_elem)?;

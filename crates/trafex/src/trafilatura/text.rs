@@ -126,7 +126,6 @@ pub fn sanitize(text: &str, preserve_space: bool, trailing_space: bool) -> Optio
         return line_processing(text, preserve_space, true);
     }
     let lines: Vec<String> = py::splitlines(text)
-        .into_iter()
         .filter_map(|l| line_processing(l, preserve_space, false))
         .filter(|l| !l.is_empty())
         .collect();

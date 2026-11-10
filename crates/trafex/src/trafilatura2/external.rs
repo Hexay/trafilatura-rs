@@ -13,8 +13,10 @@ use crate::trafilatura::text::trim;
 use crate::trafilatura::utils::fromstring_bytes;
 use std::collections::HashSet;
 
-const TEI_VALID_TAGS: &[&str] =
-    &["ab", "body", "cell", "code", "del", "div", "graphic", "head", "hi", "item", "lb", "list", "p", "quote", "ref", "row", "table"];
+const TEI_VALID_TAGS: &[&str] = &[
+    "ab", "body", "cell", "code", "del", "div", "graphic", "head", "hi", "item", "lb", "list", "p", "quote", "ref",
+    "row", "table",
+];
 /// Adopt justext only when the text it replaces is at most this much longer.
 const JUSTEXT_OVERRIDE_RATIO: usize = 3;
 
@@ -34,7 +36,14 @@ fn try_readability(ctx: &Ctx, tree: Node) -> Result<Node> {
 }
 
 /// `_prefer_readability`.
-fn prefer_readability(body: Node, algo: Node, algo_text: &str, len_text: usize, len_algo: usize, opts: &Options) -> Result<bool> {
+fn prefer_readability(
+    body: Node,
+    algo: Node,
+    algo_text: &str,
+    len_text: usize,
+    len_algo: usize,
+    opts: &Options,
+) -> Result<bool> {
     if len_algo == 0 || len_algo == len_text || len_text > 2 * len_algo {
         return Ok(false);
     }
@@ -42,7 +51,8 @@ fn prefer_readability(body: Node, algo: Node, algo_text: &str, len_text: usize, 
     Ok(len_text == 0
         || (len_algo > 2 * len_text && !algo_text.starts_with('{'))
         || (len_algo > opts.min_extracted_size * 2
-            && (body.xpath_strings(".//p//text()")?.is_empty() || body.findall(".//table").len() > body.findall(".//p").len()))
+            && (body.xpath_strings(".//p//text()")?.is_empty()
+                || body.findall(".//table").len() > body.findall(".//p").len()))
         || (recall && len_algo as f64 > 1.5 * len_text as f64 && !algo_text.starts_with('{'))
         || (recall
             && body.xpath_nodes(".//head")?.is_empty()

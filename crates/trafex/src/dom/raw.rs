@@ -148,7 +148,9 @@ pub(crate) unsafe fn remove_text(n: P) {
 pub(crate) fn utf8(s: &str) -> Result<CString> {
     let b = s.as_bytes();
     let is_char = |c: u8| (0x9..=0xa).contains(&c) || c == 0xd || c >= 0x20;
-    let invalid = || Error::Value("All strings must be XML compatible: Unicode or ASCII, no NULL bytes or control characters".into());
+    let invalid = || {
+        Error::Value("All strings must be XML compatible: Unicode or ASCII, no NULL bytes or control characters".into())
+    };
     let end = b.len();
     let mut i = 0;
     let mut next3: u32 = 0;

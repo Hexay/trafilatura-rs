@@ -1,16 +1,20 @@
 //! Rust counterpart of harness/ref_justext.py. usage: justext_parity run docs.jsonl out.jsonl
 //!                                                    justext_parity show docs.jsonl <i>
-use trafex::justext::{custom_justext_full as custom_justext, Paragraph, Stoplist};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use trafex::dom::{Ctx, Error};
+use trafex::justext::{custom_justext_full as custom_justext, Paragraph, Stoplist};
 
 fn esc(s: &str) -> String {
     s.replace('\\', "\\\\").replace('\n', "\\n")
 }
 
 fn py_bool(b: bool) -> &'static str {
-    if b { "True" } else { "False" }
+    if b {
+        "True"
+    } else {
+        "False"
+    }
 }
 
 /// Same bytes as `dump` in ref_justext.py.

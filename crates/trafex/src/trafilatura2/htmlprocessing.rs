@@ -144,11 +144,7 @@ pub fn delete_by_link_density(
         let (result, has_list) = link_density_test(elem, &mut elemlen, favor_precision);
         // A non-empty list implies the length was computed.
         let len = || elemlen.expect("computed before any list is built");
-        let backtrack = backtracking
-            && has_list
-            && 0 < len()
-            && len() < len_threshold
-            && elem.len() >= depth_threshold;
+        let backtrack = backtracking && has_list && 0 < len() && len() < len_threshold && elem.len() >= depth_threshold;
         if result || backtrack {
             if tagname == "p" && elem.parent().is_some_and(|p| matches!(p.tag(), "item" | "td" | "th")) {
                 continue;

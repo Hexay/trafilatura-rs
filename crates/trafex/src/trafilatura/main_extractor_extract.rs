@@ -53,9 +53,8 @@ pub fn recover_wild_text(
     result_body: Node,
     potential_tags: &mut PotentialTags,
 ) -> Result<Node> {
-    let mut search_expr = String::from(
-        ".//blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//div[contains(@class, 'w3-code')]",
-    );
+    let mut search_expr =
+        String::from(".//blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//div[contains(@class, 'w3-code')]");
     if env.opts.focus == Focus::Recall {
         potential_tags.extend(["div", "lb"]);
         search_expr += "|.//div|.//lb|.//list";

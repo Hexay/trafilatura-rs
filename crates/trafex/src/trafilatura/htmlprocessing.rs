@@ -27,8 +27,28 @@ pub(crate) fn attribute_error(what: &str) -> Error {
 }
 
 pub const CUT_EMPTY_ELEMS: &[&str] = &[
-    "article", "b", "blockquote", "dd", "div", "dt", "em", "h1", "h2", "h3", "h4", "h5", "h6", "i", "li", "main", "p",
-    "pre", "q", "section", "span", "strong",
+    "article",
+    "b",
+    "blockquote",
+    "dd",
+    "div",
+    "dt",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "i",
+    "li",
+    "main",
+    "p",
+    "pre",
+    "q",
+    "section",
+    "span",
+    "strong",
 ];
 
 pub const MANUALLY_CLEANED: &[&str] = &[
@@ -97,7 +117,10 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
                     prev.set_tail(Some(&format!("{} {}", prev.tail().unwrap_or_default(), tail)))?;
                 }
             }
-            subtree.parent().ok_or_else(|| attribute_error("'NoneType' object has no attribute 'remove'"))?.remove(ctx, subtree)?;
+            subtree
+                .parent()
+                .ok_or_else(|| attribute_error("'NoneType' object has no attribute 'remove'"))?
+                .remove(ctx, subtree)?;
         }
     }
     if let Some((old_len, backup)) = backup {
@@ -138,7 +161,8 @@ pub fn link_density_test(element: Node, elemlen: &mut Option<usize>, favor_preci
             if elemnum == 0 {
                 return (true, false);
             }
-            let dense = linklen as f64 > 0.8 * elemlen as f64 || (elemnum > 1 && shortelems as f64 / elemnum as f64 > 0.8);
+            let dense =
+                linklen as f64 > 0.8 * elemlen as f64 || (elemnum > 1 && shortelems as f64 / elemnum as f64 > 0.8);
             return (dense, true);
         }
     }

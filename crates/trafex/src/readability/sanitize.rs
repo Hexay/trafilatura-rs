@@ -1,8 +1,8 @@
 //! `Document.sanitize`: prune headers, forms, non-video iframes and low-quality tables/lists/divs.
-use super::scoring::{class_weight, link_density, text_length, Candidates};
 use super::regexes::VIDEO;
-use std::collections::HashSet;
+use super::scoring::{class_weight, link_density, text_length, Candidates};
 use crate::dom::{Ctx, Method, Node, Result};
+use std::collections::HashSet;
 
 const CONDITIONAL: &str = "//table|//ul|//div|//aside|//header|//footer|//section";
 
@@ -31,7 +31,9 @@ pub fn sanitize(ctx: &Ctx, node: Node, cands: &Candidates, min_text_length: usiz
         let score = cands.get(elem).unwrap_or(0.0);
         if weight as f64 + score < 0.0 {
             elem.drop_tree(ctx)?;
-        } else if elem.text_content().matches(',').count() < 10 && should_remove(elem, weight, min_text_length, &mut allowed) {
+        } else if elem.text_content().matches(',').count() < 10
+            && should_remove(elem, weight, min_text_length, &mut allowed)
+        {
             elem.drop_tree(ctx)?;
         }
     }

@@ -27,10 +27,17 @@ fn span(cell: Node, attr: &str) -> usize {
     if value.is_empty() || !value.chars().all(|c| decimal_value(c).is_some()) {
         return 1;
     }
-    value.chars().try_fold(0usize, |acc, c| {
-        let v = acc * 10 + decimal_value(c).expect("decimal") as usize;
-        if v >= MAX_SPAN { None } else { Some(v) }
-    }).unwrap_or(MAX_SPAN)
+    value
+        .chars()
+        .try_fold(0usize, |acc, c| {
+            let v = acc * 10 + decimal_value(c).expect("decimal") as usize;
+            if v >= MAX_SPAN {
+                None
+            } else {
+                Some(v)
+            }
+        })
+        .unwrap_or(MAX_SPAN)
 }
 
 fn row_has_content(row: Node) -> bool {
@@ -51,7 +58,13 @@ fn flush_rowspan_phantoms(ctx: &Ctx, rowspan_map: &mut HashMap<usize, usize>, ne
 }
 
 /// `_finalize_row`.
-fn finalize_row(ctx: &Ctx, newtable: Node, newrow: Node, map: &mut HashMap<usize, usize>, max_cols: usize) -> Result<()> {
+fn finalize_row(
+    ctx: &Ctx,
+    newtable: Node,
+    newrow: Node,
+    map: &mut HashMap<usize, usize>,
+    max_cols: usize,
+) -> Result<()> {
     flush_rowspan_phantoms(ctx, map, newrow)?;
     while newrow.len() < max_cols {
         newrow.append(define_cell_type(ctx, false)?)?;
@@ -63,7 +76,13 @@ fn finalize_row(ctx: &Ctx, newtable: Node, newrow: Node, map: &mut HashMap<usize
 }
 
 /// `_fill_cell`: the source cell's content into the new `cell`.
-fn fill_cell(env: &mut Env, new: Node, cell: Node, nested: &HashSet<Node>, ptags_with_div: &PotentialTags) -> Result<()> {
+fn fill_cell(
+    env: &mut Env,
+    new: Node,
+    cell: Node,
+    nested: &HashSet<Node>,
+    ptags_with_div: &PotentialTags,
+) -> Result<()> {
     if cell.is_empty() {
         if let Some(pc) = process_node(env, cell)? {
             new.set_text(pc.text().as_deref())?;
@@ -125,7 +144,11 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
     table_elem.strip_tags(ctx, &["thead", "tbody", "tfoot"]);
     let nested: HashSet<Node> = table_elem.iter_descendants(&["table"]).flat_map(|t| t.iter(&[])).collect();
     let col_counts = table_elem.findall("tr").into_iter().map(|tr| {
-        tr.children().into_iter().filter(|td| TABLE_ELEMS.contains(&td.tag())).map(|td| span(td, "colspan")).sum::<usize>()
+        tr.children()
+            .into_iter()
+            .filter(|td| TABLE_ELEMS.contains(&td.tag()))
+            .map(|td| span(td, "colspan"))
+            .sum::<usize>()
     });
     let max_cols = col_counts.max().unwrap_or(0).min(MAX_SPAN);
     for caption in table_elem.findall("caption") {
@@ -198,7 +221,8 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
 pub fn handle_image(ctx: &Ctx, element: Option<Node>) -> Result<Option<Node>> {
     let Some(element) = element else { return Ok(None) };
     let processed = ctx.element(element.tag())?;
-    let direct = ["data-src", "src"].iter().map(|a| element.get(a).unwrap_or_default()).find(|s| is_image_file(Some(s)));
+    let direct =
+        ["data-src", "src"].iter().map(|a| element.get(a).unwrap_or_default()).find(|s| is_image_file(Some(s)));
     let src = direct.or_else(|| {
         element.attrs().into_iter().find(|(k, v)| k.starts_with("data-src") && is_image_file(Some(v))).map(|(_, v)| v)
     });

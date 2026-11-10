@@ -34,13 +34,11 @@ pub const BODY_XPATH: [&str; 5] = [
         starts-with(@class, 'main') or starts-with(@id, 'main') or starts-with(@role, 'main')])[1]|(.//main)[1]
         "##,
 ];
-pub const REMOVE_COMMENTS_XPATH: [&str; 1] = [
-    r##"
+pub const REMOVE_COMMENTS_XPATH: [&str; 1] = [r##"
         .//*[self::div or self::list or self::section or self::details][
         re:test(@id, '^(?:[Cc]omment|comol|disqus_thread|dsq-comments)') or
         re:test(@class, '^[Cc]omment|(?:article|post)-comments')]
-        "##,
-];
+        "##];
 pub const OVERALL_DISCARD_XPATH: [&str; 2] = [
     r##"
         .//*[self::div or self::item or self::list or self::p or self::section or self::span][
@@ -60,12 +58,10 @@ pub const OVERALL_DISCARD_XPATH: [&str; 2] = [
         re:test(@class, '^hide-|comments-title|nocomments|-reply-|message|akismet|suggest-links|-hide-|hide-print| hidden| hide|noprint|notloaded') or @aria-hidden='true']
         "##,
 ];
-pub const TEASER_DISCARD_XPATH: [&str; 1] = [
-    r##"
+pub const TEASER_DISCARD_XPATH: [&str; 1] = [r##"
     .//*[self::div or self::item or self::list or self::p or self::section or self::span][
     contains(translate(@id, 'T', 't'), 'teaser') or contains(translate(@class, 'T', 't'), 'teaser')]
-    "##,
-];
+    "##];
 pub const PRECISION_DISCARD_XPATH: [&str; 2] = [
     r##".//header"##,
     r##"
@@ -73,11 +69,9 @@ pub const PRECISION_DISCARD_XPATH: [&str; 2] = [
     contains(@id|@class, 'bottom') or re:test(@id|@class, '(^|\s)link(\s|$)') or contains(@style, 'border')]
     "##,
 ];
-pub const DISCARD_IMAGE_ELEMENTS: [&str; 1] = [
-    r##"
+pub const DISCARD_IMAGE_ELEMENTS: [&str; 1] = [r##"
     .//*[self::div or self::item or self::list or self::p or self::section or self::span][
     contains(@id, 'caption') or contains(@class, 'caption')]
-    "##,
-];
+    "##];
 pub const BASIC_CLEAN_XPATH: &str = r##".//aside|.//div[contains(@class|@id, 'footer')]|.//fencedframe|.//footer|.//script|.//style|.//svg|.//template|.//*[re:test(@class, 'cookie[-_]?(?:banner|bar|consent|law|notice|policy|description)|notice[-_]{0,2}cookie|consent[-_]?(?:banner|manager|sdk)|borlabs|cookiebot|cmplz|onetrust|moove[-_]?gdpr', 'i') or re:test(@id, 'cookie[-_]?(?:banner|bar|consent|law|notice|policy|description)|notice[-_]{0,2}cookie|consent[-_]?(?:banner|manager|sdk)|borlabs|cookiebot|cmplz|onetrust|moove[-_]?gdpr', 'i')]"##;
 pub const SANITIZED_XPATH: &str = r##".//aside|.//audio|.//button|.//fencedframe|.//fieldset|.//figure|.//footer|.//iframe|.//input|.//label|.//link|.//nav|.//noindex|.//noscript|.//object|.//option|.//select|.//source|.//svg|.//time"##;

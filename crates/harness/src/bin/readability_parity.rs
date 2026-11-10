@@ -1,10 +1,10 @@
 //! Rust counterpart of harness/ref_readability.py.
 //!   readability_parity run docs.jsonl out.jsonl
 //!   readability_parity show docs.jsonl <i> [tr]
-use trafex::readability::{try_readability, Document};
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use trafex::dom::{Ctx, Error, Method};
+use trafex::readability::{try_readability, Document};
 use trafex::trafilatura::utils::load_html;
 
 fn exc_name(e: &Error) -> String {

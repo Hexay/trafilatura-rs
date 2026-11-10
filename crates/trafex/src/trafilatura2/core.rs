@@ -141,8 +141,7 @@ pub fn escalation_due(opts: &Options, len_text: usize, page_len: usize) -> bool 
 pub fn escalate(env: &mut Env, tree: Node, is_forum: bool, len_text: usize) -> Result<Option<Extraction>> {
     let (ctx, opts) = (env.ctx, env.opts);
     let r_opts = Options { focus: Focus::Recall, ..opts.clone() };
-    let esc_tree =
-        if is_forum { tree } else { prune_unwanted_nodes(ctx, tree, &REMOVE_COMMENTS_XPATH, false)? };
+    let esc_tree = if is_forum { tree } else { prune_unwanted_nodes(ctx, tree, &REMOVE_COMMENTS_XPATH, false)? };
     let mut r_env = Env { ctx, opts: &r_opts, lru: &mut *env.lru };
     // Python catches any Exception from either candidate.
     let retry = recall_retry(&mut r_env, esc_tree).ok();

@@ -1,6 +1,6 @@
 //! justext/paragraph.py, justext/utils.py text helpers and core.PathInfo.
-use std::collections::HashMap;
 use crate::py;
+use std::collections::HashMap;
 
 /// `class_type` / `cf_class` values; `Unset` is Python's initial `""`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

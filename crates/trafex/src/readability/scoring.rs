@@ -1,8 +1,8 @@
 //! Candidate scoring: `score_paragraphs`, `class_weight`, `score_node`, `get_link_density`, `select_best_candidate`.
 use super::regexes::{NEGATIVE, POSITIVE};
-use std::collections::HashMap;
 use crate::dom::Node;
 use crate::py;
+use std::collections::HashMap;
 
 /// The `candidates` dict: element identity -> score, in insertion order.
 #[derive(Default)]

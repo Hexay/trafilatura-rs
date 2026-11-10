@@ -1,6 +1,8 @@
 //! `trafex._core`: extraction entry points. Python-level argument checking and the trafilatura monkeypatch live
 //! in python/trafex/__init__.py.
-use pyo3::exceptions::{PyAssertionError, PyAttributeError, PyIndexError, PyKeyError, PyRuntimeError, PyTypeError, PyValueError};
+use pyo3::exceptions::{
+    PyAssertionError, PyAttributeError, PyIndexError, PyKeyError, PyRuntimeError, PyTypeError, PyValueError,
+};
 use pyo3::prelude::*;
 use std::sync::{LazyLock, Mutex};
 use trafex::dom::Error;
@@ -30,7 +32,13 @@ fn to_py_err(e: Error) -> PyErr {
     }
 }
 
-fn options(favor_precision: bool, favor_recall: bool, include_tables: bool, deduplicate: bool, no_fallback: bool) -> Options {
+fn options(
+    favor_precision: bool,
+    favor_recall: bool,
+    include_tables: bool,
+    deduplicate: bool,
+    no_fallback: bool,
+) -> Options {
     let focus = if favor_recall {
         Focus::Recall
     } else if favor_precision {
@@ -38,7 +46,14 @@ fn options(favor_precision: bool, favor_recall: bool, include_tables: bool, dedu
     } else {
         Focus::Balanced
     };
-    Options { focus, comments: false, tables: include_tables, dedup: deduplicate, fast: no_fallback, ..Options::default() }
+    Options {
+        focus,
+        comments: false,
+        tables: include_tables,
+        dedup: deduplicate,
+        fast: no_fallback,
+        ..Options::default()
+    }
 }
 
 /// `trafilatura.extract` (txt output, include_comments=False) with the process-wide dedup state.
@@ -80,7 +95,13 @@ struct Extractor {
 impl Extractor {
     #[new]
     #[pyo3(signature = (favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false, no_fallback=false))]
-    fn new(favor_precision: bool, favor_recall: bool, include_tables: bool, deduplicate: bool, no_fallback: bool) -> Self {
+    fn new(
+        favor_precision: bool,
+        favor_recall: bool,
+        include_tables: bool,
+        deduplicate: bool,
+        no_fallback: bool,
+    ) -> Self {
         let opts = options(favor_precision, favor_recall, include_tables, deduplicate, no_fallback);
         Extractor { inner: core::Extractor::new(opts) }
     }

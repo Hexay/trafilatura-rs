@@ -4,13 +4,15 @@ mod maker;
 mod paragraph;
 pub mod sax;
 
-pub use classify::{classify_paragraphs, get_next_neighbour, get_prev_neighbour, revise_paragraph_classification, Params};
+pub use classify::{
+    classify_paragraphs, get_next_neighbour, get_prev_neighbour, revise_paragraph_classification, Params,
+};
 pub use maker::make_paragraphs;
 pub use paragraph::{is_blank, normalize_whitespace, Class, Paragraph, PathInfo};
 
+use crate::dom::{Node, Result};
 use std::collections::HashSet;
 use std::sync::LazyLock;
-use crate::dom::{Node, Result};
 
 /// A `define_stoplist` result: lower-cased words.
 pub struct Stoplist(HashSet<String>);

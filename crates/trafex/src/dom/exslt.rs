@@ -8,8 +8,8 @@ use std::os::raw::c_int;
 const EXSLT_RE: &[u8] = b"http://exslt.org/regular-expressions\0";
 
 pub(crate) unsafe fn register(ctxt: *mut ffi::xmlXPathContext) {
-    ffi::xmlXPathRegisterNs(ctxt, b"re\0".as_ptr(), EXSLT_RE.as_ptr());
-    ffi::xmlXPathRegisterFuncNS(ctxt, b"test\0".as_ptr(), EXSLT_RE.as_ptr(), Some(re_test));
+    ffi::xmlXPathRegisterNs(ctxt, c"re".as_ptr().cast(), EXSLT_RE.as_ptr());
+    ffi::xmlXPathRegisterFuncNS(ctxt, c"test".as_ptr().cast(), EXSLT_RE.as_ptr(), Some(re_test));
 }
 
 /// `_make_string`: a node-set argument is its *first* node in libxml2's node table order (not sorted), an

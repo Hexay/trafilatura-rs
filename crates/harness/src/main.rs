@@ -154,7 +154,11 @@ fn main() {
         let t = std::time::Instant::now();
         let kept = pages.iter().filter(|h| matches!(extract(h), Ok(Some(_)))).count();
         let secs = t.elapsed().as_secs_f64();
-        println!("docs={} kept={kept} extract={secs:.2}s = {:.2} ms/doc", pages.len(), 1000.0 * secs / pages.len() as f64);
+        println!(
+            "docs={} kept={kept} extract={secs:.2}s = {:.2} ms/doc",
+            pages.len(),
+            1000.0 * secs / pages.len() as f64
+        );
         return;
     }
     let mut out = BufWriter::new(std::fs::File::create(&args[3]).expect("out file"));

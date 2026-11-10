@@ -39,7 +39,5 @@ re_i!(VIDEO, r"https?://(?:www\.)?(?:youtube|vimeo)\.com");
 /// `DOT_SPACE.search(s)` for `\.( |$)`; Python's `$` also matches before a final "\n".
 pub fn dot_space(s: &str) -> bool {
     let b = s.as_bytes();
-    b.iter().enumerate().any(|(i, &c)| {
-        c == b'.' && matches!(&b[i + 1..], [] | [b' ', ..] | [b'\n'])
-    })
+    b.iter().enumerate().any(|(i, &c)| c == b'.' && matches!(&b[i + 1..], [] | [b' ', ..] | [b'\n']))
 }

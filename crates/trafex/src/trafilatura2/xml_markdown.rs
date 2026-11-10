@@ -146,8 +146,7 @@ pub fn collapse_emphasis(ctx: &Ctx, el: Node, active: &[&'static str]) -> Result
         if let Some(m) = hi_marker(el) {
             active.push(m);
         }
-        loop {
-            let Some(child) = el.child(0) else { break };
+        while let Some(child) = el.child(0) {
             let blank = |s: Option<String>| py::strip(&s.unwrap_or_default()).is_empty();
             let collapsible = blank(el.text())
                 && el.len() == 1

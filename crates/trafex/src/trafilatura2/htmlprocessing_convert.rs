@@ -74,7 +74,8 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         for elem in tree.iter(REND_TAGS) {
             elem.clear_attrs();
             let i = REND_TAGS.iter().position(|&t| t == elem.tag());
-            let rend = i.map(|i| REND_VALUES[i]).ok_or_else(|| Error::Runtime(format!("KeyError: {:?}", elem.tag())))?;
+            let rend =
+                i.map(|i| REND_VALUES[i]).ok_or_else(|| Error::Runtime(format!("KeyError: {:?}", elem.tag())))?;
             elem.set("rend", Some(rend))?;
             elem.set_tag("hi")?;
         }

@@ -5,9 +5,9 @@ mod regexes;
 mod sanitize;
 mod scoring;
 
-use scoring::{link_density, Candidates};
 use crate::dom::{fragment_fromstring, Ctx, Node, Result};
 use crate::py;
+use scoring::{link_density, Candidates};
 
 /// `readability_lxml.Document`; not re-enterable, `summary` mutates the tree.
 pub struct Document {
