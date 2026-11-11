@@ -38,6 +38,7 @@ impl Drop for Compiled {
 /// Everything known about one expression string: libxml2's compiled form plus native plans for the full
 /// node-set and for first-match use.
 struct Entry {
+    expr: String,
     comp: Compiled,
     plan: Option<Plan>,
     first: Option<Plan>,
@@ -45,9 +46,28 @@ struct Entry {
 
 thread_local! {
     static CACHE: RefCell<HashMap<String, std::rc::Rc<Entry>>> = RefCell::new(HashMap::new());
+    /// Front cache by string address (expressions are mostly constants), checked against the text on a hit.
+    static BY_ADDR: RefCell<HashMap<(usize, usize), std::rc::Rc<Entry>>> = RefCell::new(HashMap::new());
 }
 
 fn entry(expr: &str) -> Result<std::rc::Rc<Entry>> {
+    let addr = (expr.as_ptr() as usize, expr.len());
+    if let Some(e) = BY_ADDR.with(|c| c.borrow().get(&addr).filter(|e| e.expr == expr).cloned()) {
+        return Ok(e);
+    }
+    let e = entry_by_text(expr)?;
+    BY_ADDR.with(|c| {
+        let mut c = c.borrow_mut();
+        // built expressions land at arbitrary addresses
+        if c.len() > 4096 {
+            c.clear();
+        }
+        c.insert(addr, e.clone());
+    });
+    Ok(e)
+}
+
+fn entry_by_text(expr: &str) -> Result<std::rc::Rc<Entry>> {
     CACHE.with(|cache| {
         if let Some(e) = cache.borrow().get(expr) {
             return Ok(e.clone());
@@ -58,7 +78,12 @@ fn entry(expr: &str) -> Result<std::rc::Rc<Entry>> {
         if comp.is_null() {
             return Err(Error::Value(format!("Invalid expression: {expr}")));
         }
-        let e = std::rc::Rc::new(Entry { comp: Compiled(comp), plan: plan(expr), first: plan_first(expr) });
+        let e = std::rc::Rc::new(Entry {
+            expr: expr.to_owned(),
+            comp: Compiled(comp),
+            plan: plan(expr),
+            first: plan_first(expr),
+        });
         cache.borrow_mut().insert(expr.to_owned(), e.clone());
         Ok(e)
     })

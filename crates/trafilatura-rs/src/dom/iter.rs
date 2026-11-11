@@ -210,6 +210,15 @@ impl Node {
         }
     }
 
+    /// `len(el.text_content())` without building the string.
+    pub fn text_content_len(self) -> usize {
+        let mut n = 0;
+        if unsafe { !visit_text(self.raw(), &mut |s| n += py::len(s)) } {
+            return py::len(&self.text_content());
+        }
+        n
+    }
+
     /// `len(trim(el.text_content()))` without building either string.
     pub fn text_content_trim_len(self) -> usize {
         let mut count = py::TrimLen::default();

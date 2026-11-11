@@ -4,7 +4,6 @@ use super::settings::{Focus, Options};
 use super::text::{textfilter, trim};
 use super::xml::delete_element;
 use crate::dom::{Ctx, Error, Node, Result};
-use crate::py;
 
 /// What trafilatura threads through as `options` (plus the dedup LRU Python keeps module-global).
 pub struct Env<'a> {
@@ -109,7 +108,7 @@ pub fn prune_html(ctx: &Ctx, tree: Node) -> Result<Node> {
 
 /// `prune_unwanted_nodes`.
 pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backup: bool) -> Result<Node> {
-    let backup = with_backup.then(|| (py::len(&tree.text_content()), tree.deep_copy(ctx)));
+    let backup = with_backup.then(|| (tree.text_content_len(), tree.deep_copy(ctx)));
     for expression in nodelist {
         for subtree in tree.xpath_nodes(expression)? {
             if let Some(tail) = subtree.tail() {
@@ -124,7 +123,7 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
         }
     }
     if let Some((old_len, backup)) = backup {
-        let new_len = py::len(&tree.text_content());
+        let new_len = tree.text_content_len();
         return Ok(if new_len as f64 > old_len as f64 / 7.0 { tree } else { backup });
     }
     Ok(tree)

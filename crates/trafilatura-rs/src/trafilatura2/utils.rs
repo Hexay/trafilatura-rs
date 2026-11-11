@@ -28,8 +28,10 @@ fn prefix_chars(s: &str, n: usize) -> &str {
 pub fn repair_faulty_html<'a>(html: &'a str, beginning: &str) -> Cow<'a, str> {
     // U+FFFE/U+FFFF are EF BF BE / EF BF BF in UTF-8.
     let bytes = html.as_bytes();
-    let has_invalid = bytes.iter().any(|&b| b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r'))
-        || bytes.windows(3).any(|w| w[0] == 0xef && w[1] == 0xbf && w[2] >= 0xbe);
+    let has_invalid = bytes.iter().enumerate().any(|(i, &b)| {
+        (b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r'))
+            || (b == 0xef && bytes.get(i + 1) == Some(&0xbf) && bytes.get(i + 2).is_some_and(|&c| c >= 0xbe))
+    });
     let mut s: Cow<str> = if has_invalid {
         Cow::Owned(html.chars().filter(|&c| !invalid_xml_char(c)).collect())
     } else {
@@ -114,7 +116,8 @@ pub fn textfilter(el: Node) -> bool {
         t => t,
     };
     let Some(t) = test.filter(|t| text_chars_test(Some(t))) else { return true };
-    let re = py::re::compile(&format!("^(?:{RE_FILTER})"), true);
-    let filtered = py::splitlines(&t).any(|l| re.is_match(l));
-    filtered
+    thread_local! {
+        static FILTER: std::rc::Rc<Regex> = py::re::compile(&format!("^(?:{RE_FILTER})"), true);
+    }
+    FILTER.with(|re| py::splitlines(&t).any(|l| re.is_match(l)))
 }
