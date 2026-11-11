@@ -1,17 +1,18 @@
 //! One location step of the recognised grammar and its native matcher:
-//!   step  := .//name | .//name[preds] | .//*[preds] | .//*[tags][preds]
+//!   step  := .//name[preds]* | .//*[preds]* | .//*[tags][preds]*     (every predicate group must hold)
 //!   tags  := self::a or self::b ...  (optionally parenthesised)
 //!   preds := atom (or atom)*
 //!   atom  := contains(V, "s") | starts-with(V, "s") | @a="v" | @a
 //!          | contains(U, "s") | starts-with(U, "s") | re:test(U, 'pattern'[, 'flags'])
+//!          | not(self::a or self::b ...) | not(.//name) | not(ancestor::name)
 //!   V := @a | translate(@a, "ABC", "abc")      U := @a | @a|@b ...
 //! A union U is converted to a string as libxml2 does for function arguments (sorted node-set): the value of the
 //! first listed attribute in the element's attribute order, "" if none. `re:test` is Python `re.search` (lxml).
 //! Values are compared as UTF-8 bytes, as libxml2's xmlStrstr / xmlStrncmp / xmlStrEqual do.
-use super::super::alloc;
 use super::super::raw::P;
 use super::super::{cstr, ELEMENT};
 pub(crate) use super::pred_parse::parse_step;
+use super::resolve::{look, Resolved};
 use aho_corasick::AhoCorasick;
 use libxml2_sys as ffi;
 use regex::Regex;
@@ -34,6 +35,8 @@ pub(crate) enum UnionKind {
     Contains(Vec<u8>),
     StartsWith(Vec<u8>),
     Regex(Rc<Regex>),
+    /// Lookaround patterns, which only fancy-regex runs.
+    Fancy(Rc<fancy_regex::Regex>),
 }
 
 /// A test on the string value of an attribute union (a single attribute for `re:test(@a, ...)`).
@@ -42,49 +45,24 @@ pub(crate) struct UnionTest {
     pub kind: UnionKind,
 }
 
+/// One predicate: a disjunction of atoms.
+#[derive(Default)]
+pub(crate) struct Preds {
+    pub tests: Vec<AttrTests>,
+    pub unions: Vec<UnionTest>,
+    /// `not(self::a or ...)` atoms (each holds when the element is none of its names).
+    pub not_self: Vec<Vec<String>>,
+    /// `not(.//name)` atoms.
+    pub not_desc: Vec<String>,
+    /// `not(ancestor::name)` atoms.
+    pub not_anc: Vec<String>,
+}
+
 pub(crate) struct Step {
-    tags: Option<Vec<String>>,
-    tests: Vec<AttrTests>,
-    unions: Vec<UnionTest>,
-    tag_only: bool,
+    pub(super) tags: Option<Vec<String>>,
+    pub(super) groups: Vec<Preds>,
     /// Names resolved in the current `Ctx` dict (all names there are interned), so matching compares pointers.
     resolved: RefCell<Resolved>,
-}
-
-struct Resolved {
-    dict: *mut ffi::xmlDict,
-    generation: u64,
-    /// Dict size at resolution when some name was absent; renames (`set_tag`) can intern it later.
-    missing_at: Option<i32>,
-    tags: Vec<*const ffi::xmlChar>,
-    attrs: Vec<*const ffi::xmlChar>,
-    unions: Vec<Vec<*const ffi::xmlChar>>,
-}
-
-unsafe fn look(dict: *mut ffi::xmlDict, s: &[u8]) -> *const ffi::xmlChar {
-    ffi::xmlDictExists(dict, s.as_ptr(), s.len() as i32)
-}
-
-impl Resolved {
-    unsafe fn new(dict: *mut ffi::xmlDict, step: &Step) -> Resolved {
-        let mut r = Resolved {
-            dict,
-            generation: alloc::generation(),
-            missing_at: None,
-            tags: step.tags.iter().flatten().map(|t| look(dict, t.as_bytes())).collect(),
-            attrs: step.tests.iter().map(|t| look(dict, &t.name)).collect(),
-            unions: step.unions.iter().map(|u| u.names.iter().map(|n| look(dict, n)).collect()).collect(),
-        };
-        let missing = r.tags.iter().chain(&r.attrs).chain(r.unions.iter().flatten()).any(|p| p.is_null());
-        r.missing_at = missing.then(|| ffi::xmlDictSize(dict));
-        r
-    }
-
-    unsafe fn stale(&self, dict: *mut ffi::xmlDict) -> bool {
-        self.dict != dict
-            || self.generation != alloc::generation()
-            || self.missing_at.is_some_and(|size| size != ffi::xmlDictSize(dict))
-    }
 }
 
 /// Attribute value bytes as XPath sees them (borrowed when the value is a single text node).
@@ -114,22 +92,33 @@ unsafe fn first_attr<'a>(n: P, is_name: impl Fn(*const ffi::xmlChar) -> bool) ->
     None
 }
 
+/// Whether some element ancestor of `n` satisfies `is_name`.
+unsafe fn has_ancestor(n: P, is_name: impl Fn(*const ffi::xmlChar) -> bool) -> bool {
+    let mut p = (*n).parent;
+    while !p.is_null() {
+        if (*p).type_ == ELEMENT && is_name((*p).name) {
+            return true;
+        }
+        p = (*p).parent;
+    }
+    false
+}
+
+/// Whether some element strictly below `n` satisfies `is_name`.
+unsafe fn has_descendant(n: P, is_name: impl Fn(*const ffi::xmlChar) -> bool) -> bool {
+    let mut c = super::super::iter::traverse_next(n, n);
+    while !c.is_null() {
+        if (*c).type_ == ELEMENT && is_name((*c).name) {
+            return true;
+        }
+        c = super::super::iter::traverse_next(n, c);
+    }
+    false
+}
+
 impl Step {
-    pub(crate) fn new(
-        tags: Option<Vec<String>>,
-        tests: Vec<AttrTests>,
-        unions: Vec<UnionTest>,
-        tag_only: bool,
-    ) -> Step {
-        let resolved = Resolved {
-            dict: ptr::null_mut(),
-            generation: 0,
-            missing_at: None,
-            tags: vec![],
-            attrs: vec![],
-            unions: vec![],
-        };
-        Step { tags, tests, unions, tag_only, resolved: RefCell::new(resolved) }
+    pub(crate) fn new(tags: Option<Vec<String>>, groups: Vec<Preds>) -> Step {
+        Step { tags, groups, resolved: RefCell::new(Resolved::empty()) }
     }
 
     pub(crate) unsafe fn matches(&self, n: P) -> bool {
@@ -144,40 +133,53 @@ impl Step {
         if r.stale(dict) {
             *r = Resolved::new(dict, self);
         }
-        if self.tags.is_some() && !r.tags.contains(&(*n).name) {
+        let name = (*n).name;
+        if self.tags.is_some() && !r.tags.contains(&name) {
             return false;
         }
-        if self.tag_only {
-            return true;
-        }
-        self.tests
-            .iter()
-            .zip(&r.attrs)
-            .any(|(t, &attr)| !attr.is_null() && first_attr(n, |name| name == attr).is_some_and(|v| t.test(&v)))
-            || self
-                .unions
+        self.groups.iter().zip(&r.groups).all(|(g, rg)| {
+            g.tests
                 .iter()
-                .zip(&r.unions)
-                .any(|(u, names)| u.test(&first_attr(n, |name| names.contains(&name)).unwrap_or(Cow::Borrowed(&[]))))
+                .zip(&rg.attrs)
+                .any(|(t, &attr)| !attr.is_null() && first_attr(n, |a| a == attr).is_some_and(|v| t.test(&v)))
+                || g.unions
+                    .iter()
+                    .zip(&rg.unions)
+                    .any(|(u, names)| u.test(&first_attr(n, |a| names.contains(&a)).unwrap_or(Cow::Borrowed(&[]))))
+                || rg.not_self.iter().any(|tags| !tags.contains(&name))
+                || rg.not_desc.iter().any(|&t| t.is_null() || !has_descendant(n, |d| d == t))
+                || rg.not_anc.iter().any(|&t| t.is_null() || !has_ancestor(n, |d| d == t))
+        })
     }
 
     unsafe fn matches_by_string(&self, n: P) -> bool {
-        if let Some(tags) = &self.tags {
-            let name = cstr((*n).name);
-            if !tags.iter().any(|t| t == name) {
-                return false;
-            }
+        let name = cstr((*n).name);
+        if self.tags.as_ref().is_some_and(|tags| !tags.iter().any(|t| t == name)) {
+            return false;
         }
-        self.tag_only
-            || self
-                .tests
-                .iter()
-                .any(|t| first_attr(n, |name| cstr(name).as_bytes() == &t.name[..]).is_some_and(|v| t.test(&v)))
-            || self.unions.iter().any(|u| {
-                let v = first_attr(n, |name| u.names.iter().any(|w| cstr(name).as_bytes() == &w[..]));
-                u.test(&v.unwrap_or(Cow::Borrowed(&[])))
-            })
+        fn eq(w: &[u8]) -> impl Fn(*const ffi::xmlChar) -> bool + '_ {
+            move |a| unsafe { cstr(a) }.as_bytes() == w
+        }
+        self.groups.iter().all(|g| {
+            g.tests.iter().any(|t| first_attr(n, eq(&t.name)).is_some_and(|v| t.test(&v)))
+                || g.unions.iter().any(|u| {
+                    let v = first_attr(n, |a| u.names.iter().any(|w| cstr(a).as_bytes() == &w[..]));
+                    u.test(&v.unwrap_or(Cow::Borrowed(&[])))
+                })
+                || g.not_self.iter().any(|tags| !tags.iter().any(|t| t == name))
+                || g.not_desc.iter().any(|t| !has_descendant(n, eq(t.as_bytes())))
+                || g.not_anc.iter().any(|t| !has_ancestor(n, eq(t.as_bytes())))
+        })
     }
+}
+
+/// Dict lookups for every name a step compares by pointer.
+pub(super) unsafe fn resolve_names(dict: *mut ffi::xmlDict, step: &Step) -> Resolved {
+    let mut r = Resolved::empty();
+    r.dict = dict;
+    r.tags = step.tags.iter().flatten().map(|t| look(dict, t.as_bytes())).collect();
+    r.groups = step.groups.iter().map(|g| g.resolve(dict)).collect();
+    r
 }
 
 impl AttrTests {
@@ -202,10 +204,12 @@ impl AttrTests {
 
 impl UnionTest {
     fn test(&self, v: &[u8]) -> bool {
+        let text = || std::str::from_utf8(v).expect("libxml2 stores UTF-8");
         match &self.kind {
             UnionKind::Contains(s) => v.windows(s.len().max(1)).any(|w| w == &s[..]) || s.is_empty(),
             UnionKind::StartsWith(s) => v.starts_with(s),
-            UnionKind::Regex(re) => re.is_match(std::str::from_utf8(v).expect("libxml2 stores UTF-8")),
+            UnionKind::Regex(re) => re.is_match(text()),
+            UnionKind::Fancy(re) => re.is_match(text()).expect("regex backtrack limit"),
         }
     }
 }

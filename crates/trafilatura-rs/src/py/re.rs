@@ -118,7 +118,12 @@ pub fn search(pat: &str, ignorecase: bool, s: &str) -> bool {
     if !has_lookaround(pat) {
         return compile(pat, ignorecase).is_match(s);
     }
-    let re = FANCY.with(|cache| {
+    compile_fancy(pat, ignorecase).is_match(s).expect("regex backtrack limit")
+}
+
+/// `compile` for patterns the `regex` crate cannot run (lookaround), cached per thread.
+pub fn compile_fancy(pat: &str, ignorecase: bool) -> Rc<fancy_regex::Regex> {
+    FANCY.with(|cache| {
         let key = (pat.to_owned(), ignorecase);
         if let Some(r) = cache.borrow().get(&key) {
             return r.clone();
@@ -127,8 +132,7 @@ pub fn search(pat: &str, ignorecase: bool, s: &str) -> bool {
             Rc::new(fancy_regex::Regex::new(&translate(pat, ignorecase)).unwrap_or_else(|e| panic!("{pat:?}: {e}")));
         cache.borrow_mut().insert(key, r.clone());
         r
-    });
-    re.is_match(s).expect("regex backtrack limit")
+    })
 }
 
 #[cfg(test)]
