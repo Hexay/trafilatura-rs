@@ -1,8 +1,9 @@
-//! trafilatura 2.2.0 settings.py constants. `Extractor` defaults (settings.cfg) are unchanged from 1.11, so
+//! trafilatura 2.3.1 settings.py constants. `Extractor` defaults (settings.cfg) are unchanged from 1.11, so
 //! `Options`/`Focus` are shared (MAX_TREE_SIZE is empty, i.e. None, in both).
 pub use crate::trafilatura::htmlprocessing::CUT_EMPTY_ELEMS;
-pub use crate::trafilatura::main_extractor::TAG_CATALOG;
 pub use crate::trafilatura::settings::{Focus, Options};
+
+pub const TAG_CATALOG: &[&str] = &["code", "del", "head", "hi", "lb", "list", "p", "quote"];
 
 pub const MANUALLY_CLEANED: &[&str] = &[
     "aside",
@@ -33,7 +34,6 @@ pub const MANUALLY_CLEANED: &[&str] = &[
     "fieldset",
     "link",
     "input",
-    "ins",
     "label",
     "legend",
     "marquee",
@@ -61,7 +61,7 @@ pub const MANUALLY_CLEANED: &[&str] = &[
 
 pub const MANUALLY_STRIPPED: &[&str] = &[
     "abbr", "acronym", "address", "bdi", "bdo", "big", "cite", "data", "dfn", "font", "hgroup", "img", "ins", "mark",
-    "meta", "nobr", "ruby", "small", "tbody", "template", "tfoot", "thead",
+    "meta", "nobr", "ruby", "small", "tbody", "template", "tfoot", "thead", "wbr",
 ];
 
 /// Min length for a repeated span to count as an extraction artifact.

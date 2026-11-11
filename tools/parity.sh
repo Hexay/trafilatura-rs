@@ -11,7 +11,7 @@ BIN=$(dirname "$H")
 DOCS=$D/docs.jsonl
 if [[ ${1:-} == show* ]]; then
   ref=$ROOT/harness/ref_stages.py py=$PY
-  [ "$1" = show2 ] && ref=$ROOT/harness/ref2_stages.py py=$PY22
+  [ "$1" = show2 ] && ref=$ROOT/harness/ref2_stages.py py=$PY23
   diff <("$py" "$ref" show "$DOCS" "${@:2}" 2>/dev/null | fold -w 160) <("$H" "$1" "$DOCS" "${@:2}" | fold -w 160) \
     | head -n "${LINES_MAX:-40}" || true
   exit 0
@@ -25,7 +25,7 @@ run() {
   case $mode in
     stages | final | stages2 | final2)
       local tag=${mode%2}_$cfg ref=ref_
-      [[ $mode == *2 ]] && ref=ref2_
+      [[ $mode == *2 ]] && ref=ref23_
       [ "$mode" = stages ] && tag=stages
       "$H" "$mode" "$DOCS" "$D/rust${ref#ref}$tag.jsonl" $cfg
       "$PY" "$ROOT/harness/compare.py" "$mode" "$D/$ref$tag.jsonl" "$D/rust${ref#ref}$tag.jsonl" ;;

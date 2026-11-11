@@ -1,19 +1,17 @@
-//! trafilatura 2.2.0 main_extractor.py: the `handle_*` family (lists, tables/images and the extraction driver
+//! trafilatura 2.3.1 main_extractor.py: the `handle_*` family (lists, tables/images and the extraction driver
 //! live in main_extractor_lists, main_extractor_table and main_extractor_extract).
 use super::htmlprocessing::{handle_textnode, process_node};
-pub use super::main_extractor_lists::handle_lists;
+pub use super::main_extractor_lists::{handle_lists, process_nested_elements};
 use super::main_extractor_table::{handle_image, handle_table};
-use super::settings::{INLINE_CARRIED, TAG_CATALOG};
+use super::settings::{INLINE_CARRIED, INLINE_CONSUMING};
 use super::xml::delete_element;
 use crate::dom::{Node, Result};
-use crate::trafilatura::htmlprocessing::{truthy, Env};
+use crate::trafilatura::htmlprocessing::Env;
 use crate::trafilatura::text::{text_chars_test, trim};
 use std::collections::HashSet;
 
 pub type PotentialTags = HashSet<&'static str>;
 
-const P_FORMATTING: &[&str] = &["hi", "ref"];
-const FORMATTING: &[&str] = &["hi", "ref", "del", "span"];
 const CODES_QUOTES: &[&str] = &["code", "quote"];
 const FORMATTING_PROTECTED: &[&str] = &["cell", "head", "hi", "item", "p", "quote", "ref", "td"];
 /// Internal attributes carried onto a rewired sub-element.
@@ -39,16 +37,14 @@ fn wraps_inline(el: Node) -> bool {
     !el.is_empty() && (el.tag() == "ref" || el.children().iter().any(|c| INLINE_CARRIED.contains(&c.tag())))
 }
 
-/// `handle_titles`.
+/// `handle_titles`: a heading with children is copied whole, minus children an earlier pass consumed.
 pub fn handle_titles(env: &mut Env, element: Node) -> Result<Option<Node>> {
     let title = if element.is_empty() {
         process_node(env, element)?
     } else {
         let title = element.deep_copy(env.ctx);
-        for child in element.children() {
-            if let Some(processed) = handle_textnode(env, child, false, false)? {
-                title.append(processed)?;
-            }
+        title.strip_elements(env.ctx, &["done"], true);
+        for child in element.iter_descendants(&["*"]) {
             child.set_tag("done")?;
         }
         Some(title)
@@ -56,16 +52,15 @@ pub fn handle_titles(env: &mut Env, element: Node) -> Result<Option<Node>> {
     Ok(title.filter(|&t| is_text_element(t)))
 }
 
-/// `handle_formatting`.
+/// `handle_formatting`: orphan formatting is wrapped in a paragraph.
 pub fn handle_formatting(env: &mut Env, element: Node) -> Result<Option<Node>> {
     let Some(formatting) = process_node(env, element)? else { return Ok(None) };
-    let parent = element.parent().or_else(|| element.prev());
-    if parent.is_none_or(|p| !FORMATTING_PROTECTED.contains(&p.tag())) {
-        let processed = env.ctx.element("p")?;
-        processed.insert(0, formatting)?;
-        return Ok(Some(processed));
+    if element.parent().is_some_and(|p| FORMATTING_PROTECTED.contains(&p.tag())) {
+        return Ok(Some(formatting));
     }
-    Ok(Some(formatting))
+    let wrapper = env.ctx.element("p")?;
+    wrapper.append(formatting)?;
+    Ok(Some(wrapper))
 }
 
 /// `update_elem_rendition`: copy a non-empty rend attribute.
@@ -76,17 +71,23 @@ pub(crate) fn update_elem_rendition(elem: Node, new_elem: Node) -> Result<()> {
     Ok(())
 }
 
+/// `_copy_attrs`: KEEP_ATTRS onto a rewired element.
+fn copy_attrs(source: Node, target: Node) -> Result<()> {
+    for (key, value) in source.attrs() {
+        if KEEP_ATTRS.contains(&key.as_str()) {
+            target.set(&key, Some(&value))?;
+        }
+    }
+    Ok(())
+}
+
 /// `define_newelem`: a sub-element copying tag, text, tail and KEEP_ATTRS, optionally with inline children.
 pub fn define_newelem(processed: Option<Node>, orig: Node, keep_children: bool) -> Result<()> {
     let Some(p) = processed else { return Ok(()) };
     let child = orig.sub_element(p.tag())?;
     child.set_text(p.text().as_deref())?;
     child.set_tail(p.tail().as_deref())?;
-    for (key, value) in p.attrs() {
-        if KEEP_ATTRS.contains(&key.as_str()) {
-            child.set(&key, Some(&value))?;
-        }
-    }
+    copy_attrs(p, child)?;
     if keep_children {
         for sub in iter_children(p) {
             if INLINE_CARRIED.contains(&sub.tag()) || sub.tag() == "lb" {
@@ -128,24 +129,7 @@ pub fn handle_quotes(env: &mut Env, element: Node) -> Result<Option<Node>> {
         return handle_code_blocks(env, element).map(Some);
     }
     let processed_element = env.ctx.element(element.tag())?;
-    processed_element.set_text(element.text().as_deref())?;
-    let quote_tags: PotentialTags = TAG_CATALOG.iter().copied().chain(["ref", "graphic"]).collect();
-    for child in element.iter_descendants(&[]) {
-        let tag = child.tag();
-        if tag == "graphic" {
-            define_newelem(handle_image(env.ctx, Some(child))?, processed_element, false)?;
-        } else if tag == "p" && !child.is_empty() {
-            if let Some(p) = handle_paragraphs(env, child, &quote_tags)? {
-                processed_element.append(p)?;
-            }
-        } else if INLINE_CARRIED.contains(&tag) {
-            define_newelem(Some(child), processed_element, true)?;
-        } else {
-            let processed = process_node(env, child)?;
-            define_newelem(processed, processed_element, false)?;
-        }
-        child.set_tag("done")?;
-    }
+    process_nested_elements(env, element, processed_element)?;
     if is_text_element(processed_element) {
         processed_element.strip_tags(env.ctx, &["quote"]);
         return Ok(Some(processed_element));
@@ -153,78 +137,75 @@ pub fn handle_quotes(env: &mut Env, element: Node) -> Result<Option<Node>> {
     Ok(None)
 }
 
-/// `handle_other_elements`.
+/// `handle_other_elements`: only a div (when divs are potential tags) becomes a paragraph.
 fn handle_other_elements(env: &mut Env, element: Node, potential_tags: &PotentialTags) -> Result<Option<Node>> {
     if element.tag() == "div" && element.get("class").unwrap_or_default().contains("w3-code") {
         return handle_code_blocks(env, element).map(Some);
     }
-    if !potential_tags.contains(element.tag()) {
+    if element.tag() != "div" || !potential_tags.contains("div") {
         return Ok(None);
     }
-    if element.tag() == "div" {
-        if let Some(processed) = handle_textnode(env, element, false, true)? {
-            if text_chars_test(processed.text().as_deref()) {
-                processed.clear_attrs();
-                if processed.tag() == "div" {
-                    processed.set_tag("p")?;
-                }
-                return Ok(Some(processed));
-            }
-        }
+    let Some(processed) = handle_textnode(env, element, false, true)? else { return Ok(None) };
+    if !text_chars_test(processed.text().as_deref()) {
+        return Ok(None);
     }
-    Ok(None)
+    processed.clear_attrs();
+    processed.set_tag("p")?;
+    Ok(Some(processed))
 }
 
 /// `handle_paragraphs`.
 pub fn handle_paragraphs(env: &mut Env, element: Node, potential_tags: &PotentialTags) -> Result<Option<Node>> {
-    element.clear_attrs();
     if element.is_empty() {
         return process_node(env, element);
     }
     let processed_element = env.ctx.element(element.tag())?;
+    let mut unexpected: Vec<&str> = element
+        .iter_descendants(&["*"])
+        .map(|c| c.tag())
+        .filter(|&t| t != "done" && !potential_tags.contains(t))
+        .collect();
+    unexpected.sort_unstable();
+    unexpected.dedup();
+    if !unexpected.is_empty() {
+        element.strip_tags(env.ctx, &unexpected);
+    }
     for child in element.iter(&["*"]) {
-        if !potential_tags.contains(child.tag()) && child.tag() != "done" {
-            continue;
-        }
         if let Some(pc) = handle_textnode(env, child, false, true)? {
             if pc.tag() == "p" {
-                let text = match processed_element.text().filter(|t| !t.is_empty()) {
-                    Some(p) => Some(format!("{p} {}", pc.text().unwrap_or_default())),
-                    None => pc.text(),
-                };
-                processed_element.set_text(text.as_deref())?;
+                let joined: Vec<String> =
+                    [processed_element.text(), pc.text()].into_iter().flatten().filter(|t| !t.is_empty()).collect();
+                processed_element.set_text(Some(&joined.join(" ")))?;
                 child.set_tag("done")?;
                 continue;
             }
             let mut newsub = env.ctx.element(child.tag())?;
-            if P_FORMATTING.contains(&pc.tag()) {
+            if INLINE_CONSUMING.contains(&pc.tag()) {
                 if wraps_inline(pc) {
                     define_newelem(Some(pc), processed_element, true)?;
                     child.set_tag("done")?;
                     continue;
                 }
-                if !pc.is_empty() {
-                    for item in iter_children(pc) {
-                        if let Some(tail) = item.tail().filter(|t| item.tag() == "lb" && !t.is_empty()) {
-                            item.set_tail(Some(&format!(" {}", tail.trim_start_matches(crate::py::is_space))))?;
-                        } else if let Some(t) = item.text().filter(|t| text_chars_test(Some(t))) {
-                            item.set_text(Some(&format!(" {t}")))?;
-                        }
-                        pc.strip_tags(env.ctx, &[item.tag()]);
+                let mut tags: Vec<&str> = Vec::new();
+                for item in iter_children(pc) {
+                    if let Some(tail) = item.tail().filter(|t| item.tag() == "lb" && !t.is_empty()) {
+                        item.set_tail(Some(&format!(" {}", tail.trim_start_matches(crate::py::is_space))))?;
+                    } else if let Some(t) = item.text().filter(|t| text_chars_test(Some(t))) {
+                        item.set_text(Some(&format!(" {t}")))?;
+                    }
+                    if item.is_element() && !tags.contains(&item.tag()) {
+                        tags.push(item.tag());
                     }
                 }
-                if child.tag() == "hi" {
-                    newsub.set("rend", Some(&child.get("rend").unwrap_or_default()))?;
-                } else if child.tag() == "ref" {
-                    if let Some(target) = child.get("target") {
-                        newsub.set("target", Some(&target))?;
-                    }
+                if !tags.is_empty() {
+                    pc.strip_tags(env.ctx, &tags);
                 }
+                copy_attrs(child, newsub)?;
             }
             newsub.set_text(pc.text().as_deref())?;
             newsub.set_tail(pc.tail().as_deref())?;
             if pc.tag() == "graphic" {
-                if let Some(image) = handle_image(env.ctx, Some(pc))? {
+                if let Some(image) = handle_image(env.ctx, pc)? {
                     newsub = image;
                 }
             }
@@ -238,7 +219,7 @@ pub fn handle_paragraphs(env: &mut Env, element: Node, potential_tags: &Potentia
         }
         return Ok(Some(processed_element));
     }
-    Ok(truthy(&processed_element.text()).then_some(processed_element))
+    Ok(text_chars_test(processed_element.text().as_deref()).then_some(processed_element))
 }
 
 /// `handle_textelem`.
@@ -258,9 +239,9 @@ pub fn handle_textelem(env: &mut Env, element: Node, potential_tags: &PotentialT
             new_element.set_text(element.tail().as_deref())?;
             Ok(Some(new_element))
         }
-        _ if FORMATTING.contains(&tag) => handle_formatting(env, element),
+        _ if INLINE_CONSUMING.contains(&tag) => handle_formatting(env, element),
         "table" if potential_tags.contains("table") => handle_table(env, element, potential_tags),
-        "graphic" if potential_tags.contains("graphic") => handle_image(env.ctx, Some(element)),
+        "graphic" if potential_tags.contains("graphic") => handle_image(env.ctx, element),
         _ => handle_other_elements(env, element, potential_tags),
     }
 }

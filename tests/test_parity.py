@@ -1,16 +1,23 @@
-"""trafilatura_rs.extract == trafilatura.extract (1.11.0 + lxml 6.1.3) on the committed fixtures, per verified
-config."""
+"""trafilatura_rs.extract == trafilatura.extract (the installed REPRODUCES pair) on the committed fixtures, per
+verified config."""
 import json
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-from parity import CONFIGS, kwargs_for, pages, run
+from parity import CONFIGS, FAST, TRAFILATURA, kwargs_for, pages, run
 
 # 3 passes so repeated segments cross trafilatura's duplicate threshold (max_repetitions=2).
 DEDUP_PASSES = 3
 DEDUP_CONFIGS = [c for c in CONFIGS if CONFIGS[c].get("deduplicate")]
+
+
+def test_installed_pair_is_reproduced():
+    import trafilatura_rs
+
+    assert not trafilatura_rs.mismatched_versions()
+    assert trafilatura_rs.engine() == TRAFILATURA
 
 
 def test_every_config_is_verified():
@@ -19,10 +26,10 @@ def test_every_config_is_verified():
     combos = {
         ((c.get("output_format", "txt"), c.get("with_metadata", False)),
          (c.get("favor_precision", False), c.get("favor_recall", False), c.get("include_tables", True),
-          c.get("no_fallback", False), c["include_comments"]))
+          c.get(FAST, False), c["include_comments"]))
         for c in CONFIGS.values()
     }
-    verified = {(out, combo) for out, combos in trafilatura_rs.VERIFIED_OUTPUTS.items() for combo in combos}
+    verified = {(out, combo) for out, combos in trafilatura_rs.verified_outputs().items() for combo in combos}
     assert combos == verified
 
 

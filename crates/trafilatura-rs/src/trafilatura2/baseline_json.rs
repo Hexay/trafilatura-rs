@@ -22,6 +22,42 @@ const HTML_TAG_NAMES: &str = "a|abbr|address|article|aside|b|blockquote|body|br|
     em|figcaption|figure|footer|h[1-6]|head|header|hr|html|i|img|ins|kbd|li|main|mark|nav|\
     ol|p|pre|q|quote|s|section|small|span|strong|sub|summary|sup|table|tbody|td|tfoot|th|\
     thead|time|title|tr|u|ul";
+const BLOCK_ELEMS: &[&str] = &[
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "br",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "li",
+    "main",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "summary",
+    "table",
+    "td",
+    "th",
+    "tr",
+    "ul",
+];
 static FULL_HTML: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&py::re::translate(r"^\s*<(?:html|!doctype)", true)).unwrap());
 
@@ -129,14 +165,27 @@ pub fn collect_json_content(tree: Node) -> Result<(Vec<String>, Vec<String>)> {
     Ok((bodies, teasers))
 }
 
-/// `trim(fragment_fromstring(raw, create_parent="div").text_content())`: the fragment body's text (leading
-/// whitespace-only text is dropped by lxml, which trimming makes irrelevant).
+/// baseline.py `_spaced_text`: the text with block boundaries spaced (mutates `element`).
+pub fn spaced_text(element: Node) -> Result<String> {
+    for elem in element.iter(BLOCK_ELEMS) {
+        let spaced = |s: Option<String>| match s.filter(|s| !s.is_empty()) {
+            Some(s) => format!(" {}", remove_control_characters(&s)),
+            None => " ".to_owned(),
+        };
+        elem.set_text(Some(&spaced(elem.text())))?;
+        elem.set_tail(Some(&spaced(elem.tail())))?;
+    }
+    Ok(trim(&element.text_content()))
+}
+
+/// `block_text(fragment_fromstring(raw, create_parent="div"))`: the fragment body's spaced text (the wrapper div
+/// only adds whitespace, which trimming removes).
 fn fragment_text(ctx: &Ctx, raw: &str) -> Result<String> {
     let wrapped = if FULL_HTML.is_match(raw) { raw.to_owned() } else { format!("<html><body>{raw}</body></html>") };
     let doc = document_fromstring(ctx, &Input::Str(&wrapped), LXML_HTML_PARSER)?;
     let bodies: Vec<Node> = doc.children().into_iter().filter(|c| c.tag() == "body").collect();
     match bodies.as_slice() {
-        [body] if doc.tag() == "html" => Ok(trim(&body.text_content())),
+        [body] if doc.tag() == "html" => spaced_text(*body),
         _ => Err(Error::Runtime("AssertionError".into())),
     }
 }

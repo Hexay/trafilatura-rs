@@ -1,5 +1,5 @@
-//! trafilatura 2.2.0 utils.py: input repair and loading, image checks, textfilter and the list/cell position
-//! helpers of the text serializer. Unchanged helpers (trim, sanitize, text_chars_test, ...) come from 1.11.
+//! trafilatura 2.3.1 utils.py: input repair and loading, image checks and textfilter. Unchanged helpers (trim,
+//! sanitize, text_chars_test, ...) come from 1.11.
 use crate::dom::{fromstring, Ctx, Error, Input, Node, HTML_PARSER};
 use crate::py;
 use crate::trafilatura::text::text_chars_test;
@@ -15,6 +15,11 @@ const RE_FILTER: &str = r"\W*(Drucken|E-?Mail|Facebook|Flipboard|Google|Instagra
 
 fn invalid_xml_char(c: char) -> bool {
     matches!(c, '\0'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\u{fffe}' | '\u{ffff}')
+}
+
+/// `htmlstring[:n]` in code points.
+fn prefix_chars(s: &str, n: usize) -> &str {
+    s.char_indices().nth(n).map_or(s, |(i, _)| &s[..i])
 }
 
 /// `repair_faulty_html`. Borrows the input when nothing changes (the common case): the control-character filter
@@ -37,18 +42,14 @@ pub fn repair_faulty_html<'a>(html: &'a str, beginning: &str) -> Cow<'a, str> {
             s = Cow::Owned(format!("{fixed}\n{rest}"));
         }
     }
-    for (i, line) in py::splitlines(&s).enumerate() {
-        if line.contains("<html") && line.ends_with("/>") {
-            return Cow::Owned(FAULTY_HTML.replacen(&s, 1, "$1>").into_owned());
-        }
-        if i > 2 {
-            break;
-        }
+    let faulty = py::splitlines(prefix_chars(&s, 4096)).take(4).any(|l| l.contains("<html") && l.ends_with("/>"));
+    if faulty {
+        return Cow::Owned(FAULTY_HTML.replacen(&s, 1, "$1>").into_owned());
     }
     s
 }
 
-/// `load_html` for str input.
+/// `load_html` for str input (decode_file and its MAX_FILE_SIZE cap only apply to bytes).
 pub fn load_html(ctx: &Ctx, html: &str) -> Option<Node> {
     let beginning = html.chars().take(50).collect::<String>().to_lowercase();
     let check_flag = !beginning.contains("html");
@@ -99,10 +100,11 @@ pub fn is_image_file(src: Option<&str>) -> bool {
     })
 }
 
-/// `is_image_element`.
-pub fn is_image_element(el: Node) -> bool {
-    ["data-src", "src"].iter().any(|a| is_image_file(Some(&el.get(a).unwrap_or_default())))
-        || el.attrs().iter().any(|(k, v)| k.starts_with("data-src") && is_image_file(Some(v)))
+/// `image_src`: src, data-src, or the first data-src* attribute pointing to an image file.
+pub fn image_src(el: Node) -> Option<String> {
+    ["data-src", "src"].iter().map(|a| el.get(a).unwrap_or_default()).find(|s| is_image_file(Some(s))).or_else(|| {
+        el.attrs().into_iter().find(|(k, v)| k.starts_with("data-src") && is_image_file(Some(v))).map(|kv| kv.1)
+    })
 }
 
 /// `textfilter`: True when the element's text (or tail) should be discarded.
@@ -115,43 +117,4 @@ pub fn textfilter(el: Node) -> bool {
     let re = py::re::compile(&format!("^(?:{RE_FILTER})"), true);
     let filtered = py::splitlines(&t).any(|l| re.is_match(l));
     filtered
-}
-
-/// `is_in_table_cell`.
-pub fn is_in_table_cell(el: Node) -> bool {
-    el.parent().is_some() && std::iter::successors(Some(el), |e| e.parent()).any(|e| e.tag() == "cell")
-}
-
-/// `is_last_element_in_cell`.
-pub fn is_last_element_in_cell(el: Node) -> bool {
-    if !is_in_table_cell(el) {
-        return false;
-    }
-    let container = if el.tag() == "cell" { el } else { el.parent().expect("in a cell") };
-    container.is_empty() || container.child(-1) == Some(el)
-}
-
-/// `is_element_in_item`.
-pub fn is_element_in_item(el: Node) -> bool {
-    std::iter::successors(Some(el), |e| e.parent()).any(|e| e.tag() == "item")
-}
-
-/// `item_if_first_element`: the enclosing list item when `el` carries its first content.
-pub fn item_if_first_element(el: Node) -> Option<Node> {
-    if el.tag() == "item" {
-        return el.text().is_some_and(|t| !t.is_empty()).then_some(el);
-    }
-    let item = el.iter_ancestors(&["item"]).next()?;
-    (item.text().is_none_or(|t| t.is_empty()) && item.iter_descendants(&["*"]).next() == Some(el)).then_some(item)
-}
-
-/// `is_last_element_in_item`.
-pub fn is_last_element_in_item(el: Node) -> bool {
-    if !is_element_in_item(el) {
-        return false;
-    }
-    if el.tag() == "item" {
-        return el.is_empty();
-    }
-    el.next().is_none_or(|n| n.tag() == "item")
 }

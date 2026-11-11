@@ -1,6 +1,6 @@
-//! trafilatura 2.2.0 baseline.py: `basic_cleaning`, `baseline` (JSON, articles, paragraphs, teasers, body dump)
+//! trafilatura 2.3.1 baseline.py: `basic_cleaning`, `baseline` (JSON, articles, paragraphs, teasers, body dump)
 //! and `html2txt`, for element input (what the pipeline passes; the element is copied, not mutated).
-use super::baseline_json::{collect_json_content, render_text};
+use super::baseline_json::{collect_json_content, render_text, spaced_text};
 use super::settings::{DEDUPE_SCAN_CAP, MIN_DUPLICATE_LENGTH};
 use super::xml::delete_element;
 use super::xpaths::BASIC_CLEAN_XPATH;
@@ -11,42 +11,7 @@ use crate::trafilatura::text::{remove_control_characters, trim};
 pub type Extraction = (Node, String, usize);
 
 const MIN_CONTENT_LENGTH: usize = 100;
-const BLOCK_ELEMS: &[&str] = &[
-    "address",
-    "article",
-    "aside",
-    "blockquote",
-    "br",
-    "dd",
-    "div",
-    "dl",
-    "dt",
-    "figcaption",
-    "figure",
-    "footer",
-    "form",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "header",
-    "hr",
-    "li",
-    "main",
-    "nav",
-    "ol",
-    "p",
-    "pre",
-    "section",
-    "summary",
-    "table",
-    "td",
-    "th",
-    "tr",
-    "ul",
-];
+const SCRAPED_TAGS: &[&str] = &["blockquote", "code", "p", "pre", "q", "quote"];
 
 /// `basic_cleaning`.
 pub fn basic_cleaning(ctx: &Ctx, tree: Node) -> Result<Node> {
@@ -54,6 +19,11 @@ pub fn basic_cleaning(ctx: &Ctx, tree: Node) -> Result<Node> {
         delete_element(ctx, elem, true)?;
     }
     Ok(tree)
+}
+
+/// `block_text`: text_content() with word boundaries kept at block tags.
+pub fn block_text(ctx: &Ctx, element: Node) -> Result<String> {
+    spaced_text(element.deep_copy(ctx))
 }
 
 /// `_build_body`: one paragraph per text; with `dedupe`, long texts already contained are dropped.
@@ -94,12 +64,13 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<Extraction> {
         return Ok(r);
     }
     let tree = basic_cleaning(ctx, tree)?;
-    let article_texts: Vec<String> = tree
-        .xpath_nodes(".//article[not(ancestor::article)]")?
-        .into_iter()
-        .map(|e| trim(&e.text_content()))
-        .filter(|t| py::len(t) > MIN_CONTENT_LENGTH)
-        .collect();
+    let mut article_texts = Vec::new();
+    for elem in tree.xpath_nodes(".//article[not(ancestor::article)]")? {
+        let text = block_text(ctx, elem)?;
+        if py::len(&text) > MIN_CONTENT_LENGTH {
+            article_texts.push(text);
+        }
+    }
     if let Some(longest) = article_texts.iter().map(|t| py::len(t)).max() {
         let cutoff = longest as f64 / 5.0;
         let kept = article_texts.into_iter().filter(|t| py::len(t) as f64 >= cutoff);
@@ -107,8 +78,12 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<Extraction> {
             return Ok(r);
         }
     }
-    let paragraphs: Vec<String> =
-        tree.iter(&["blockquote", "code", "p", "pre", "q", "quote"]).map(|e| trim(&e.text_content())).collect();
+    let mut paragraphs = Vec::new();
+    for elem in tree.iter(SCRAPED_TAGS) {
+        if !elem.iter_ancestors(&[]).any(|a| SCRAPED_TAGS.contains(&a.tag())) {
+            paragraphs.push(block_text(ctx, elem)?);
+        }
+    }
     if let Some(r) = attempt(ctx, paragraphs, true)? {
         return Ok(r);
     }
@@ -131,14 +106,5 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<Extraction> {
 pub fn html2txt(ctx: &Ctx, tree: Node) -> Result<String> {
     let tree = tree.deep_copy(ctx);
     let body = tree.find(".//body").unwrap_or(tree);
-    let body = basic_cleaning(ctx, body)?;
-    for elem in body.iter(BLOCK_ELEMS) {
-        let spaced = |s: Option<String>| match s.filter(|s| !s.is_empty()) {
-            Some(s) => format!(" {}", remove_control_characters(&s)),
-            None => " ".to_owned(),
-        };
-        elem.set_text(Some(&spaced(elem.text())))?;
-        elem.set_tail(Some(&spaced(elem.tail())))?;
-    }
-    Ok(trim(&body.text_content()))
+    spaced_text(basic_cleaning(ctx, body)?)
 }

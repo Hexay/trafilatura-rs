@@ -1,8 +1,13 @@
-"""Shared by the parity tests and the release smoke test: fixtures, configs and the engines being compared."""
+"""Shared by the parity tests and the release smoke test: fixtures, configs and the engines being compared. Parity is
+checked against whichever trafilatura is installed (a REPRODUCES pair)."""
 import json
+from importlib.metadata import version
 from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pages.jsonl"
+TRAFILATURA = version("trafilatura")
+# 1.11's fast-mode flag; 2.x renamed it (no_fallback still works there, with a DeprecationWarning).
+FAST = "no_fallback" if TRAFILATURA.startswith("1.") else "fast"
 
 # extract() keyword sets of trafilatura_rs.VERIFIED_OUTPUTS; fineweb is datatrove's Trafilatura call, `<cfg>_comments`
 # adds include_comments=True (trafilatura's default). "url": True passes the page's URL. Mirrors
@@ -11,7 +16,7 @@ _BASE = {
     "fineweb": {"favor_precision": True, "deduplicate": True},
     "balanced": {},
     "recall": {"favor_recall": True},
-    "fast": {"no_fallback": True},
+    "fast": {FAST: True},
     "notables": {"include_tables": False},
 }
 _OUTPUTS = {
@@ -21,7 +26,7 @@ _OUTPUTS = {
     "balanced_json": {"output_format": "json", "with_metadata": True},
     "precision_json": {"favor_precision": True, "output_format": "json", "with_metadata": True, "url": True},
     "json_text": {"output_format": "json"},
-}
+} if TRAFILATURA.startswith("1.") else {}  # markdown, json and metadata are ported for 1.11 only
 CONFIGS = {
     **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_OUTPUTS}.items()},
     **{f"{k}_comments": {**v, "include_comments": True}

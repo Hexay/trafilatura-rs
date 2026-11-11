@@ -1,9 +1,10 @@
-//! Port of trafilatura 1.11.0's trafilatura/readability_lxml.py and
-//! `external.try_readability`.
+//! Port of trafilatura 1.11.0's trafilatura/readability_lxml.py and `external.try_readability`; `v23` is
+//! trafilatura 2.3.1's fork.
 mod prep;
 mod regexes;
 mod sanitize;
 mod scoring;
+pub mod v23;
 
 use crate::dom::{fragment_fromstring, Ctx, Node, Result};
 use crate::py;
@@ -14,22 +15,16 @@ pub struct Document {
     doc: Node,
     min_text_length: usize,
     retry_length: usize,
-    drop_tags: &'static [&'static str],
 }
 
 impl Document {
     pub fn new(doc: Node, min_text_length: usize, retry_length: usize) -> Document {
-        Document { doc, min_text_length, retry_length, drop_tags: &["script", "style"] }
-    }
-
-    /// Tags `summary` drops first (trafilatura 2.2.0's fork adds "fencedframe").
-    pub fn with_drop_tags(self, drop_tags: &'static [&'static str]) -> Document {
-        Document { drop_tags, ..self }
+        Document { doc, min_text_length, retry_length }
     }
 
     /// `Document.summary()`: the cleaned article serialized as XML.
     pub fn summary(&mut self, ctx: &Ctx) -> Result<String> {
-        for elem in self.doc.iter(self.drop_tags) {
+        for elem in self.doc.iter(&["script", "style"]) {
             elem.drop_tree(ctx)?;
         }
         let mut ruthless = true;
@@ -57,6 +52,12 @@ impl Document {
             return Ok(cleaned);
         }
     }
+}
+
+fn new_p(ctx: &Ctx, text: &str) -> Result<Node> {
+    let p = fragment_fromstring(ctx, "<p/>")?;
+    p.set_text(Some(text))?;
+    Ok(p)
 }
 
 fn get_article(ctx: &Ctx, cands: &Candidates, (best, best_score): (Node, f64)) -> Result<Node> {

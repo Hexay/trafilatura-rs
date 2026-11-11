@@ -176,6 +176,12 @@ impl Node {
         unsafe { opt(raw::previous_element(self.raw())) }
     }
 
+    /// `el.getroottree().getroot()`: the root of the node's document, which moves with the node on append and
+    /// stays when it is removed.
+    pub fn getroot(self) -> Option<Node> {
+        unsafe { opt(ffi::xmlDocGetRootElement(self.doc())) }
+    }
+
     /// `len(el)`: element-like children, comments included.
     pub fn len(self) -> usize {
         unsafe { raw::count_elements((*self.raw()).children) }

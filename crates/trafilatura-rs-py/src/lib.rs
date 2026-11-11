@@ -1,5 +1,5 @@
-//! `trafilatura_rs._core`: extraction entry points. Python-level argument checking, fallback and the trafilatura
-//! monkeypatch live in python/trafilatura_rs/.
+//! `trafilatura_rs._core`: extraction entry points per reproduced trafilatura version. Python-level argument checking,
+//! engine selection, fallback and the trafilatura monkeypatch live in python/trafilatura_rs/.
 mod hooks;
 
 use hooks::PyHooks;
@@ -10,17 +10,52 @@ use pyo3::exceptions::{
 };
 use pyo3::prelude::*;
 use std::sync::{LazyLock, Mutex};
-use trafilatura_rs::dom::{Ctx, Error};
+use trafilatura_rs::dom::{Ctx, Error, Result};
 use trafilatura_rs::htmldate::{find_date, DateParams};
-use trafilatura_rs::trafilatura::core::{self, Request};
+use trafilatura_rs::trafilatura::core::Request;
 use trafilatura_rs::trafilatura::deduplication::Lru;
 use trafilatura_rs::trafilatura::settings::{Focus, Format, Options};
 use trafilatura_rs::trafilatura::utils::load_html;
+use trafilatura_rs::{trafilatura, trafilatura2};
 
 create_exception!(_core, Unsupported, PyException, "The call needs a code path only Python trafilatura has.");
 
 /// trafilatura keeps its deduplication LRU module-global; so does the module-level `extract`.
 static GLOBAL_LRU: LazyLock<Mutex<Lru>> = LazyLock::new(|| Mutex::new(Lru::default()));
+
+/// The trafilatura release an extraction reproduces.
+#[derive(Clone, Copy)]
+enum Engine {
+    V1_11,
+    V2_3,
+}
+
+impl Engine {
+    fn parse(version: &str) -> PyResult<Engine> {
+        match version {
+            "1.11.0" => Ok(Engine::V1_11),
+            "2.3.1" => Ok(Engine::V2_3),
+            other => Err(PyValueError::new_err(format!("no engine for trafilatura {other}"))),
+        }
+    }
+
+    /// Rejects options the engine's port does not cover (2.3.1: txt without metadata only).
+    fn check(self, opts: &Options) -> PyResult<()> {
+        match self {
+            Engine::V2_3 if opts.format != Format::Txt || opts.with_metadata => {
+                Err(PyValueError::new_err("trafilatura 2.3.1 is ported for txt output without metadata only"))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn extract(self, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<String>> {
+        match self {
+            Engine::V1_11 => trafilatura::core::extract_with(html, opts, req, lru),
+            Engine::V2_3 => trafilatura2::core::extract(html, opts, lru),
+        }
+    }
+}
 
 fn to_py_err(e: Error) -> PyErr {
     match e {
@@ -51,8 +86,10 @@ fn format(output_format: &str) -> PyResult<Format> {
     }
 }
 
+/// The engine and its options; `no_fallback` is 1.11's name for 2.x's `fast`.
 #[allow(clippy::too_many_arguments)]
 fn options(
+    engine: &str,
     favor_precision: bool,
     favor_recall: bool,
     include_tables: bool,
@@ -61,7 +98,8 @@ fn options(
     include_comments: bool,
     output_format: &str,
     with_metadata: bool,
-) -> PyResult<Options> {
+) -> PyResult<(Engine, Options)> {
+    let engine = Engine::parse(engine)?;
     let focus = if favor_recall {
         Focus::Recall
     } else if favor_precision {
@@ -77,25 +115,28 @@ fn options(
         fast: no_fallback,
         with_metadata,
         ..Options::default()
-    };
-    Ok(opts.with_format(format(output_format)?))
+    }
+    .with_format(format(output_format)?);
+    engine.check(&opts)?;
+    Ok((engine, opts))
 }
 
 fn request<'a>(url: Option<&'a str>, record_id: Option<&'a str>, max_date: Option<&'a str>) -> Request<'a> {
     Request { url, record_id, max_date, hooks: &PyHooks }
 }
 
-/// `trafilatura.extract` (trafilatura's defaults) with the process-wide dedup state. `max_date` is today's local
-/// date as htmldate's `set_date_params` formats it (needed with metadata). Raises `Unsupported` where only Python
-/// trafilatura can answer.
+/// `trafilatura.extract` of trafilatura `engine` (trafilatura's defaults) with the process-wide dedup state.
+/// `max_date` is today's local date as htmldate's `set_date_params` formats it (needed with metadata). Raises
+/// `Unsupported` where only Python trafilatura can answer.
 #[pyfunction]
-#[pyo3(signature = (html, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
+#[pyo3(signature = (html, engine, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
     no_fallback=false, include_comments=true, output_format="txt", with_metadata=false, url=None, record_id=None,
     max_date=None))]
 #[allow(clippy::too_many_arguments)]
 fn extract(
     py: Python<'_>,
     html: &str,
+    engine: &str,
     favor_precision: bool,
     favor_recall: bool,
     include_tables: bool,
@@ -108,7 +149,8 @@ fn extract(
     record_id: Option<&str>,
     max_date: Option<&str>,
 ) -> PyResult<Option<String>> {
-    let opts = options(
+    let (engine, opts) = options(
+        engine,
         favor_precision,
         favor_recall,
         include_tables,
@@ -121,9 +163,9 @@ fn extract(
     let req = request(url, record_id, max_date);
     py.detach(|| {
         if deduplicate {
-            core::extract_with(html, &opts, &req, &mut GLOBAL_LRU.lock().expect("lru lock"))
+            engine.extract(html, &opts, &req, &mut GLOBAL_LRU.lock().expect("lru lock"))
         } else {
-            core::extract_with(html, &opts, &req, &mut Lru::default())
+            engine.extract(html, &opts, &req, &mut Lru::default())
         }
     })
     .map_err(to_py_err)
@@ -150,18 +192,21 @@ fn reset_caches() {
 }
 
 /// An extractor with its own dedup state, independent of the module-level one.
-#[pyclass]
+#[pyclass(subclass)]
 struct Extractor {
-    inner: core::Extractor,
+    engine: Engine,
+    opts: Options,
+    lru: Lru,
 }
 
 #[pymethods]
 impl Extractor {
     #[new]
-    #[pyo3(signature = (favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
+    #[pyo3(signature = (engine, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
         no_fallback=false, include_comments=true, output_format="txt", with_metadata=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
+        engine: &str,
         favor_precision: bool,
         favor_recall: bool,
         include_tables: bool,
@@ -171,7 +216,8 @@ impl Extractor {
         output_format: &str,
         with_metadata: bool,
     ) -> PyResult<Self> {
-        let opts = options(
+        let (engine, opts) = options(
+            engine,
             favor_precision,
             favor_recall,
             include_tables,
@@ -181,7 +227,7 @@ impl Extractor {
             output_format,
             with_metadata,
         )?;
-        Ok(Extractor { inner: core::Extractor::new(opts) })
+        Ok(Extractor { engine, opts, lru: Lru::default() })
     }
 
     #[pyo3(signature = (html, url=None, record_id=None, max_date=None))]
@@ -193,9 +239,9 @@ impl Extractor {
         record_id: Option<&str>,
         max_date: Option<&str>,
     ) -> PyResult<Option<String>> {
-        let inner = &mut self.inner;
+        let Extractor { engine, opts, lru } = self;
         let req = request(url, record_id, max_date);
-        py.detach(|| inner.extract_with(html, &req)).map_err(to_py_err)
+        py.detach(|| engine.extract(html, opts, &req, lru)).map_err(to_py_err)
     }
 }
 

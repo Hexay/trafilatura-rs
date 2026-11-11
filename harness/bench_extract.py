@@ -1,6 +1,7 @@
 """Per-doc CPU time and output of one extractor over the corpus, in corpus order, single thread.
 usage: bench_extract.py {none|trafilatura|trafilatura_rs|rs} docs.jsonl out.jsonl [n]
-  trafilatura  datatrove's Trafilatura(favour_precision=True).extract (trafilatura 1.11, dedup on)
+  trafilatura  datatrove's Trafilatura(favour_precision=True).extract (dedup on), or the extract() call it makes when
+               datatrove isn't installed (the trafilatura 2.3.1 venv)
   trafilatura_rs  the same call after trafilatura_rs.install()
   rs           rs_trafilatura.extract(html, favor_precision=True, include_comments=False).main_content
   none         no extraction (load/loop baseline for instruction counts)
@@ -46,15 +47,20 @@ def extractor(engine):
     if engine == "trafilatura_rs":
         import trafilatura_rs
 
-        trafilatura_rs.install()
+        assert trafilatura_rs.install() is not None, "installed trafilatura/lxml not reproduced"
     elif engine != "trafilatura":
         raise SystemExit(f"unknown engine {engine}")
     if DEFAULT_CALL:
         import trafilatura
 
         return lambda doc: trafilatura.extract(doc["html"])
-    from datatrove.pipeline.extractors import Trafilatura
+    try:
+        from datatrove.pipeline.extractors import Trafilatura
+    except ImportError:
+        import trafilatura
 
+        return lambda doc: trafilatura.extract(doc["html"], favor_precision=True, include_comments=False,
+                                               deduplicate=True)
     extract = Trafilatura(favour_precision=True).extract
     return lambda doc: extract(doc["html"])
 

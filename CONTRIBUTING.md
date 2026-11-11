@@ -3,14 +3,14 @@
 ## Layout
 
 ```
-crates/trafilatura-rs     the port: DOM/XPath layer over libxml2, trafilatura 1.11 and 2.2.0, jusText, readability
+crates/trafilatura-rs     the port: DOM/XPath layer over libxml2, trafilatura 1.11 and 2.3.1, jusText, readability
 crates/trafilatura-rs-py  PyO3 bindings (trafilatura_rs._core)
 crates/libxml2-sys        vendored static libxml2 2.14.6 (lxml 6.1.3's version), see PATCHES.md
 crates/harness            parity and bench binaries
 python/trafilatura_rs     Python API, install() patching
 harness/                  Python reference generators and comparers
 tests/                    pytest parity smoke on tests/fixtures (runs in CI)
-docs/                     trafilatura 1.11 → 2.2.0 diff, README assets
+docs/                     trafilatura 1.11 → 2.2.0 → 2.3.1 diffs, README assets
 ```
 
 ## Setup (Linux)
@@ -19,7 +19,7 @@ Needs Rust, cmake, uv and perf. The corpus and references live outside the repo 
 (default `/srv/agents/cache/trafilatura-rs-data`).
 
 ```bash
-tools/dev.sh setup     # .venv (py3.13: trafilatura 1.11, datatrove, rs-trafilatura) + .venv-t22 (trafilatura 2.2.0)
+tools/dev.sh setup     # .venv (py3.13: trafilatura 1.11, datatrove, rs-trafilatura) + .venv-t23 (trafilatura 2.3.1)
 tools/dev.sh build     # cargo build --release (harness bins)
 tools/dev.sh py        # maturin develop --release into .venv
 tools/dev.sh test      # cargo test
@@ -35,7 +35,7 @@ tools/make_reference.sh   # exports docs.jsonl (first 10,666 URLFilter-passing H
 tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall_comments
                           # (configs: tools/env.sh; `<cfg>_comments` runs include_comments=True)
 LIMIT=500 tools/parity.sh final:fineweb
-tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.2.0)
+tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.3.1)
 TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
 tools/parity.sh meta:balanced_json   # markdown/metadata/json configs (harness/ref_meta.py), via the extension
 harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc

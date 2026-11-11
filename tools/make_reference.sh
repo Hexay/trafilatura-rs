@@ -16,7 +16,7 @@ job() {
   case $mode in
     stages) out=ref_stages.jsonl cmd=("$PY" "$ROOT/harness/ref_stages.py" stages) cfg= ;;
     final) out=ref_final_$cfg.jsonl cmd=("$PY" "$ROOT/harness/ref_stages.py" final) ;;
-    stages2 | final2) out=ref2_${mode%2}_$cfg.jsonl cmd=("$PY22" "$ROOT/harness/ref2_stages.py" "${mode%2}") ;;
+    stages2 | final2) out=ref23_${mode%2}_$cfg.jsonl cmd=("$PY23" "$ROOT/harness/ref2_stages.py" "${mode%2}") ;;
     meta) out=ref_meta_$cfg.jsonl cmd=("$PY" "$ROOT/harness/ref_meta.py" ref) ;;
     justext) out=ref_justext.jsonl cmd=("$PY" "$ROOT/harness/ref_justext.py" run) cfg= ;;
     readability) out=ref_readability.jsonl cmd=("$PY" "$ROOT/harness/ref_readability.py" run) cfg= ;;
@@ -28,7 +28,7 @@ job() {
   [ -s "$D/$out.err" ] || rm -f "$D/$out.err"
 }
 export -f job quiet
-export ROOT D PY PY22
+export ROOT D PY PY23
 
 jobs=("$@")
 if [ ${#jobs[@]} -eq 0 ]; then

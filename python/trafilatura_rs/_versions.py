@@ -1,8 +1,11 @@
 from importlib.metadata import PackageNotFoundError, version
 
-# The Python versions whose output trafilatura_rs reproduces; Python trafilatura's output depends on both.
-REPRODUCES = {"trafilatura": "1.11.0", "lxml": "6.1.3"}
-# With metadata, also the ported htmldate (courlan, dateparser and python-dateutil are called, not ported).
+# The (trafilatura, lxml) pairs whose output trafilatura_rs reproduces; Python trafilatura's output depends on both.
+REPRODUCES = frozenset({("1.11.0", "6.1.3"), ("2.3.1", "6.1.3")})
+# The trafilatura version reproduced when trafilatura isn't installed.
+DEFAULT_TRAFILATURA = "2.3.1"
+# With metadata (trafilatura 1.11 only), also the ported htmldate (courlan, dateparser and python-dateutil are called,
+# not ported).
 REPRODUCES_METADATA = {"htmldate": "1.11.0"}
 
 
@@ -13,9 +16,28 @@ def _installed_version(package):
         return None
 
 
+def engine():
+    """The trafilatura version trafilatura_rs reproduces here: the installed one when supported, else the default."""
+    installed = _installed_version("trafilatura")
+    return installed if installed in {t for t, _ in REPRODUCES} else DEFAULT_TRAFILATURA
+
+
+def _pair_mismatch():
+    traf, lxml = _installed_version("trafilatura"), _installed_version("lxml")
+    if traf is None or (traf, lxml) in REPRODUCES:
+        return {}
+    if traf not in {t for t, _ in REPRODUCES}:
+        mismatch = {"trafilatura": traf}
+        return mismatch if lxml in {x for _, x in REPRODUCES} else {**mismatch, "lxml": lxml}
+    return {"lxml": lxml}
+
+
 def mismatched_versions(with_metadata=False):
-    """{package: installed version} for each package in REPRODUCES (and REPRODUCES_METADATA) installed at a different
-    version. When non-empty, trafilatura_rs output would differ from what the installed Python trafilatura returns."""
-    pins = {**REPRODUCES, **REPRODUCES_METADATA} if with_metadata else REPRODUCES
-    installed = {pkg: _installed_version(pkg) for pkg in pins}
-    return {pkg: v for pkg, v in installed.items() if v is not None and v != pins[pkg]}
+    """{package: installed version} for each package keeping the installed (trafilatura, lxml) pair out of REPRODUCES
+    (and, with metadata, each REPRODUCES_METADATA package installed at another version). When non-empty,
+    trafilatura_rs output would differ from what the installed Python trafilatura returns."""
+    mismatch = _pair_mismatch()
+    if with_metadata:
+        installed = {pkg: _installed_version(pkg) for pkg in REPRODUCES_METADATA}
+        mismatch |= {pkg: v for pkg, v in installed.items() if v is not None and v != REPRODUCES_METADATA[pkg]}
+    return mismatch
