@@ -1,7 +1,7 @@
 # trafilatura 2.2.0 → 2.3.1: semantic diff of the extract() path
 
-Scope as in [trafilatura-2x-diff.md](trafilatura-2x-diff.md): `extract(html, include_comments=False,
-output_format="txt")` with the 5 parity configs (fineweb, balanced, recall, fast, notables). "same" = pure refactor.
+Scope as in [trafilatura-2x-diff.md](trafilatura-2x-diff.md): `extract(html, output_format="txt")` with the parity
+configs of tools/env.sh, with and without comments. "same" = pure refactor.
 The Rust port (`crates/trafilatura-rs/src/trafilatura2`) now tracks 2.3.1 only; 2.2.0 is no longer reproduced.
 
 Environment: 2.3.1 requires lxml>=6.1.3, htmldate>=1.11.0, justext>=3.0.2, charset_normalizer>=3.5.2,
@@ -24,7 +24,18 @@ stoplist union is unchanged.
 - Baseline rescue accepted **only if it adds text** (`b_len > len(temp_text)`).
 - Escalation input: the (already pruned) tree itself when comments are off; recall retry =
   `_extract_and_compare(*_prepare_tree(tree))`, jusText candidate on `copy(tree)`. Gates and ratios same.
-- `MIN_EXTRACTED_COMM_SIZE` removed (comments only).
+- `MIN_EXTRACTED_COMM_SIZE` removed; `bare_extraction` rejects only when text < min_output_size **and** comments <
+  min_output_comm_size.
+
+## Comments (include_comments=True)
+- `extract_comments` strips only ref and span (no longer a), uses TAG_CATALOG and `handle_textnode(comments_fix=True)`,
+  clears the copied node's attributes, appends node by node, and removes the source subtree with
+  `delete_element(keep_tail=False)` only when the comments body is non-empty. COMMENTS_XPATH/DISCARD: whitespace only.
+- Thread forum (JSON-LD DiscussionForumPosting) with captured comments: they are the posts. The comments body is
+  emptied, `cleaned` is rebuilt as `convert_tags(copy(backup))`, and the captured posts are kept aside.
+  Posts missing from the final body are appended (salvage) unless the baseline or an escalation candidate was accepted.
+- Escalation input with comments on (not a forum): a copy pruned with REMOVE_COMMENTS_AND_LISTS_XPATH if comments
+  were captured, else REMOVE_COMMENTS_XPATH.
 
 ## settings.py / settings.cfg
 - MANUALLY_CLEANED **− ins**; MANUALLY_STRIPPED **+ wbr**; TAG_CATALOG **− blockquote, pre** (now code, del, head,
