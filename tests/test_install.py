@@ -86,6 +86,12 @@ def test_supports():
     assert trafilatura_rs.supports(include_comments=False, url="http://a.b/")
 
 
+def test_markdown_without_formatting():
+    kwargs = dict(include_comments=False, output_format="markdown", include_formatting=False)
+    assert trafilatura_rs._api._rust_kwargs(kwargs, "1.11.0") is not None
+    assert trafilatura_rs._api._rust_kwargs(kwargs, "2.3.1") is None
+
+
 @pytest.mark.parametrize("kwargs", [dict(output_format="markdown"), dict(output_format="json"),
                                     dict(with_metadata=True)])
 def test_new_outputs_run_in_rust(monkeypatch, kwargs):

@@ -92,6 +92,9 @@ def _core_kwargs(kwargs, engine):
             continue
         elif not _neutral(key, value):
             return None
+    # 2.x honors an explicit formatting=False for markdown; 1.11 forces formatting on
+    if engine != "1.11.0" and rust.get("output_format") == "markdown" and kwargs.get("include_formatting") is False:
+        return None
     if rust.get("with_metadata"):
         rust["max_date"] = _max_date(kwargs.get("date_extraction_params"))
         if rust["max_date"] is None:
