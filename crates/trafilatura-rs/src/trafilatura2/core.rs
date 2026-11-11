@@ -1,6 +1,6 @@
 //! trafilatura 2.3.1 core.py: `trafilatura_sequence`, `bare_extraction` and `extract` for txt, markdown and json
 //! output (no language checks or blacklists).
-use super::baseline::{baseline, html2txt};
+use super::baseline::{baseline, html2txt_len};
 use super::deduplication::content_fingerprint;
 use super::external::{compare_extraction, justext_rescue};
 use super::htmlprocessing::{prune_unwanted_nodes, tree_cleaning};
@@ -152,7 +152,7 @@ pub fn trafilatura_sequence(env: &mut Env, tree: Node) -> Result<(Extraction, Ex
     // short-circuit as in Python: html2txt only runs once the cheaper gates pass
     let len_text = py::len(&result.1);
     let due = opts.focus == Focus::Balanced && 0 < len_text && len_text < ESCALATION_MAX_LENGTH;
-    if due && escalation_due(opts, len_text, py::len(&html2txt(ctx, tree)?)) {
+    if due && escalation_due(opts, len_text, html2txt_len(tree)?) {
         let esc_tree = escalation_tree(env, tree, is_forum, !comments.1.is_empty())?;
         if let Some(better) = escalate(env, esc_tree, len_text)? {
             result = better;

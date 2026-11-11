@@ -108,7 +108,7 @@ unsafe fn sys_alloc(size: usize) -> *mut c_void {
     write_header(base, size, TAG_SYS)
 }
 
-unsafe extern "C" fn x_malloc(size: usize) -> *mut c_void {
+pub(crate) unsafe extern "C" fn x_malloc(size: usize) -> *mut c_void {
     let s = state();
     if arena_active(s) {
         arena_alloc(&mut *s, size)

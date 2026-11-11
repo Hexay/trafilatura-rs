@@ -4,7 +4,6 @@ use super::settings::{Focus, Options, CUT_EMPTY_ELEMS, MANUALLY_CLEANED, MANUALL
 use super::utils::{image_src, textfilter, trim_or_none};
 use super::xml::{delete_element, separates_inline};
 use crate::dom::{Ctx, Node, Result};
-use crate::py;
 use crate::trafilatura::deduplication::duplicate_test;
 use crate::trafilatura::htmlprocessing::{truthy, Env};
 use crate::trafilatura::text::trim;
@@ -38,9 +37,9 @@ fn handle_forms(ctx: &Ctx, tree: Node) -> Result<()> {
     if forms.is_empty() {
         return Ok(());
     }
-    let total = py::len(&tree.text_content());
+    let total = tree.text_content_len();
     for form in forms {
-        if total > 0 && py::len(&form.text_content()) as f64 > total as f64 / 2.0 {
+        if total > 0 && form.text_content_len() as f64 > total as f64 / 2.0 {
             form.set_tag("div")?;
         } else {
             delete_element(ctx, form, true)?;
@@ -124,8 +123,8 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
         matches.extend(tree.xpath_nodes(expression)?.into_iter().filter(|&e| seen.insert(e)));
     }
     let outer: Vec<Node> = matches.into_iter().filter(|e| !e.iter_ancestors(&[]).any(|a| seen.contains(&a))).collect();
-    let old_len = py::len(&tree.text_content());
-    let pruned: usize = outer.iter().map(|e| py::len(&e.text_content())).sum();
+    let old_len = tree.text_content_len();
+    let pruned: usize = outer.iter().map(|e| e.text_content_len()).sum();
     if (old_len as f64 - pruned as f64) > old_len as f64 / 7.0 {
         for elem in outer {
             delete_element(ctx, elem, true)?;

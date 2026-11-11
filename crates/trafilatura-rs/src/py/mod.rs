@@ -122,6 +122,43 @@ impl Collapse {
     }
 }
 
+/// Streaming `len(' '.join(s.split()))` over a sequence of pieces, without building the string.
+#[derive(Default)]
+pub struct TrimLen {
+    chars: usize,
+    tokens: usize,
+    in_token: bool,
+}
+
+impl TrimLen {
+    pub fn feed(&mut self, s: &str) {
+        if s.is_ascii() {
+            for &b in s.as_bytes() {
+                self.step(matches!(b, b'\t'..=b'\r' | 0x1c..=0x1f | b' '));
+            }
+        } else {
+            for c in s.chars() {
+                self.step(is_space(c));
+            }
+        }
+    }
+
+    #[inline]
+    fn step(&mut self, space: bool) {
+        if space {
+            self.in_token = false;
+        } else {
+            self.tokens += usize::from(!self.in_token);
+            self.in_token = true;
+            self.chars += 1;
+        }
+    }
+
+    pub fn finish(&self) -> usize {
+        self.chars + self.tokens.saturating_sub(1)
+    }
+}
+
 /// `str.strip()` with no argument.
 pub fn strip(s: &str) -> &str {
     s.trim_matches(is_space)

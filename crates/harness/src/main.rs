@@ -1,5 +1,6 @@
 //! Rust counterpart of harness/ref_stages.py (and ref2_stages.py for `*2` modes, see `main`).
-//! usage: harness {stages|final|bench}[2] docs.jsonl out.jsonl [cfg]    harness show[2] docs.jsonl <i> <stage> [cfg]
+//! usage: harness {stages|final}[2] docs.jsonl out.jsonl [cfg]    harness bench[2] docs.jsonl [n] [cfg]
+//!        harness show[2] docs.jsonl <i> <stage> [cfg]
 mod v2;
 
 use serde_json::{json, Value};
@@ -158,14 +159,22 @@ fn main() {
     if mode == "bench" {
         let n: usize = args.get(3).map_or(usize::MAX, |s| s.parse().expect("n"));
         let pages: Vec<String> = docs(path).take(n).map(|(_, h)| h).collect();
-        let mut extract = extractor(v2, Options::fineweb());
-        let t = std::time::Instant::now();
-        let kept = pages.iter().filter(|h| matches!(extract(h), Ok(Some(_)))).count();
-        let secs = t.elapsed().as_secs_f64();
+        let mut extract = extractor(v2, config(args.get(4).map_or("fineweb", String::as_str)));
+        let mut ms = Vec::with_capacity(pages.len());
+        let mut kept = 0;
+        for h in &pages {
+            let t = std::time::Instant::now();
+            kept += usize::from(matches!(extract(h), Ok(Some(_))));
+            ms.push(t.elapsed().as_secs_f64() * 1000.0);
+        }
+        let total: f64 = ms.iter().sum();
+        ms.sort_by(f64::total_cmp);
         println!(
-            "docs={} kept={kept} extract={secs:.2}s = {:.2} ms/doc",
+            "docs={} kept={kept} extract={:.2}s mean={:.3} p50={:.3} ms/doc",
             pages.len(),
-            1000.0 * secs / pages.len() as f64
+            total / 1000.0,
+            total / pages.len() as f64,
+            ms[ms.len() / 2]
         );
         return;
     }

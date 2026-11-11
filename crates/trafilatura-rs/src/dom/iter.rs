@@ -210,24 +210,22 @@ impl Node {
         }
     }
 
+    /// `len(el.text_content())` without building the string.
+    pub fn text_content_len(self) -> usize {
+        let mut n = 0;
+        if unsafe { !visit_text(self.raw(), &mut |s| n += py::len(s)) } {
+            return py::len(&self.text_content());
+        }
+        n
+    }
+
     /// `len(trim(el.text_content()))` without building either string.
     pub fn text_content_trim_len(self) -> usize {
-        let (mut n, mut tokens, mut in_token) = (0usize, 0usize, false);
-        let mut count = |s: &str| {
-            for c in s.chars() {
-                if py::is_space(c) {
-                    in_token = false;
-                } else {
-                    tokens += usize::from(!in_token);
-                    in_token = true;
-                    n += 1;
-                }
-            }
-        };
-        if unsafe { !visit_text(self.raw(), &mut count) } {
+        let mut count = py::TrimLen::default();
+        if unsafe { !visit_text(self.raw(), &mut |s| count.feed(s)) } {
             return py::len(&py::Collapse::of(&self.text_content()));
         }
-        n + tokens.saturating_sub(1)
+        count.finish()
     }
 
     /// `trim(el.text_content())` in one pass.

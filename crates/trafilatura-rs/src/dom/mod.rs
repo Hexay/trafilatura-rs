@@ -9,6 +9,7 @@
 
 mod alloc;
 mod cleanup;
+mod copy;
 mod error;
 mod exslt;
 mod fastpath;
@@ -18,6 +19,7 @@ mod mutate;
 mod parse;
 mod raw;
 mod serialize;
+mod slots;
 mod tree;
 mod xpath;
 

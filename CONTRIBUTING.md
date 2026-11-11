@@ -64,6 +64,15 @@ user-space instructions net of a load-only baseline, never wall time. It also ch
 trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead, and
 `BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura.
 
+The Rust side alone: `target/release/harness bench[2] docs.jsonl [n] [cfg]` (cfg as in parity, default fineweb;
+`balanced_comments` is the default `extract(html)`), under `perf stat -e instructions:u`. To profile, build with
+frame pointers and full debug info, then `perf record -g` that binary:
+
+```bash
+CFLAGS=-fno-omit-frame-pointer CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=mold \
+  -C force-frame-pointers=yes" cargo build --profile profiling -p harness   # target/profiling/harness
+```
+
 ## Releasing
 
 Bump `version` in `pyproject.toml`, merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`.

@@ -120,6 +120,14 @@ impl Node {
 
     /// `el.findall(path)` for `tag`, `*`, `./tag`, `.//tag`, `.//*` and `.//tag[@attr="value"]`.
     pub fn findall(self, path: &str) -> Vec<Node> {
+        self.find_iter(path).collect()
+    }
+
+    pub fn find(self, path: &str) -> Option<Node> {
+        self.find_iter(path).next()
+    }
+
+    fn find_iter(self, path: &str) -> impl Iterator<Item = Node> {
         let (descendants, rest) = match path.strip_prefix(".//") {
             Some(r) => (true, r),
             None => (false, path.strip_prefix("./").unwrap_or(path)),
@@ -129,21 +137,14 @@ impl Node {
             None => (rest, None),
         };
         assert!(!tag.contains('/') && !tag.contains('|'), "unsupported ElementPath {path:?}");
-        let candidates: Vec<Node> =
-            if descendants { self.iter_descendants(&[tag]).collect() } else { self.child_iter(tag) };
-        match pred {
-            None => candidates,
-            Some((k, v)) => candidates.into_iter().filter(|n| n.get(&k).as_deref() == Some(v.as_str())).collect(),
-        }
+        let candidates: Box<dyn Iterator<Item = Node>> =
+            if descendants { Box::new(self.iter_descendants(&[tag])) } else { Box::new(self.child_iter(tag)) };
+        candidates.filter(move |n| pred.as_ref().is_none_or(|(k, v)| n.get(k).as_deref() == Some(v.as_str())))
     }
 
-    pub fn find(self, path: &str) -> Option<Node> {
-        self.findall(path).into_iter().next()
-    }
-
-    fn child_iter(self, tag: &str) -> Vec<Node> {
+    fn child_iter(self, tag: &str) -> impl Iterator<Item = Node> {
         let m = Tags::for_node(&[tag], self.raw());
-        self.children().into_iter().filter(|c| unsafe { m.matches(c.raw()) }).collect()
+        self.children().into_iter().filter(move |c| unsafe { m.matches(c.raw()) })
     }
 }
 

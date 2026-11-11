@@ -43,19 +43,9 @@ pub fn trim(s: &str) -> String {
 
 /// `len(trim(s))` without building the string: non-space characters plus one separator between tokens.
 pub fn trim_len(s: &str) -> usize {
-    let (mut n, mut tokens, mut in_token) = (0usize, 0usize, false);
-    for c in s.chars() {
-        if py::is_space(c) {
-            in_token = false;
-        } else {
-            if !in_token {
-                tokens += 1;
-                in_token = true;
-            }
-            n += 1;
-        }
-    }
-    n + tokens.saturating_sub(1)
+    let mut c = py::TrimLen::default();
+    c.feed(s);
+    c.finish()
 }
 
 /// Already in `trim` form: whitespace only as single ' ' between non-space characters.
@@ -83,10 +73,23 @@ pub fn text_chars_test(s: Option<&str>) -> bool {
 
 /// `remove_control_characters`: keep printable or whitespace characters.
 pub fn remove_control_characters(s: &str) -> String {
-    s.chars().filter(|&c| py::is_printable(c) || py::is_space(c)).collect()
+    without_control_characters(s).into_owned()
+}
+
+/// `remove_control_characters`, borrowing when nothing is removed.
+pub fn without_control_characters(s: &str) -> std::borrow::Cow<'_, str> {
+    // branch-free per chunk so the scan vectorizes
+    let plain = |c: &[u8]| c.iter().fold(true, |acc, &b| acc & matches!(b, b'\t'..=b'\r' | 0x1c..=0x7e));
+    if s.as_bytes().chunks(64).all(plain) {
+        return s.into();
+    }
+    s.chars().filter(|&c| py::is_printable(c) || py::is_space(c)).collect::<String>().into()
 }
 
 pub fn normalize_unicode(s: &str) -> String {
+    if unicode_normalization::is_nfc_quick(s.chars()) == unicode_normalization::IsNormalized::Yes {
+        return s.to_owned();
+    }
     s.nfc().collect()
 }
 

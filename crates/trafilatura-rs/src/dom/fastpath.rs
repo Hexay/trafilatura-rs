@@ -8,12 +8,13 @@ use std::sync::LazyLock;
 
 mod pred;
 mod pred_parse;
+mod resolve;
 pub(crate) use pred::{parse_step, Step};
 
 pub(crate) static VERIFY: LazyLock<bool> = LazyLock::new(|| std::env::var_os("TRAFILATURA_RS_VERIFY_XPATH").is_some());
 
 pub(crate) enum Plan {
-    /// `.//*[(self::a or ...)][atom or ...]` (and `.//tag`, unions of `.//tag`): descendants in document order.
+    /// `.//*[(self::a or ...)][atom or ...]...` (and `.//tag`, unions of `.//tag`): descendants in document order.
     Descendants(Vec<Step>),
     /// `ancestor::tag`: ancestors, document order (outermost first).
     Ancestor(String),

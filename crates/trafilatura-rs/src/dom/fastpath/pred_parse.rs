@@ -1,6 +1,6 @@
 //! Parsing of one location step into a `Step` (grammar in pred.rs). Splitting is quote- and bracket-aware:
 //! trafilatura 2.x regex arguments contain `[`, `]`, `(`, `)` and `|`.
-use super::pred::{AttrTests, Step, UnionKind, UnionTest};
+use super::pred::{AttrTests, Preds, Step, UnionKind, UnionTest};
 use aho_corasick::AhoCorasick;
 use regex::Regex;
 use std::sync::LazyLock;
@@ -101,11 +101,21 @@ pub(crate) fn parse_step(b: &str) -> Option<Step> {
             groups = &groups[1..];
         }
     }
-    match groups {
-        [] => Some(Step::new(tags, Vec::new(), Vec::new(), true)),
-        [preds] => parse_preds(preds).map(|(tests, unions)| Step::new(tags, tests, unions, false)),
-        _ => None,
+    let preds: Option<Vec<Preds>> = groups.iter().map(|g| parse_preds(g)).collect();
+    Some(Step::new(tags, preds?))
+}
+
+/// `not(self::a or ...)` / `not(.//name)` / `not(ancestor::name)`.
+fn parse_not(atom: &str, preds: &mut Preds) -> Option<()> {
+    let inner = atom.strip_prefix("not(")?.strip_suffix(')')?.trim();
+    if let Some(name) = inner.strip_prefix(".//") {
+        preds.not_desc.push(super::is_name(name).then(|| name.to_owned())?);
+    } else if let Some(name) = inner.strip_prefix("ancestor::") {
+        preds.not_anc.push(super::is_name(name).then(|| name.to_owned())?);
+    } else {
+        preds.not_self.push(tag_group(inner)?);
     }
+    Some(())
 }
 
 type Group = (Vec<u8>, Option<String>, Vec<String>, Vec<Vec<u8>>, Vec<Vec<u8>>, bool);
@@ -121,17 +131,21 @@ fn group<'g>(groups: &'g mut Vec<Group>, attr: &[u8], map_key: Option<String>) -
     &mut groups[i]
 }
 
-fn parse_preds(body: &str) -> Option<(Vec<AttrTests>, Vec<UnionTest>)> {
+fn parse_preds(body: &str) -> Option<Preds> {
     let mut groups: Vec<Group> = Vec::new();
+    let mut preds = Preds::default();
     let mut unions = Vec::new();
     for atom in split_top(body, " or ").into_iter().map(str::trim) {
-        if let Some(c) = RE_TEST.captures(atom) {
-            if crate::py::re::has_lookaround(&c[2]) {
-                return None;
-            }
+        if atom.starts_with("not(") {
+            parse_not(atom, &mut preds)?;
+        } else if let Some(c) = RE_TEST.captures(atom) {
             let ignorecase = c.get(3).is_some_and(|f| f.as_str().contains('i'));
-            let regex = crate::py::re::compile(&c[2], ignorecase);
-            unions.push(UnionTest { names: attr_names(&c[1]), kind: UnionKind::Regex(regex) });
+            let kind = if crate::py::re::has_lookaround(&c[2]) {
+                UnionKind::Fancy(crate::py::re::compile_fancy(&c[2], ignorecase))
+            } else {
+                UnionKind::Regex(crate::py::re::compile(&c[2], ignorecase))
+            };
+            unions.push(UnionTest { names: attr_names(&c[1]), kind });
         } else if let Some(c) = STR_FN.captures(atom) {
             let names = attr_names(&c[2]);
             let needle = c[4].as_bytes().to_vec();
@@ -158,7 +172,8 @@ fn parse_preds(body: &str) -> Option<(Vec<AttrTests>, Vec<UnionTest>)> {
             group(&mut groups, c[1].as_bytes(), None).5 = true;
         }
     }
-    let tests = groups
+    preds.unions = unions;
+    preds.tests = groups
         .into_iter()
         .map(|(name, map_key, contains, starts, equals, present)| {
             let map = map_key.map(|k| {
@@ -175,5 +190,5 @@ fn parse_preds(body: &str) -> Option<(Vec<AttrTests>, Vec<UnionTest>)> {
             AttrTests { name, map, contains, starts, equals, present }
         })
         .collect();
-    Some((tests, unions))
+    Some(preds)
 }

@@ -22,7 +22,7 @@ const HTML_TAG_NAMES: &str = "a|abbr|address|article|aside|b|blockquote|body|br|
     em|figcaption|figure|footer|h[1-6]|head|header|hr|html|i|img|ins|kbd|li|main|mark|nav|\
     ol|p|pre|q|quote|s|section|small|span|strong|sub|summary|sup|table|tbody|td|tfoot|th|\
     thead|time|title|tr|u|ul";
-const BLOCK_ELEMS: &[&str] = &[
+pub const BLOCK_ELEMS: &[&str] = &[
     "address",
     "article",
     "aside",
