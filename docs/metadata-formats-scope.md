@@ -45,7 +45,7 @@ patterns with Counter-based candidate selection). Needs `datetime` semantics: co
 
 Two leaves are not ported: `dateutil.parser.parse(s, fuzzy=False)` (strings starting with 4 digits that are not
 ISO) and dateparser's `DateDataParser.get_date_data` (multilingual, ~200 locales). On the corpus they are reached on
-~8% and ~10% of documents. The port calls back into Python for exactly these two functions
+~6% and ~8% of documents. The port calls back into Python for exactly these two functions
 (`htmldate.extractors.dateutil_parse` and `htmldate.extractors._external_date`), so results stay byte-exact
 without fallback; the pure-Rust crate (no Python) reports `Unsupported` instead. `has_date_cue` (the gate in front
 of dateparser) needs dateparser's month names for all locales: generated table.

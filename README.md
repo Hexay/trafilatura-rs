@@ -140,6 +140,18 @@ The default call, `extract(html)` (comments included, `CALL=default tools/bench.
 
 Measured by instruction count, the speedup is 7.1x.
 
+Markdown, metadata and JSON (first 3,000 pages, `include_comments=False`, `BENCH_CFG=<cfg> tools/bench.sh 3000`):
+
+| Call | trafilatura 1.11 | trafilatura-rs | Speedup (CPU) | Speedup (instructions) |
+|---|---:|---:|---:|---:|
+| `output_format="markdown"` | 8.36 ms | 1.58 ms | 5.3x | 6.5x |
+| `with_metadata=True, url=...` | 18.07 ms | 9.53 ms | 1.9x | 2.3x |
+| `output_format="json", with_metadata=True` | 21.02 ms | 9.09 ms | 2.3x | 2.6x |
+
+Mean CPU time per page. With metadata, about half of the remaining time is dateparser, which htmldate calls for
+unusual date strings and which trafilatura-rs calls back into rather than ports (see
+[docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)).
+
 ## Contributing
 
 Development setup, the parity harness, benchmarks and releasing: [CONTRIBUTING.md](CONTRIBUTING.md).
