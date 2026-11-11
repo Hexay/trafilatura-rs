@@ -1,0 +1,56 @@
+# Contributing
+
+## Layout
+
+```
+crates/trafilatura-rs     the port: DOM/XPath layer over libxml2, trafilatura 1.11 and 2.2.0, jusText, readability
+crates/trafilatura-rs-py  PyO3 bindings (trafilatura_rs._core)
+crates/libxml2-sys        vendored static libxml2 2.14.6 (lxml 6.1.3's version), see PATCHES.md
+crates/harness            parity and bench binaries
+python/trafilatura_rs     Python API, install() patching
+harness/                  Python reference generators and comparers
+reference/                vendored Python sources the port follows
+tests/                    pytest parity smoke on tests/fixtures (runs in CI)
+```
+
+## Setup (Linux)
+
+Needs Rust, cmake, uv and perf. The corpus and references live outside the repo in `$TRAFILATURA_RS_DATA`
+(default `/srv/agents/cache/trafilatura-rs-data`).
+
+```bash
+tools/dev.sh setup     # .venv (py3.13: trafilatura 1.11, datatrove, rs-trafilatura) + .venv-t22 (trafilatura 2.2.0)
+tools/dev.sh build     # cargo build --release (harness bins)
+tools/dev.sh py        # maturin develop --release into .venv
+tools/dev.sh test      # cargo test
+python -m pytest tests # parity vs trafilatura on tests/fixtures
+tools/build_wheel.sh   # abi3 wheel in target/wheels (PGO=1 for profile-guided, via tools/pgo.sh)
+```
+
+## Parity
+
+```bash
+tools/make_reference.sh   # exports docs.jsonl (first 10,666 URLFilter-passing HTML records of a CC WARC) and all
+                          # Python references; REF_JOBS parallel, skips existing files (~50 CPU-min)
+tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall
+LIMIT=500 tools/parity.sh final:fineweb
+tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.2.0)
+TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
+```
+
+Any output difference from trafilatura is a bug. New options join `VERIFIED` only with full-corpus parity.
+
+## Benchmark
+
+`tools/bench.sh [N]` runs trafilatura 1.11 with datatrove's arguments, the same call after `trafilatura_rs.install()`,
+and `rs_trafilatura.extract(...)`. Each engine runs in a fresh process, on the same docs in the same order, single
+thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min over rounds) and `perf stat`
+user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
+trafilatura's on every doc.
+
+## Releasing
+
+Bump `version` in `pyproject.toml`, merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
+`.github/workflows/release.yml` builds abi3 wheels (Linux x86_64/aarch64, macOS x86_64/arm64, Windows x64) and an
+sdist, smoke-tests each against trafilatura, checks the tag matches the version, and publishes to PyPI by trusted
+publishing (environment `pypi`).

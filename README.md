@@ -1,93 +1,103 @@
 # trafilatura-rs
 
-Byte-exact drop-in for trafilatura 1.11's `extract()` (txt output, `include_comments=False`), in Rust: same
-output, byte for byte, ~9x less CPU. Pinned to trafilatura 1.11.0 + lxml 6.1.3 / libxml2 2.14.6 (vendored and
-statically linked, see `crates/libxml2-sys/PATCHES.md`).
+[![PyPI](https://img.shields.io/pypi/v/trafilatura-rs.svg)](https://pypi.org/project/trafilatura-rs/)
+[![Python versions](https://img.shields.io/pypi/pyversions/trafilatura-rs.svg)](https://pypi.org/project/trafilatura-rs/)
+[![CI](https://github.com/Hexay/trafilatura-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Hexay/trafilatura-rs/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Not related to the `rs-trafilatura` package, which is a separate extractor with different output (exact on
-171/10,666 pages, see [Benchmark](#benchmark)).
+A Rust port of [trafilatura](https://github.com/adbar/trafilatura)'s main-text extraction that returns **the same
+output, byte for byte**, as `trafilatura.extract()`, using about a tenth of the CPU.
 
-A port of trafilatura 2.2.0's pipeline (`crates/trafilatura-rs/src/trafilatura2`, diff in
-`research/trafilatura-2x-diff.md`) is verified by the harness but not exposed in Python yet.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Hexay/trafilatura-rs/main/docs/assets/extract-speed.svg"
+       alt="CPU per page: trafilatura 17.93 ms, rs-trafilatura 12.24 ms, trafilatura-rs 1.92 ms" width="720">
+</p>
 
-## Verified configs
-
-`trafilatura_rs.VERIFIED`, each byte-identical to Python on the 10,666-doc corpus below
-(`(favor_precision, favor_recall, include_tables, no_fallback)`):
-
-| harness cfg | args | 1.11 final | 2.2.0 final |
-|---|---|---|---|
-| fineweb | `favor_precision=True, deduplicate=True` (datatrove) | 10666/10666 | 10666/10666 |
-| balanced | defaults | 10666/10666 | 10666/10666 |
-| recall | `favor_recall=True` | 10666/10666 | 10666/10666 |
-| fast | `no_fallback=True` | 10666/10666 | 10666/10666 |
-| notables | `include_tables=False` | 10666/10666 | 10666/10666 |
-
-Stage hashes: 1.11 (fineweb) 10666/10666; 2.2.0 balanced and fineweb 10666/10666. jusText and readability
-components: 10666/10666. Any other argument falls back to Python trafilatura.
-
-## Usage
+## Installation
 
 ```bash
-pip install trafilatura-rs
+pip install "trafilatura-rs[trafilatura]"
 ```
+
+The `[trafilatura]` extra installs the exact versions trafilatura-rs is verified against (trafilatura 1.11.0,
+lxml 6.1.3), so you can fall back to and compare with the original. Wheels are built for Linux, macOS and Windows,
+Python 3.10+, with libxml2 statically linked.
+
+## Quickstart
+
+Keep calling trafilatura as you do now; supported calls run in Rust:
 
 ```python
+import trafilatura
 import trafilatura_rs
-trafilatura_rs.install()  # patches trafilatura.extract; covered calls run in Rust, others stay on Python
-# e.g. datatrove's Trafilatura(favour_precision=True) now runs trafilatura-rs
-trafilatura_rs.extract(html, favor_precision=True, deduplicate=True)   # direct; NotImplementedError if not covered
+
+trafilatura_rs.install()
+
+text = trafilatura.extract(html, favor_precision=True)  # runs in Rust, same result
 ```
 
-`deduplicate=True` keeps a process-global LRU like trafilatura's, so output depends on doc order;
-`trafilatura_rs.reset_caches()` clears it.
+Calls trafilatura-rs doesn't cover (metadata, XML/JSON output, comments, ...) keep running Python trafilatura. That
+also makes it work in libraries that call trafilatura internally. For example, datatrove's `Trafilatura` step is
+accelerated by [datatrove-rs](https://github.com/Hexay/datatrove-rs).
 
-## Dev setup (Linux)
+Or call it directly:
 
-Needs Rust, cmake, uv, perf. Corpus and references live outside the repo in `$TRAFILATURA_RS_DATA`
-(default `/srv/agents/cache/trafilatura-rs-data`).
+```python
+from trafilatura_rs import extract
 
-```bash
-tools/dev.sh setup     # .venv (py3.13: trafilatura 1.11, datatrove via .pth from $DATATROVE_SRC, rs-trafilatura)
-                       # + .venv-t22 (trafilatura 2.2.0)
-tools/dev.sh build     # cargo build --release (harness bins)
-tools/dev.sh py        # maturin develop --release into .venv
-tools/dev.sh test      # cargo test
-tools/build_wheel.sh   # abi3 wheel in target/wheels (PGO=1 for profile-guided, via tools/pgo.sh)
-pytest tests           # parity vs trafilatura on tests/fixtures (needs the wheel + `.[test]` pins; CI runs this)
+text = extract(html, favor_precision=True)  # raises NotImplementedError for unsupported options
 ```
 
-Releases: `.github/workflows/release.yml` builds abi3 wheels (Linux x86_64/aarch64, macOS x86_64/arm64,
-Windows x64) and an sdist, smoke-tests each against trafilatura, and publishes to PyPI on a `v*` tag matching
-`pyproject.toml`'s version.
+## What's supported
 
-## Parity
+Plain-text `extract()` with `include_comments=False`, in these configurations (`trafilatura_rs.VERIFIED`):
 
-```bash
-tools/make_reference.sh   # exports docs.jsonl (first 10,666 URLFilter-passing HTML records of the WARC) and all
-                          # Python references; REF_JOBS parallel, skips existing files (~50 CPU-min)
-tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall
-LIMIT=500 tools/parity.sh final:fineweb
-tools/parity.sh show 123 txt          # diff one doc's stage (show2 for 2.2.0)
-TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
-```
+| Configuration | Arguments | Identical to trafilatura |
+|---|---|---|
+| Default | | 10,666 / 10,666 |
+| Precision (datatrove / FineWeb) | `favor_precision=True, deduplicate=True` | 10,666 / 10,666 |
+| Recall | `favor_recall=True` | 10,666 / 10,666 |
+| Fast | `no_fallback=True` | 10,666 / 10,666 |
+| No tables | `include_tables=False` | 10,666 / 10,666 |
+
+`deduplicate=True` is verified with the precision configuration (datatrove's call). Like trafilatura, it keeps a
+process-global cache, so output depends on document order exactly as in Python; `trafilatura_rs.reset_caches()`
+clears it.
+
+## Exactness
+
+Each configuration is checked page by page against trafilatura 1.11.0 on 10,666 Common Crawl pages, comparing final
+output and per-stage tree hashes. The jusText and readability fallbacks are checked separately. Exactness holds
+because the parser is the same: trafilatura-rs vendors and statically links libxml2 2.14.6, the version lxml 6.1.3
+bundles, with the same parsing options (see [PATCHES.md](crates/libxml2-sys/PATCHES.md)).
+
+A port of trafilatura 2.2.0's extraction is verified by the same harness but not yet exposed in Python
+(differences: [research/trafilatura-2x-diff.md](research/trafilatura-2x-diff.md)).
+
+### How is this different from rs-trafilatura?
+
+[rs-trafilatura](https://pypi.org/project/rs-trafilatura/) is an independent extractor inspired by trafilatura,
+not a port. On the same 10,666 pages its output equals trafilatura's on 171. It never returns `None`, separates
+paragraphs differently and often selects different content. Use trafilatura-rs when you need trafilatura's results,
+for example to reproduce a dataset.
 
 ## Benchmark
 
-`tools/bench.sh [N]` — trafilatura 1.11 via datatrove's call, the same call after `trafilatura_rs.install()`, and
-`rs_trafilatura.extract(html, favor_precision=True, include_comments=False)`. Fresh process per run, same docs in
-the same order, single thread, engines alternated over `ROUNDS` (default 2). Reports per-doc CPU time (min over
-rounds) and `perf stat` user-space instructions net of a load-only baseline; never wall time (shared box). It also
-checks trafilatura-rs output == trafilatura output on every doc (the end-to-end check) and rs-trafilatura agreement.
+Single thread, CPU time per page, 10,666 Common Crawl pages, `favor_precision=True` (`tools/bench.sh`):
 
-Full corpus (10,666 docs), 2026-11-10, loaded 16-core box:
+| | mean | p50 | p99 | Speedup |
+|---|---:|---:|---:|---:|
+| trafilatura 1.11 | 17.93 ms | 11.19 ms | 110.83 ms | 1x |
+| rs-trafilatura 0.1.1 | 12.24 ms | 7.66 ms | 81.88 ms | 1.5x |
+| **trafilatura-rs** | **1.92 ms** | **1.25 ms** | **11.85 ms** | **9.3x** |
 
-| engine | mean ms/doc | p50 | p99 | Minstr/doc | speedup (CPU / instr) | output == trafilatura |
-|---|---|---|---|---|---|---|
-| trafilatura 1.11 | 17.93 | 11.19 | 110.83 | 261.7 | 1x | — |
-| trafilatura-rs | 1.92 | 1.25 | 11.85 | 23.2 | 9.3x / 11.3x | 10666/10666 |
-| rs-trafilatura 0.1.1 | 12.24 | 7.66 | 81.88 | 181.8 | 1.5x / 1.4x | 171/10666 exact, 974 whitespace-normalized |
+Measured by instruction count, the speedup is 11.3x.
 
-rs-trafilatura is a different extractor, not a port: it never returns None, separates paragraphs with `\n\n`, and
-selects different content (248/10666 equal with None == "", 172 of them both empty; 637 equal after collapsing
-newline runs; median difflib similarity ~0.67 on the first 400 docs).
+## Contributing
+
+Development setup, the parity harness, benchmarks and releasing: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Apache-2.0, like trafilatura. Vendored libxml2 is MIT-licensed; win-iconv (Windows builds) is public domain.
+trafilatura-rs is an independent project and is not affiliated with the trafilatura authors.
