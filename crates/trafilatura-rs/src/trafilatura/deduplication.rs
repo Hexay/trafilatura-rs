@@ -68,10 +68,15 @@ fn sample_tokens(input: &str) -> Vec<&str> {
 
 /// `content_fingerprint`: hex of a 64-bit Charikar simhash over blake2b-8 token hashes (`Simhash.to_hex`).
 pub fn content_fingerprint(content: &str) -> String {
+    simhash_hex(&sample_tokens(content))
+}
+
+/// `Simhash(...).to_hex()` over already sampled tokens.
+pub fn simhash_hex(tokens: &[&str]) -> String {
     use blake2::digest::consts::U8;
     use blake2::{Blake2b, Digest};
     let mut vector = [0i64; 64];
-    for token in sample_tokens(content) {
+    for token in tokens {
         let digest = Blake2b::<U8>::digest(token.as_bytes());
         let hash = u64::from_be_bytes(digest.as_slice().try_into().expect("8 bytes"));
         for (i, v) in vector.iter_mut().enumerate() {

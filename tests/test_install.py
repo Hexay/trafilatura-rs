@@ -12,7 +12,6 @@ from parity import TRAFILATURA, pages
 import trafilatura_rs
 
 HTML = pages()[0]["html"]
-V1 = TRAFILATURA.startswith("1.")
 _REF = {"extract": trafilatura.core.extract}  # in a dict: install() swaps module attributes holding the original
 
 
@@ -81,29 +80,25 @@ def test_supports():
     assert not trafilatura_rs.supports(include_comments=False, favor_precision=True, favor_recall=True)
     assert not trafilatura_rs.supports(include_comments=False, with_metadata=True, deduplicate=True)
     assert not trafilatura_rs.supports(include_comments=False, date_extraction_params={"original_date": False})
-    # markdown, json and metadata are ported for 1.11 only
-    assert trafilatura_rs.supports(include_comments=False, output_format="markdown", favor_precision=True) == V1
+    assert trafilatura_rs.supports(include_comments=False, output_format="markdown", favor_precision=True)
     assert trafilatura_rs.supports(include_comments=False, output_format="json", with_metadata=True,
-                                   url="http://a.b/") == V1
-    assert trafilatura_rs.supports(include_comments=False, url="http://a.b/") == V1
+                                   url="http://a.b/")
+    assert trafilatura_rs.supports(include_comments=False, url="http://a.b/")
 
 
 @pytest.mark.parametrize("kwargs", [dict(output_format="markdown"), dict(output_format="json"),
                                     dict(with_metadata=True)])
-def test_new_outputs_stay_on_python_for_2x(monkeypatch, kwargs):
-    if V1:
-        pytest.skip("ported for trafilatura 1.11")
+def test_new_outputs_run_in_rust(monkeypatch, kwargs):
     kwargs = dict(include_comments=False, **kwargs)
-    monkeypatch.setattr(trafilatura_rs._api, "_rust_extract", lambda *a, **k: pytest.fail("ran Rust"))
-    assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
-    with pytest.raises(ValueError, match="txt output"):
-        trafilatura_rs.Extractor(**kwargs)
+    expected = _REF["extract"](HTML, **kwargs)
+    monkeypatch.setattr(trafilatura_rs._api, "_python_extract", lambda: lambda *a, **k: pytest.fail("ran Python"))
+    assert trafilatura_rs.extract(HTML, **kwargs) == expected
 
 
 def test_metadata_date_params():
     kwargs = dict(include_comments=False, with_metadata=True, output_format="json",
                   date_extraction_params={"original_date": True, "extensive_search": True, "max_date": "2020-01-01"})
-    assert trafilatura_rs.supports(**kwargs) == V1
+    assert trafilatura_rs.supports(**kwargs)
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 

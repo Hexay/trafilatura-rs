@@ -12,6 +12,8 @@ pub mod re;
 pub mod value;
 #[rustfmt::skip]
 mod tables;
+#[rustfmt::skip]
+mod tables_meta;
 
 use std::sync::LazyLock;
 
@@ -45,6 +47,16 @@ pub fn is_digit(c: char) -> bool {
 
 pub fn is_printable(c: char) -> bool {
     in_table(&tables::PRINTABLE, c)
+}
+
+/// `str.isalpha()` of one character (Python 3.13, Unicode 15.1).
+pub fn is_alpha(c: char) -> bool {
+    in_table(&tables_meta::ALPHA, c)
+}
+
+/// `unicodedata.category(c)[0] == "P"` (Python 3.13, Unicode 15.1).
+pub fn is_punctuation(c: char) -> bool {
+    in_table(&tables_meta::PUNCT, c)
 }
 
 /// Python re `\w` as a `regex` character-class body: `format!("[{}]", *WORD_CLASS)` for `\w`, `[^...]` for `\W`.

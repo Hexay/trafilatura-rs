@@ -1,23 +1,27 @@
-//! trafilatura 2.3.1 core.py: `trafilatura_sequence`, `bare_extraction` and `extract` for txt output (no
-//! metadata or language checks).
+//! trafilatura 2.3.1 core.py: `trafilatura_sequence`, `bare_extraction` and `extract` for txt, markdown and json
+//! output (no language checks or blacklists).
 use super::baseline::{baseline, html2txt};
+use super::deduplication::content_fingerprint;
 use super::external::{compare_extraction, justext_rescue};
 use super::htmlprocessing::{prune_unwanted_nodes, tree_cleaning};
 use super::htmlprocessing_convert::convert_tags;
 use super::main_extractor::elem_text;
 use super::main_extractor_comments::extract_comments;
 use super::main_extractor_extract::{extract_content, Extraction};
+use super::metadata::extract_metadata;
+use super::output::determine_returnstring;
 use super::settings::{Focus, Options};
 use super::utils::load_html;
-use super::xml::xmltotxt;
 use super::xpaths::{RAW_TREE_PRUNE_XPATH, REMOVE_COMMENTS_AND_LISTS_XPATH, REMOVE_COMMENTS_XPATH};
 use crate::dom::{Ctx, Error, Node, Result};
 use crate::py;
+use crate::py::value::Value;
+pub use crate::trafilatura::core::Request;
 use crate::trafilatura::deduplication::{duplicate_test, Lru};
+use crate::trafilatura::document::Document;
 use crate::trafilatura::htmlprocessing::Env;
 use crate::trafilatura::main_extractor_extract::body_text;
 use crate::trafilatura::settings::Format;
-use crate::trafilatura::text::normalize_unicode;
 
 const ESCALATION_MAX_LENGTH: usize = 3000;
 const ESCALATION_PAGE_SHARE: f64 = 0.2;
@@ -38,29 +42,32 @@ impl Extractor {
     }
 
     pub fn extract(&mut self, html: &str) -> Result<Option<String>> {
-        extract(html, &self.opts, &mut self.lru)
+        extract(html, &self.opts, &Request::default(), &mut self.lru)
     }
 }
 
-/// `trafilatura.extract(html, ...)` with txt output: `Ok(None)` where Python returns None, `Err` where it raises
-/// (2.x no longer catches RuntimeError).
-pub fn extract(html: &str, opts: &Options, lru: &mut Lru) -> Result<Option<String>> {
-    if opts.format != Format::Txt || opts.with_metadata || opts.formatting {
-        return Err(Error::Unsupported("trafilatura 2.3.1 is ported for txt output without metadata only".into()));
-    }
+/// `trafilatura.extract(html, url=..., record_id=..., ...)`: `Ok(None)` where Python returns None, `Err` where it
+/// raises (2.x no longer catches RuntimeError).
+pub fn extract(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<String>> {
     let ctx = Ctx::new();
-    let (body, comments) = match bare_extraction(&ctx, html, opts, lru) {
+    let mut document = match bare_extraction(&ctx, html, opts, req, lru) {
         Err(Error::Value(_) | Error::Type(_)) => return Ok(None),
         other => other?,
     };
-    let text = xmltotxt(body)?;
-    let comments = xmltotxt(comments)?;
-    Ok(Some(normalize_unicode(py::strip(&format!("{text}\n{comments}")))))
+    // txt formats only output the id and fingerprint in their metadata header
+    if opts.format == Format::Json || opts.with_metadata {
+        document.id = req.record_id.map_or(Value::None, Value::str);
+        let content = format!("{} {}", document.title.to_py_str(), document.raw_text.to_py_str());
+        document.fingerprint = Value::Str(content_fingerprint(&content));
+    }
+    determine_returnstring(&ctx, &document, opts).map(Some)
 }
 
-/// `bare_extraction` up to the TypeError/ValueError catch: (body, comments body).
-fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, lru: &mut Lru) -> Result<(Node, Node)> {
+/// `bare_extraction` up to the TypeError/ValueError catch.
+fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| Error::Value("empty HTML tree".into()))?;
+    // url_blacklist is empty and only_with_metadata off: no checks on the metadata
+    let mut document = if opts.with_metadata { extract_metadata(ctx, tree, req)? } else { Document::default() };
     let mut env = Env { ctx, opts, lru };
     let ((postbody, temp_text), (commentsbody, temp_comments)) = trafilatura_sequence(&mut env, tree)?;
     if let Some(max) = opts.max_tree_size {
@@ -77,7 +84,10 @@ fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, lru: &mut Lru) -> Resu
     if opts.dedup && duplicate_test(postbody, opts, env.lru) {
         return Err(Error::Value("duplicate document".into()));
     }
-    Ok((postbody, commentsbody))
+    document.raw_text = Value::Str(temp_text);
+    document.body = Some(postbody);
+    document.commentsbody = Some(commentsbody);
+    Ok(document)
 }
 
 /// `_forum_thread_page`: a JSON-LD script declaring a DiscussionForumPosting.

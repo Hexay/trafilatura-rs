@@ -59,7 +59,7 @@ fn fix_sitename(sitename: &Value) -> Result<Value> {
 }
 
 /// `Document.clean_and_trim`: cap, unescape and `line_processing` every str field.
-fn clean_and_trim(doc: &mut Document) {
+pub(crate) fn clean_and_trim(doc: &mut Document) {
     for slot in doc.slots_mut() {
         if let Value::Str(s) = slot {
             let mut value = s.clone();

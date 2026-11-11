@@ -99,6 +99,10 @@ impl Hooks for PyHooks {
         call(|py| func(py, "trafilatura.metadata", "get_base_url")?.call1((url,))?.extract())
     }
 
+    fn safe_base_url(&self, url: &str) -> Result<String> {
+        call(|py| func(py, "trafilatura.metadata", "safe_base_url")?.call1((url,))?.extract())
+    }
+
     fn validated_url(&self, url: &str) -> Result<Option<String>> {
         call(|py| {
             let (valid, parsed): (bool, Bound<'_, PyAny>) =

@@ -55,7 +55,7 @@ pub fn run_stages(html: &str, cfg: &str) -> Vec<(&'static str, String)> {
         let mut result = extract_content(&mut env, cleaned)?;
         out.push((stage, pair(&result)));
         stage = "txt_content";
-        out.push((stage, xmltotxt(result.0.deep_copy(&ctx))?));
+        out.push((stage, xmltotxt(&ctx, result.0.deep_copy(&ctx), false)?));
         stage = "baseline_raw";
         out.push((stage, triple(&baseline(&ctx, tree)?)));
         stage = "html2txt";
@@ -80,8 +80,8 @@ pub fn run_stages(html: &str, cfg: &str) -> Vec<(&'static str, String)> {
             out.push((stage, pair(&result)));
         }
         stage = "txt";
-        let text = xmltotxt(result.0)?;
-        let comments = xmltotxt(ctx.element("body")?)?;
+        let text = xmltotxt(&ctx, result.0, false)?;
+        let comments = xmltotxt(&ctx, ctx.element("body")?, false)?;
         out.push((stage, normalize_unicode(py::strip(&format!("{text}\n{comments}")))));
         Ok(())
     })();

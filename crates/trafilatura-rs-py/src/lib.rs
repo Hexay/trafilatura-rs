@@ -40,20 +40,10 @@ impl Engine {
         }
     }
 
-    /// Rejects options the engine's port does not cover (2.3.1: txt without metadata only).
-    fn check(self, opts: &Options) -> PyResult<()> {
-        match self {
-            Engine::V2_3 if opts.format != Format::Txt || opts.with_metadata => {
-                Err(PyValueError::new_err("trafilatura 2.3.1 is ported for txt output without metadata only"))
-            }
-            _ => Ok(()),
-        }
-    }
-
     fn extract(self, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<String>> {
         match self {
             Engine::V1_11 => trafilatura::core::extract_with(html, opts, req, lru),
-            Engine::V2_3 => trafilatura2::core::extract(html, opts, lru),
+            Engine::V2_3 => trafilatura2::core::extract(html, opts, req, lru),
         }
     }
 }
@@ -118,7 +108,6 @@ fn options(
         ..Options::default()
     }
     .with_format(format(output_format)?);
-    engine.check(&opts)?;
     Ok((engine, opts))
 }
 

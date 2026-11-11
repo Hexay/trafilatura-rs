@@ -8,7 +8,7 @@ use crate::dom::{Node, Result};
 use crate::hooks::Hooks;
 use crate::py::value::Value;
 
-const METANAME_AUTHOR: &[&str] = &[
+pub(crate) const METANAME_AUTHOR: &[&str] = &[
     "article:author",
     "atc-metaauthor",
     "author",
@@ -27,7 +27,7 @@ const METANAME_AUTHOR: &[&str] = &[
     "sailthru.author",
     "shareaholic:article_author_name",
 ];
-const METANAME_DESCRIPTION: &[&str] = &[
+pub(crate) const METANAME_DESCRIPTION: &[&str] = &[
     "dc.description",
     "dc:description",
     "dcterms.abstract",
@@ -36,7 +36,7 @@ const METANAME_DESCRIPTION: &[&str] = &[
     "sailthru.description",
     "twitter:description",
 ];
-const METANAME_PUBLISHER: &[&str] = &[
+pub(crate) const METANAME_PUBLISHER: &[&str] = &[
     "article:publisher",
     "citation_journal_title",
     "copyright",
@@ -48,9 +48,9 @@ const METANAME_PUBLISHER: &[&str] = &[
     "rbpubname",
     "twitter:site",
 ];
-const METANAME_TAG: &[&str] =
+pub(crate) const METANAME_TAG: &[&str] =
     &["citation_keywords", "dcterms.subject", "keywords", "parsely-tags", "shareaholic:keywords", "tags"];
-const METANAME_TITLE: &[&str] = &[
+pub(crate) const METANAME_TITLE: &[&str] = &[
     "citation_title",
     "dc.title",
     "dcterms.title",
@@ -63,13 +63,13 @@ const METANAME_TITLE: &[&str] = &[
     "title",
     "twitter:title",
 ];
-const METANAME_IMAGE: &[&str] =
+pub(crate) const METANAME_IMAGE: &[&str] =
     &["image", "og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src"];
-const OG_AUTHOR: &[&str] = &["og:author", "og:article:author"];
-const PROPERTY_AUTHOR: &[&str] = &["author", "article:author"];
-const TWITTER_ATTRS: &[&str] = &["twitter:site", "application-name"];
+pub(crate) const OG_AUTHOR: &[&str] = &["og:author", "og:article:author"];
+pub(crate) const PROPERTY_AUTHOR: &[&str] = &["author", "article:author"];
+pub(crate) const TWITTER_ATTRS: &[&str] = &["twitter:site", "application-name"];
 
-fn is_space_only(s: &str) -> bool {
+pub(crate) fn is_space_only(s: &str) -> bool {
     !s.is_empty() && s.chars().all(crate::py::is_space)
 }
 
@@ -78,7 +78,7 @@ fn author_from(current: &Value, content: &str) -> Result<Value> {
 }
 
 /// `metadata.x = metadata.x or content`.
-fn keep_or(field: &mut Value, content: &str) {
+pub(crate) fn keep_or(field: &mut Value, content: &str) {
     if !field.truthy() {
         *field = Value::str(content);
     }

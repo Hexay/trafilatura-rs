@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Python reference outputs in $D (untimed), REF_JOBS at a time, skipping files that already exist. Usage:
 #   tools/make_reference.sh [job ...]    job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg>
-#                                        | justext | readability   (meta configs: harness/ref_meta.py CONFIGS)
+#                                        | meta2:<cfg> | justext | readability
+#                                        (meta configs: harness/ref_meta.py CONFIGS; meta2: trafilatura 2.3.1)
 # Default: every job. docs.jsonl is exported first if missing (WARC=path overrides the source WARC).
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
@@ -18,6 +19,7 @@ job() {
     final) out=ref_final_$cfg.jsonl cmd=("$PY" "$ROOT/harness/ref_stages.py" final) ;;
     stages2 | final2) out=ref23_${mode%2}_$cfg.jsonl cmd=("$PY23" "$ROOT/harness/ref2_stages.py" "${mode%2}") ;;
     meta) out=ref_meta_$cfg.jsonl cmd=("$PY" "$ROOT/harness/ref_meta.py" ref) ;;
+    meta2) out=ref23_meta_$cfg.jsonl cmd=("$PY23" "$ROOT/harness/ref_meta.py" ref) ;;
     justext) out=ref_justext.jsonl cmd=("$PY" "$ROOT/harness/ref_justext.py" run) cfg= ;;
     readability) out=ref_readability.jsonl cmd=("$PY" "$ROOT/harness/ref_readability.py" run) cfg= ;;
     *) echo "unknown job $1" >&2; return 2 ;;
