@@ -43,19 +43,9 @@ pub fn trim(s: &str) -> String {
 
 /// `len(trim(s))` without building the string: non-space characters plus one separator between tokens.
 pub fn trim_len(s: &str) -> usize {
-    let (mut n, mut tokens, mut in_token) = (0usize, 0usize, false);
-    for c in s.chars() {
-        if py::is_space(c) {
-            in_token = false;
-        } else {
-            if !in_token {
-                tokens += 1;
-                in_token = true;
-            }
-            n += 1;
-        }
-    }
-    n + tokens.saturating_sub(1)
+    let mut c = py::TrimLen::default();
+    c.feed(s);
+    c.finish()
 }
 
 /// Already in `trim` form: whitespace only as single ' ' between non-space characters.
@@ -83,10 +73,16 @@ pub fn text_chars_test(s: Option<&str>) -> bool {
 
 /// `remove_control_characters`: keep printable or whitespace characters.
 pub fn remove_control_characters(s: &str) -> String {
+    if s.bytes().all(|b| matches!(b, b'\t'..=b'\r' | 0x1c..=0x7e)) {
+        return s.to_owned();
+    }
     s.chars().filter(|&c| py::is_printable(c) || py::is_space(c)).collect()
 }
 
 pub fn normalize_unicode(s: &str) -> String {
+    if unicode_normalization::is_nfc_quick(s.chars()) == unicode_normalization::IsNormalized::Yes {
+        return s.to_owned();
+    }
     s.nfc().collect()
 }
 
