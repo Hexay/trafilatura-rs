@@ -146,6 +146,13 @@ The default call, `extract(html)` (comments included, `CALL=default tools/bench.
 
 Measured by instruction count, the speedup is 7.1x.
 
+trafilatura 2.3.1 (first 3,000 pages, `V=23 tools/bench.sh 3000`, mean CPU time per page):
+
+| Call | trafilatura 2.3.1 | trafilatura-rs | Speedup (CPU) | Speedup (instructions) |
+|---|---:|---:|---:|---:|
+| datatrove / FineWeb (`favor_precision=True, deduplicate=True`) | 10.58 ms | 2.51 ms | 4.2x | 4.1x |
+| `extract(html)` | 12.92 ms | 2.63 ms | 4.9x | 5.0x |
+
 Markdown, metadata and JSON (first 3,000 pages, `include_comments=False`, `BENCH_CFG=<cfg> tools/bench.sh 3000`):
 
 | Call | trafilatura 1.11 | trafilatura-rs | Speedup (CPU) | Speedup (instructions) |
