@@ -120,7 +120,7 @@ fn docs(path: &str) -> impl Iterator<Item = (u64, String)> {
 
 type Extract = Box<dyn FnMut(&str) -> trafilatura_rs::dom::Result<Option<String>>>;
 
-/// `extract()` of trafilatura 1.11 (`v2` false) or 2.2.0 with the given options.
+/// `extract()` of trafilatura 1.11 (`v2` false) or 2.3.1 with the given options.
 fn extractor(v2: bool, opts: Options) -> Extract {
     if v2 {
         let mut e = trafilatura_rs::trafilatura2::core::Extractor::new(opts);
@@ -131,7 +131,7 @@ fn extractor(v2: bool, opts: Options) -> Extract {
     }
 }
 
-/// Modes with a `2` suffix (stages2, final2, show2, bench2) run the trafilatura 2.2.0 port; stages2/show2 take
+/// Modes with a `2` suffix (stages2, final2, show2, bench2) run the trafilatura 2.3.1 port; stages2/show2 take
 /// the config as last argument (default balanced), like harness/ref2_stages.py.
 fn main() {
     let args: Vec<String> = std::env::args().collect();

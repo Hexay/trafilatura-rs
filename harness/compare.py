@@ -1,7 +1,7 @@
 """Compare reference and Rust harness outputs.
   compare.py stages ref.jsonl rust.jsonl    mismatches per stage (a doc counts at its first differing stage)
   compare.py final ref.jsonl rust.jsonl     extract() output mismatches
-A `2` suffix (stages2/final2) compares trafilatura 2.2.0 outputs (stage list from ref2_stages.py)."""
+A `2` suffix (stages2/final2) compares trafilatura 2.3.1 outputs (stage list from ref2_stages.py)."""
 import json
 import sys
 from collections import Counter

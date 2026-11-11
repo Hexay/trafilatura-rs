@@ -1,9 +1,21 @@
-//! xml.py `replace_element_text` and the helpers it shares with `process_element` (list markers, links, images).
-use super::settings::{INLINE_CONSUMING, INLINE_FORMATTABLE};
-use super::utils::{is_element_in_item, is_in_table_cell, item_if_first_element};
-use super::xml_markdown::format_markdown;
-use crate::dom::{Ctx, Node, Result};
+//! xml.py `replace_element_text` and the helpers it shares with `process_element` (list markers, tails, links,
+//! images), for include_formatting=False.
+use super::settings::{INLINE_CARRIED, INLINE_CONSUMING, INLINE_FORMATTABLE};
+use super::xml::{NEWLINE_ELEMS, SEPARATORS};
+use crate::dom::Node;
 use crate::py;
+use crate::trafilatura::text::text_chars_test;
+use std::sync::LazyLock;
+
+/// `_UNESCAPED_BRACKET_RE`: code spans (kept) or an unescaped bracket.
+static UNESCAPED_BRACKET: LazyLock<fancy_regex::Regex> = LazyLock::new(|| {
+    fancy_regex::Regex::new(r"(?s)((?<![\\`])(`+)(?!`).+?(?<!`)\2(?!`))|(?<!\\)([\[\]])").expect("valid pattern")
+});
+
+/// `_last_char`: the last character of the last emitted string ("" when that string is empty).
+pub fn last_char(out: &[String]) -> &str {
+    out.last().and_then(|s| s.char_indices().next_back().map(|(i, _)| &s[i..])).unwrap_or("")
+}
 
 /// `_consumes_inline_children`.
 pub fn consumes_inline_children(el: Node) -> bool {
@@ -11,20 +23,20 @@ pub fn consumes_inline_children(el: Node) -> bool {
 }
 
 /// `_escape_cell`.
-pub fn escape_cell(text: &str) -> String {
-    text.replace('|', "\\|").replace('\n', " ")
-}
-
-/// `_heading_prefix`: `#` times the rend level digit, default 2.
-pub fn heading_prefix(el: Node) -> String {
-    let level = el.get("rend").unwrap_or_default();
-    let digit = level.chars().nth(1).filter(|c| ('1'..='6').contains(c));
-    "#".repeat(digit.map_or(2, |d| d as usize - '0' as usize))
+pub fn escape_cell(text: &str, in_cell: bool) -> String {
+    if in_cell {
+        text.replace('|', "\\|").replace('\n', " ")
+    } else {
+        text.to_owned()
+    }
 }
 
 /// `_md_link`.
-pub fn md_link(text: &str, url: Option<&str>, image: bool) -> String {
-    let esc = text.replace('[', "\\[").replace(']', "\\]");
+fn md_link(text: &str, url: Option<&str>, image: bool) -> String {
+    let esc = UNESCAPED_BRACKET.replace_all(text, |c: &fancy_regex::Captures<str>| match c.get(1) {
+        Some(span) => span.as_str().to_owned(),
+        None => format!("\\{}", &c[3]),
+    });
     let prefix = if image { "!" } else { "" };
     let Some(url) = url else { return format!("{prefix}[{esc}]") };
     let safe = if url.chars().any(|c| " <>()".contains(c)) {
@@ -41,26 +53,51 @@ pub fn image_markup(el: Node) -> String {
     md_link(py::strip(&alt), Some(&el.get("src").unwrap_or_default()), true)
 }
 
-/// `_list_marker`: "- " (or "N. " for ordered lists in markdown) with nesting indent, for an item's first content.
-pub fn list_marker(el: Node, in_item: Option<bool>, fmt: bool) -> String {
-    if !in_item.unwrap_or_else(|| is_element_in_item(el)) {
-        return String::new();
-    }
-    let Some(item) = item_if_first_element(el) else { return String::new() };
-    if is_in_table_cell(el) {
-        return String::new();
-    }
+/// `_list_marker` (plain text: always "- ") with nesting indent.
+pub fn list_marker(item: Node) -> String {
     let depth = item.iter_ancestors(&["list"]).count();
-    let indent = "  ".repeat(depth.saturating_sub(1));
-    if fmt && item.parent().is_some_and(|p| p.get("rend").as_deref() == Some("ol")) {
-        let n = item.iter_siblings(&["item"], true).count() + 1;
-        return format!("{indent}{n}. ");
+    format!("{}- ", "  ".repeat(depth.saturating_sub(1)))
+}
+
+/// `_closes_container`: whether the element carries the trailing content of its enclosing item/cell.
+pub fn closes_container(el: Node, tag: &str) -> bool {
+    if el.tag() == tag {
+        return el.is_empty();
     }
-    format!("{indent}- ")
+    el.next().is_none_or(|n| tag == "item" && n.tag() == "item")
+}
+
+/// `_opens_item`: whether nothing in the enclosing item renders before the element.
+pub fn opens_item(el: Node) -> bool {
+    let mut el = el;
+    while el.tag() != "item" {
+        match el.parent() {
+            Some(parent) if el.prev().is_none() && !text_chars_test(parent.text().as_deref()) => el = parent,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// `_item_needs_marker`: whether the item renders content of its own before any sublist.
+pub fn item_needs_marker(item: Node) -> bool {
+    if text_chars_test(item.text().as_deref()) {
+        return true;
+    }
+    for child in item.children() {
+        if child.tag() == "list" {
+            return false;
+        }
+        let text = child.itertext(true).concat() + &child.tail().unwrap_or_default();
+        if text_chars_test(Some(&text)) || child.iter(&["graphic"]).next().is_some() {
+            return true;
+        }
+    }
+    false
 }
 
 /// `_collect_inline_text`.
-fn collect_inline_text(ctx: &Ctx, el: Node, fmt: bool) -> Result<String> {
+fn collect_inline_text(el: Node) -> String {
     let mut parts: Vec<String> = el.text().filter(|t| !t.is_empty()).into_iter().collect();
     for child in el.children() {
         let tag = child.tag();
@@ -69,7 +106,7 @@ fn collect_inline_text(ctx: &Ctx, el: Node, fmt: bool) -> Result<String> {
         } else if tag == "lb" {
             parts.push("\n".into());
         } else if INLINE_FORMATTABLE.contains(&tag) {
-            parts.push(replace_element_text(ctx, child, fmt, None, false)?);
+            parts.push(replace_element_text(child, false));
         } else if let Some(t) = child.text().filter(|t| !t.is_empty()) {
             parts.push(t);
         }
@@ -77,17 +114,13 @@ fn collect_inline_text(ctx: &Ctx, el: Node, fmt: bool) -> Result<String> {
             parts.push(t);
         }
     }
-    Ok(parts.concat())
+    parts.concat()
 }
 
 /// `replace_element_text`: the element's own rendering (the tail is handled by the caller).
-pub fn replace_element_text(ctx: &Ctx, el: Node, fmt: bool, in_item: Option<bool>, in_cell: bool) -> Result<String> {
+pub fn replace_element_text(el: Node, _in_cell: bool) -> String {
     let tag = el.tag();
-    let mut text =
-        if consumes_inline_children(el) { collect_inline_text(ctx, el, fmt)? } else { el.text().unwrap_or_default() };
-    if fmt && !text.is_empty() {
-        text = format_markdown(ctx, el, text, in_cell)?;
-    }
+    let mut text = if consumes_inline_children(el) { collect_inline_text(el) } else { el.text().unwrap_or_default() };
     if tag == "ref" {
         let stripped = py::strip(&text).to_owned();
         if !stripped.is_empty() {
@@ -101,6 +134,40 @@ pub fn replace_element_text(ctx: &Ctx, el: Node, fmt: bool, in_item: Option<bool
             text.push(' ');
         }
     }
-    text = format!("{}{text}", list_marker(el, in_item, fmt));
-    Ok(if in_cell { escape_cell(&text) } else { text })
+    text
+}
+
+/// `_append_spaced`: append, dropping a leading space after a separator.
+pub fn append_spaced(out: &mut Vec<String>, text: &str) {
+    let text = match text.strip_prefix(' ') {
+        Some(rest) if SEPARATORS.contains(&last_char(out)) => rest,
+        _ => text,
+    };
+    if !text.is_empty() {
+        out.push(text.to_owned());
+    }
+}
+
+/// `_append_tail` with include_formatting=False.
+pub fn append_tail(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: bool) {
+    let Some(tail) = el.tail().filter(|t| !t.is_empty()) else { return };
+    let tag = el.tag();
+    if in_cell || in_item || tag == "list" {
+        let mut core = py::strip(&tail).to_owned();
+        let starts_space = tail.chars().next().is_some_and(py::is_space);
+        if !core.is_empty() && (starts_space || !INLINE_FORMATTABLE.contains(&tag)) {
+            core = format!(" {core}");
+        }
+        let ends_space = tail.chars().next_back().is_some_and(py::is_space);
+        if ends_space && el.next().is_some_and(|n| INLINE_CARRIED.contains(&n.tag())) {
+            core.push(' ');
+        }
+        append_spaced(out, &escape_cell(&core, in_cell));
+        return;
+    }
+    if NEWLINE_ELEMS.contains(&tag) {
+        out.push(tail.trim_start_matches(py::is_space).to_owned());
+    } else {
+        out.push(tail);
+    }
 }

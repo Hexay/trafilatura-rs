@@ -1,16 +1,18 @@
-//! trafilatura 2.2.0 main_extractor.py `handle_table` (full-width rows with colspan/rowspan placeholders) and
+//! trafilatura 2.3.1 main_extractor.py `handle_table` (full-width rows with colspan/rowspan placeholders) and
 //! `handle_image`.
 use super::htmlprocessing::{handle_textnode, process_node};
 use super::main_extractor::{define_newelem, handle_lists, handle_textelem, iter_children, PotentialTags};
-use super::settings::Focus;
-use super::utils::is_image_file;
+use super::main_extractor_lists::append_block;
+use super::settings::{Focus, INLINE_CONSUMING};
+use super::utils::image_src;
+use super::xml::separates_inline;
 use crate::dom::{Ctx, Node, Result};
 use crate::py::int::decimal_value;
 use crate::trafilatura::htmlprocessing::Env;
+use crate::trafilatura::text::text_chars_test;
 use std::collections::{HashMap, HashSet};
 
 const TABLE_ELEMS: &[&str] = &["td", "th"];
-const INLINE_WRAP_TAGS: &[&str] = &["hi", "ref", "del"];
 const MAX_SPAN: usize = 100;
 
 fn define_cell_type(ctx: &Ctx, is_header: bool) -> Result<Node> {
@@ -40,10 +42,6 @@ fn span(cell: Node, attr: &str) -> usize {
         .unwrap_or(MAX_SPAN)
 }
 
-fn row_has_content(row: Node) -> bool {
-    row.children().iter().any(|c| c.text().is_some_and(|t| !t.is_empty()) || !c.is_empty())
-}
-
 /// `_flush_rowspan_phantoms`.
 fn flush_rowspan_phantoms(ctx: &Ctx, rowspan_map: &mut HashMap<usize, usize>, newrow: Node) -> Result<()> {
     loop {
@@ -57,7 +55,7 @@ fn flush_rowspan_phantoms(ctx: &Ctx, rowspan_map: &mut HashMap<usize, usize>, ne
     }
 }
 
-/// `_finalize_row`.
+/// `_finalize_row`: trailing rowspan placeholders, padding to width, appended unless all cells are empty.
 fn finalize_row(
     ctx: &Ctx,
     newtable: Node,
@@ -69,7 +67,7 @@ fn finalize_row(
     while newrow.len() < max_cols {
         newrow.append(define_cell_type(ctx, false)?)?;
     }
-    if row_has_content(newrow) {
+    if newrow.children().iter().any(|c| c.text().is_some_and(|t| !t.is_empty()) || !c.is_empty()) {
         newtable.append(newrow)?;
     }
     Ok(())
@@ -98,33 +96,33 @@ fn fill_cell(
             continue;
         }
         if nested.contains(&child) {
-            if let Some(tail) = child.tail().filter(|t| child.tag() == "table" && !t.is_empty()) {
-                match new.child(-1) {
-                    Some(last) => last.set_tail(Some(&(last.tail().unwrap_or_default() + &tail)))?,
-                    None => new.set_text(Some(&(new.text().unwrap_or_default() + &tail)))?,
-                }
+            // nested tables are left to the main loop, their tail moves to the cell holding them
+            let outermost =
+                child.tag() == "table" && child.iter_ancestors(&["table"]).next().is_some_and(|t| !nested.contains(&t));
+            if outermost {
+                append_block(new, None, child)?;
+                child.set_tail(None)?;
             }
+            continue;
+        }
+        if separates_inline(child) && !text_chars_test(child.tail().as_deref()) {
+            new.append(env.ctx.element("lb")?)?;
+            child.set_tag("done")?;
             continue;
         }
         let tag = child.tag();
         let processed = if TABLE_ELEMS.contains(&tag) {
             child.set_tag("cell")?;
             handle_textnode(env, child, true, true)?
-        } else if INLINE_WRAP_TAGS.contains(&tag) {
-            let processed = handle_textnode(env, child, true, true)?;
-            if processed.is_none() && !child.is_empty() {
-                define_newelem(Some(child), new, true)?;
-                for el in child.iter(&["*"]) {
-                    el.set_tag("done")?;
-                }
-                continue;
+        } else if INLINE_CONSUMING.contains(&tag) {
+            // inline wrappers without direct text (<ref><hi>x</hi></ref>) are carried whole
+            match handle_textnode(env, child, true, true)? {
+                None if !child.is_empty() => Some(child),
+                processed => processed,
             }
-            processed
-        } else if tag == "list" && env.opts.focus == Focus::Recall {
-            if let Some(sub) = handle_lists(env, child)? {
-                new.append(sub)?;
-            }
-            child.set_tag("done")?;
+        } else if tag == "list" {
+            let processed = handle_lists(env, child)?;
+            append_block(new, processed.filter(|_| env.opts.focus == Focus::Recall), child)?;
             continue;
         } else {
             handle_textelem(env, child, ptags_with_div)?
@@ -143,65 +141,56 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
     ptags_with_div.insert("div");
     table_elem.strip_tags(ctx, &["thead", "tbody", "tfoot"]);
     let nested: HashSet<Node> = table_elem.iter_descendants(&["table"]).flat_map(|t| t.iter(&[])).collect();
-    let col_counts = table_elem.findall("tr").into_iter().map(|tr| {
-        tr.children()
-            .into_iter()
-            .filter(|td| TABLE_ELEMS.contains(&td.tag()))
-            .map(|td| span(td, "colspan"))
-            .sum::<usize>()
-    });
-    let max_cols = col_counts.max().unwrap_or(0).min(MAX_SPAN);
-    for caption in table_elem.findall("caption") {
-        let text = crate::py::strip(&caption.itertext(true).join(" ")).to_owned();
-        if !text.is_empty() {
-            let row = ctx.element("row")?;
-            let cell = define_cell_type(ctx, true)?;
-            cell.set_text(Some(&text))?;
-            row.append(cell)?;
-            while row.len() < max_cols {
-                row.append(define_cell_type(ctx, false)?)?;
-            }
-            newtable.append(row)?;
-        }
-        caption.set_tag("done")?;
-    }
-    let (mut header_row_emitted, mut row_has_th) = (false, false);
-    let mut newrow = ctx.element("row")?;
-    let mut rowspan_map: HashMap<usize, usize> = HashMap::new();
+    // direct children only, nested tables are left to the main loop; orphan cells join the current row
+    let mut rows: Vec<Vec<Node>> = vec![Vec::new()];
+    let mut captions: Vec<String> = Vec::new();
+    let mut max_cols = 0;
     for elem in iter_children(table_elem) {
-        if !elem.is_element() {
+        let tag = elem.tag();
+        if tag == "tr" {
+            let cells: Vec<Node> = elem.children().into_iter().filter(|c| TABLE_ELEMS.contains(&c.tag())).collect();
+            max_cols = max_cols.max(cells.iter().map(|&c| span(c, "colspan")).sum::<usize>());
+            rows.push(cells);
+        } else if TABLE_ELEMS.contains(&tag) {
+            rows.last_mut().expect("first row").push(elem);
+            continue;
+        } else if tag == "caption" {
+            captions.push(crate::py::strip(&elem.itertext(true).join(" ")).to_owned());
+            for sub in elem.iter_descendants(&["*"]) {
+                if sub.tag() == "graphic" {
+                    sub.set_tail(None)?;
+                } else {
+                    sub.set_tag("done")?;
+                }
+            }
+        } else if !elem.is_element() || tag == "table" {
             continue;
         }
-        let cells: Vec<Node> = if elem.tag() == "tr" {
-            if !newrow.is_empty() {
-                finalize_row(ctx, newtable, newrow, &mut rowspan_map, max_cols)?;
-                header_row_emitted = header_row_emitted || row_has_th;
-            }
-            newrow = ctx.element("row")?;
-            row_has_th = false;
-            flush_rowspan_phantoms(ctx, &mut rowspan_map, newrow)?;
-            iter_children(elem).collect()
-        } else if TABLE_ELEMS.contains(&elem.tag()) {
-            vec![elem]
-        } else {
-            if elem.tag() != "table" {
-                elem.set_tag("done")?;
-            }
-            continue;
-        };
+        elem.set_tag("done")?;
+    }
+    let max_cols = max_cols.min(MAX_SPAN);
+    for caption in captions.into_iter().filter(|c| !c.is_empty()) {
+        let cell = define_cell_type(ctx, true)?;
+        cell.set_text(Some(&caption))?;
+        let row = ctx.element("row")?;
+        row.append(cell)?;
+        finalize_row(ctx, newtable, row, &mut HashMap::new(), max_cols)?;
+    }
+    let mut header_row_emitted = false;
+    let mut rowspan_map: HashMap<usize, usize> = HashMap::new();
+    for cells in rows {
+        let newrow = ctx.element("row")?;
+        let mut row_has_th = false;
         for cell in cells {
-            if !cell.is_element() || !TABLE_ELEMS.contains(&cell.tag()) {
-                continue;
-            }
             let is_header = cell.tag() == "th" && !header_row_emitted;
             row_has_th = row_has_th || is_header;
             flush_rowspan_phantoms(ctx, &mut rowspan_map, newrow)?;
             let new_child_elem = define_cell_type(ctx, is_header)?;
             let colspan = span(cell, "colspan");
-            let rows = span(cell, "rowspan");
-            if rows > 1 {
+            let rowspan = span(cell, "rowspan");
+            if rowspan > 1 {
                 for c in newrow.len()..newrow.len() + colspan {
-                    rowspan_map.insert(c, rows - 1);
+                    rowspan_map.insert(c, rowspan - 1);
                 }
             }
             fill_cell(env, new_child_elem, cell, &nested, &ptags_with_div)?;
@@ -211,39 +200,25 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
             }
             cell.set_tag("done")?;
         }
-        elem.set_tag("done")?;
+        finalize_row(ctx, newtable, newrow, &mut rowspan_map, max_cols)?;
+        header_row_emitted = header_row_emitted || row_has_th;
     }
-    finalize_row(ctx, newtable, newrow, &mut rowspan_map, max_cols)?;
     Ok((!newtable.is_empty()).then_some(newtable))
 }
 
 /// `handle_image` (options.url is None in the ported configuration).
-pub fn handle_image(ctx: &Ctx, element: Option<Node>) -> Result<Option<Node>> {
-    let Some(element) = element else { return Ok(None) };
+pub fn handle_image(ctx: &Ctx, element: Node) -> Result<Option<Node>> {
+    let Some(link) = image_src(element) else { return Ok(None) };
+    let link = match link.strip_prefix("//") {
+        Some(rest) if !link.starts_with("http") => format!("http://{rest}"),
+        _ => link,
+    };
     let processed = ctx.element(element.tag())?;
-    let direct =
-        ["data-src", "src"].iter().map(|a| element.get(a).unwrap_or_default()).find(|s| is_image_file(Some(s)));
-    let src = direct.or_else(|| {
-        element.attrs().into_iter().find(|(k, v)| k.starts_with("data-src") && is_image_file(Some(v))).map(|(_, v)| v)
-    });
-    if let Some(src) = src {
-        processed.set("src", Some(&src))?;
-    }
+    processed.set("src", Some(&link))?;
     for attr in ["alt", "title"] {
         if let Some(v) = element.get(attr).filter(|v| !v.is_empty()) {
             processed.set(attr, Some(&v))?;
         }
-    }
-    let link = processed.get("src").unwrap_or_default();
-    if !processed.has_attrs() || link.is_empty() {
-        return Ok(None);
-    }
-    if !link.starts_with("http") {
-        let fixed = match link.strip_prefix("//") {
-            Some(rest) => format!("http://{rest}"),
-            None => link,
-        };
-        processed.set("src", Some(&fixed))?;
     }
     processed.set_tail(element.tail().as_deref())?;
     Ok(Some(processed))

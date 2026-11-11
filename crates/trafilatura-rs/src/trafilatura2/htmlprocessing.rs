@@ -1,28 +1,73 @@
-//! trafilatura 2.2.0 htmlprocessing.py: tree cleaning, pruning, link density and text-node processing.
+//! trafilatura 2.3.1 htmlprocessing.py: tree cleaning (with MathML and form handling), pruning, link density and
+//! text-node processing.
 use super::settings::{Focus, Options, CUT_EMPTY_ELEMS, MANUALLY_CLEANED, MANUALLY_STRIPPED};
-use super::utils::{is_image_element, textfilter, trim_or_none};
-use super::xml::delete_element;
+use super::utils::{image_src, textfilter, trim_or_none};
+use super::xml::{delete_element, separates_inline};
 use crate::dom::{Ctx, Node, Result};
 use crate::py;
 use crate::trafilatura::deduplication::duplicate_test;
 use crate::trafilatura::htmlprocessing::{truthy, Env};
+use crate::trafilatura::text::trim;
+use std::collections::HashSet;
 
 const PRESERVE_IMG_CLEANING: &[&str] = &["figure", "picture", "source"];
 /// utils.LINK_FARM_RATIO: link text above this share of the text is a link farm.
 const LINK_FARM_RATIO: f64 = 0.9;
+const TEX_ANNOTATION_XPATH: &str = r#".//*[local-name()="annotation"][@encoding="application/x-tex"]"#;
+
+/// `recover_math`: MathML becomes its LaTeX source, written into the tail that survives the `math` deletion.
+fn recover_math(tree: Node) -> Result<()> {
+    for element in tree.iter(&["math"]) {
+        let latex = match element.xpath_first(TEX_ANNOTATION_XPATH)? {
+            Some(annotation) => trim(&annotation.text().unwrap_or_default()),
+            None => trim(&element.get("alttext").unwrap_or_default()),
+        };
+        if latex.is_empty() {
+            continue;
+        }
+        let (open, close) =
+            if element.get("display").as_deref() == Some("block") { ("\\[", "\\]") } else { ("\\(", "\\)") };
+        element.set_tail(Some(&format!("{open}{latex}{close}{}", element.tail().unwrap_or_default())))?;
+    }
+    Ok(())
+}
+
+/// `_handle_forms`: a form holding most of the text is a layout wrapper (demoted to div), others go.
+fn handle_forms(ctx: &Ctx, tree: Node) -> Result<()> {
+    let forms: Vec<Node> = tree.iter(&["form"]).collect();
+    if forms.is_empty() {
+        return Ok(());
+    }
+    let total = py::len(&tree.text_content());
+    for form in forms {
+        if total > 0 && py::len(&form.text_content()) as f64 > total as f64 / 2.0 {
+            form.set_tag("div")?;
+        } else {
+            delete_element(ctx, form, true)?;
+        }
+    }
+    Ok(())
+}
 
 /// `tree_cleaning`.
 pub fn tree_cleaning(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
+    recover_math(tree)?;
     let mut cleaning_list: Vec<&str> = MANUALLY_CLEANED.to_vec();
     let mut stripping_list: Vec<&str> = MANUALLY_STRIPPED.to_vec();
+    let clean_forms = cleaning_list.contains(&"form");
+    cleaning_list.retain(|&t| t != "form");
     if !opts.tables {
         cleaning_list.extend(["table", "td", "th", "tr"]);
     } else {
-        for elem in tree.xpath_nodes(".//figure[descendant::table]")? {
-            elem.set_tag("div")?;
-        }
-        for elem in tree.xpath_nodes(r#".//table[@role="presentation" or @role="none"]"#)? {
-            elem.set_tag("div")?;
+        for elem in tree.iter(&["figure", "table"]) {
+            let layout = if elem.tag() == "figure" {
+                elem.find(".//table").is_some()
+            } else {
+                matches!(elem.get("role").as_deref(), Some("presentation" | "none"))
+            };
+            if layout {
+                elem.set_tag("div")?;
+            }
         }
     }
     if opts.images {
@@ -30,7 +75,12 @@ pub fn tree_cleaning(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         stripping_list.retain(|&t| t != "img");
     }
     tree.strip_tags(ctx, &stripping_list);
-    let tcopy = (opts.focus == Focus::Recall && tree.find(".//p").is_some()).then(|| tree.deep_copy(ctx));
+    // recall: undo the deletions if they remove every paragraph (copied only if no paragraph can survive)
+    let copy_needed = opts.focus == Focus::Recall
+        && tree.find(".//p").is_some()
+        && (cleaning_list.contains(&"p")
+            || !tree.iter(&["p"]).any(|p| p.iter_ancestors(&cleaning_list).next().is_none_or(|a| a == tree)));
+    let tcopy = copy_needed.then(|| tree.deep_copy(ctx));
     for expression in &cleaning_list {
         for element in tree.iter(&[expression]) {
             delete_element(ctx, element, true)?;
@@ -40,31 +90,46 @@ pub fn tree_cleaning(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         Some(copy) if tree.find(".//p").is_none() => copy,
         _ => tree,
     };
+    if clean_forms {
+        handle_forms(ctx, tree)?;
+    }
     prune_html(ctx, tree, opts.focus)
 }
 
 /// `prune_html`: empty CUT_EMPTY_ELEMS go, their tails kept except in precision mode.
 pub fn prune_html(ctx: &Ctx, tree: Node, focus: Focus) -> Result<Node> {
     let tails = focus != Focus::Precision;
-    for element in tree.xpath_nodes(".//processing-instruction()|.//*[not(node())]")? {
-        if element.is_element() && CUT_EMPTY_ELEMS.contains(&element.tag()) {
-            delete_element(ctx, element, tails)?;
-        }
+    let empty: Vec<Node> =
+        tree.iter_descendants(CUT_EMPTY_ELEMS).filter(|e| e.text().is_none() && e.is_empty()).collect();
+    for element in empty {
+        delete_element(ctx, element, tails)?;
     }
     Ok(tree)
 }
 
-/// `prune_unwanted_nodes`.
+/// `prune_unwanted_nodes`. With `with_backup`, nothing is pruned when that would leave a seventh of the text or
+/// less (all expressions are evaluated on the unpruned tree).
 pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backup: bool) -> Result<Node> {
-    let backup = with_backup.then(|| (py::len(&tree.text_content()), tree.deep_copy(ctx)));
-    for expression in nodelist {
-        for subtree in tree.xpath_nodes(expression)? {
-            delete_element(ctx, subtree, true)?;
+    if !with_backup {
+        for expression in nodelist {
+            for subtree in tree.xpath_nodes(expression)? {
+                delete_element(ctx, subtree, true)?;
+            }
         }
+        return Ok(tree);
     }
-    if let Some((old_len, backup)) = backup {
-        let new_len = py::len(&tree.text_content());
-        return Ok(if new_len as f64 > old_len as f64 / 7.0 { tree } else { backup });
+    let mut seen = HashSet::new();
+    let mut matches = Vec::new();
+    for expression in nodelist {
+        matches.extend(tree.xpath_nodes(expression)?.into_iter().filter(|&e| seen.insert(e)));
+    }
+    let outer: Vec<Node> = matches.into_iter().filter(|e| !e.iter_ancestors(&[]).any(|a| seen.contains(&a))).collect();
+    let old_len = py::len(&tree.text_content());
+    let pruned: usize = outer.iter().map(|e| py::len(&e.text_content())).sum();
+    if (old_len as f64 - pruned as f64) > old_len as f64 / 7.0 {
+        for elem in outer {
+            delete_element(ctx, elem, true)?;
+        }
     }
     Ok(tree)
 }
@@ -76,14 +141,18 @@ fn collect_link_info(links: &[Node]) -> (usize, usize, usize) {
     (lens.iter().sum(), lens.len(), lens.iter().filter(|&&n| n < 10).count())
 }
 
-/// `link_density_test(element, trim(element.text_content()))` -> (result, whether the returned list is non-empty).
-/// The text's length is only read once links exist, so it is computed there into `elemlen`.
-pub fn link_density_test(element: Node, elemlen: &mut Option<usize>, favor_precision: bool) -> (bool, bool) {
+/// `is_paragraph_listing`: every link alone in its paragraph (a document listing, not a farm).
+fn is_paragraph_listing(links: &[Node]) -> bool {
+    links.iter().all(|l| l.parent().is_some_and(|p| p.tag() == "p" && p.findall(".//ref").len() <= 1))
+}
+
+/// `link_density_test` -> (boilerplate, short and linked).
+pub fn link_density_test(element: Node, favor_precision: bool) -> (bool, bool) {
     let links = element.findall(".//ref");
     if links.is_empty() || element.find(".//graphic").is_some() {
         return (false, false);
     }
-    let elemlen = *elemlen.get_or_insert_with(|| element.text_content_trim_len());
+    let elemlen = element.text_content_trim_len();
     if links.len() == 1 {
         let threshold = if favor_precision { 10 } else { 100 };
         let link_len = links[0].text_content_trim_len();
@@ -99,15 +168,17 @@ pub fn link_density_test(element: Node, elemlen: &mut Option<usize>, favor_preci
     };
     if elemlen < limitlen {
         let (linklen, elemnum, shortelems) = collect_link_info(&links);
-        let dense = elemnum == 0
-            || linklen as f64 > elemlen as f64 * 0.8
-            || (elemnum > 1 && shortelems as f64 / elemnum as f64 > 0.8);
-        return (dense, elemnum > 0);
+        if elemnum == 0 {
+            return (true, false);
+        }
+        let dense = linklen as f64 > elemlen as f64 * 0.8 || (elemnum > 1 && shortelems as f64 / elemnum as f64 > 0.8);
+        return (dense, true);
     }
     if links.len() > 4 {
         let (linklen, elemnum, _) = collect_link_info(&links);
-        if linklen as f64 > elemlen as f64 * LINK_FARM_RATIO && linklen < 100 * elemnum {
-            return (true, elemnum > 0);
+        if linklen as f64 > elemlen as f64 * LINK_FARM_RATIO && linklen < 100 * elemnum && !is_paragraph_listing(&links)
+        {
+            return (true, false);
         }
     }
     (false, false)
@@ -140,11 +211,11 @@ pub fn delete_by_link_density(
     let len_threshold = if favor_precision { 200 } else { 100 };
     let depth_threshold = if favor_precision { 1 } else { 3 };
     for elem in subtree.iter(&[tagname]) {
-        let mut elemlen = None;
-        let (result, has_list) = link_density_test(elem, &mut elemlen, favor_precision);
-        // A non-empty list implies the length was computed.
-        let len = || elemlen.expect("computed before any list is built");
-        let backtrack = backtracking && has_list && 0 < len() && len() < len_threshold && elem.len() >= depth_threshold;
+        let (result, short_with_links) = link_density_test(elem, favor_precision);
+        let backtrack = backtracking
+            && short_with_links
+            && elem.len() >= depth_threshold
+            && elem.text_content_trim_len() < len_threshold;
         if result || backtrack {
             if tagname == "p" && elem.parent().is_some_and(|p| matches!(p.tag(), "item" | "td" | "th")) {
                 continue;
@@ -152,7 +223,7 @@ pub fn delete_by_link_density(
             deletions.push(elem);
         }
     }
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     for elem in deletions {
         if seen.insert(elem) {
             delete_element(ctx, elem, true)?;
@@ -163,10 +234,15 @@ pub fn delete_by_link_density(
 
 /// `handle_textnode`.
 pub fn handle_textnode(env: &mut Env, elem: Node, comments_fix: bool, preserve_spaces: bool) -> Result<Option<Node>> {
-    if elem.tag() == "graphic" && is_image_element(elem) {
+    if elem.tag() == "graphic" && image_src(elem).is_some() {
         return Ok(Some(elem));
     }
-    if elem.tag() == "done" || (elem.is_empty() && !truthy(&elem.text()) && !truthy(&elem.tail())) {
+    if elem.tag() == "done"
+        || (elem.is_empty()
+            && !truthy(&elem.text())
+            && !truthy(&elem.tail())
+            && (comments_fix || !separates_inline(elem)))
+    {
         return Ok(None);
     }
     if !comments_fix && elem.tag() == "lb" {
@@ -203,7 +279,7 @@ pub fn process_node(env: &mut Env, elem: Node) -> Result<Option<Node>> {
     let (text, tail) = (trim_or_none(elem.text()), trim_or_none(elem.tail()));
     elem.set_text(text.as_deref())?;
     elem.set_tail(tail.as_deref())?;
-    if elem.tag() != "lb" && !truthy(&elem.text()) && truthy(&elem.tail()) {
+    if elem.tag() != "lb" && !truthy(&elem.text()) && truthy(&elem.tail()) && elem.is_empty() {
         let tail = elem.tail();
         elem.set_text(tail.as_deref())?;
         elem.set_tail(None)?;

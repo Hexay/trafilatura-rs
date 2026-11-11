@@ -16,12 +16,14 @@ output, byte for byte**, as `trafilatura.extract()`, using about a tenth of the 
 ## Installation
 
 ```bash
-pip install "trafilatura-rs[trafilatura]"
+pip install "trafilatura-rs[trafilatura]"    # trafilatura 1.11.0
+pip install "trafilatura-rs[trafilatura2]"   # trafilatura 2.3.1
 ```
 
-The `[trafilatura]` extra installs the exact versions trafilatura-rs is verified against (trafilatura 1.11.0,
-lxml 6.1.3, htmldate 1.11.0), so you can fall back to and compare with the original. Wheels are built for Linux,
-macOS and Windows, Python 3.10+, with libxml2 statically linked.
+trafilatura-rs reproduces whichever of the two is installed (2.3.1 when neither is). The extras install the exact
+versions it is verified against (`[trafilatura]`: trafilatura 1.11.0, lxml 6.1.3, htmldate 1.11.0;
+`[trafilatura2]`: trafilatura 2.3.1, lxml 6.1.3), so you can fall back to and compare with the original. Wheels are
+built for Linux, macOS and Windows, Python 3.10+, with libxml2 statically linked.
 
 ## Quickstart
 
@@ -46,27 +48,32 @@ from trafilatura_rs import extract  # or swap the import: same signature, falls 
 
 You can also run a script unmodified with `python -m trafilatura_rs my_script.py`.
 
-`trafilatura_rs.supports(**kwargs)` tells you which path a call takes. If your installed trafilatura or lxml
-isn't the version trafilatura-rs reproduces, every call stays on Python and `install()` warns, so results never
-change. Markdown, JSON and metadata output are covered too (see below).
+`trafilatura_rs.supports(**kwargs)` tells you which path a call takes, and `trafilatura_rs.engine()` which
+trafilatura version is reproduced. If your installed trafilatura or lxml isn't a pair trafilatura-rs reproduces
+(`trafilatura_rs.REPRODUCES`), every call stays on Python and `install()` warns, so results never change. With
+trafilatura 1.11, markdown, JSON and metadata output are covered too (see below).
 
 ## What's supported
 
-`extract()` with string input, in the configurations below (`trafilatura_rs.VERIFIED_OUTPUTS`). Other arguments,
+`extract()` with string input, in the configurations below (`trafilatura_rs.verified_outputs()`). Other arguments,
 bytes input and other output formats run Python trafilatura.
 
-Plain text, each with comments (`include_comments=True`, trafilatura's default) and without:
+Plain text, identical pages out of 10,666, with comments (`include_comments=True`, trafilatura's default) and
+without:
 
-| Configuration | Arguments | Identical, comments | Identical, `include_comments=False` |
-|---|---|---|---|
-| Default | | 10,666 / 10,666 | 10,666 / 10,666 |
-| Precision | `favor_precision=True` | 10,666 / 10,666 | 10,666 / 10,666 |
-| datatrove / FineWeb | `favor_precision=True, deduplicate=True` | 10,666 / 10,666 | 10,666 / 10,666 |
-| Recall | `favor_recall=True` | 10,666 / 10,666 | 10,666 / 10,666 |
-| Fast | `no_fallback=True` | 10,666 / 10,666 | 10,666 / 10,666 |
-| No tables | `include_tables=False` | 10,666 / 10,666 | 10,666 / 10,666 |
+| Configuration | Arguments | 1.11.0 | 1.11.0, no comments | 2.3.1 | 2.3.1, no comments |
+|---|---|---|---|---|---|
+| Default | | 10,666 | 10,666 | 10,666 | 10,666 |
+| Precision | `favor_precision=True` | 10,666 | 10,666 | 10,666 | 10,666 |
+| datatrove / FineWeb | `favor_precision=True, deduplicate=True` | 10,666 | 10,666 | 10,666 | 10,666 |
+| Recall | `favor_recall=True` | 10,666 | 10,666 | 10,666 | 10,666 |
+| Fast | `no_fallback=True` (2.3.1: also `fast=True`) | 10,666 | 10,666 | 10,666 | 10,666 |
+| No tables | `include_tables=False` | 10,666 | 10,666 | 10,666 | 10,666 |
 
-Markdown, JSON and metadata, with `include_comments=False`:
+With 2.3.1, `deduplicate` given an `LRUCache` and any `url` run Python trafilatura.
+
+Markdown, JSON and metadata, trafilatura 1.11 only (with 2.3.1 they run Python trafilatura), with
+`include_comments=False`:
 
 | Configuration | Arguments | Identical to trafilatura |
 |---|---|---|
@@ -103,13 +110,12 @@ needs Python would update the wrong deduplication cache. Rare documents the port
 
 ## Exactness
 
-Each configuration is checked page by page against trafilatura 1.11.0 on 10,666 Common Crawl pages, comparing final
-output and per-stage tree hashes. The jusText and readability fallbacks are checked separately. Exactness holds
-because the parser is the same: trafilatura-rs vendors and statically links libxml2 2.14.6, the version lxml 6.1.3
-bundles, with the same parsing options (see [PATCHES.md](crates/libxml2-sys/PATCHES.md)).
-
-A port of trafilatura 2.2.0's extraction is verified by the same harness but not yet exposed in Python
-(differences: [docs/trafilatura-2x-diff.md](docs/trafilatura-2x-diff.md)).
+Each configuration is checked page by page against trafilatura 1.11.0 and 2.3.1 on 10,666 Common Crawl pages,
+comparing final output and per-stage tree hashes. The jusText and readability fallbacks are checked separately.
+Exactness holds because the parser is the same: trafilatura-rs vendors and statically links libxml2 2.14.6, the
+version lxml 6.1.3 bundles, with the same parsing options (see [PATCHES.md](crates/libxml2-sys/PATCHES.md)).
+What changed between the two versions: [docs/trafilatura-2x-diff.md](docs/trafilatura-2x-diff.md) and
+[docs/trafilatura-23-diff.md](docs/trafilatura-23-diff.md).
 
 ### How is this different from rs-trafilatura?
 

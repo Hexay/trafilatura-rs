@@ -50,7 +50,7 @@ def rust_extract():
     import trafilatura_rs
 
     def run(html, kw):
-        rust = trafilatura_rs._api._rust_kwargs(dict(kw, include_comments=False))
+        rust = trafilatura_rs._api._rust_kwargs(dict(kw, include_comments=False), "1.11.0")
         assert rust is not None, f"not covered by Rust: {kw}"
         return trafilatura_rs._core.extract(html, **rust)
 

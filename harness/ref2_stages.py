@@ -1,4 +1,4 @@
-"""Reference outputs from Python trafilatura 2.2.0 (.venv-t22) for the trafilatura2 parity harness.
+"""Reference outputs from Python trafilatura 2.3.1 (.venv-t23) for the trafilatura2 parity harness.
   ref2_stages.py stages docs.jsonl out.jsonl [cfg]        per-doc sha1 of each trafilatura_sequence stage (dedup off)
   ref2_stages.py final docs.jsonl out.jsonl [cfg]         extract() as in ref_stages.py (doc order, dedup per cfg)
   ref2_stages.py show docs.jsonl <i> <stage> [cfg]        print one stage's full serialization
@@ -29,6 +29,10 @@ def triple(t):
     return f"{ser(t[0])}\x00{t[1]}\x00{t[2]}"
 
 
+def pair(t):
+    return f"{ser(t[0])}\x00{t[1]}"
+
+
 def run_stages(html, cfg):
     """Yields (stage, serialized) until the pipeline stops; an exception becomes 'EXC:<type>'."""
     from lxml.etree import Element
@@ -39,7 +43,7 @@ def run_stages(html, cfg):
     from trafilatura.main_extractor import extract_content
     from trafilatura.utils import load_html, normalize_unicode
     from trafilatura.xml import xmltotxt
-    from trafilatura.xpaths import REMOVE_COMMENTS_XPATH
+    from trafilatura.xpaths import RAW_TREE_PRUNE_XPATH, REMOVE_COMMENTS_AND_LISTS_XPATH, REMOVE_COMMENTS_XPATH
 
     options = options_for(cfg)
     stage = "load"
@@ -52,8 +56,9 @@ def run_stages(html, cfg):
         is_forum = core._forum_thread_page(tree)
         yield stage, repr(is_forum)
         stage = "prune_raw"
+        tree = prune_unwanted_nodes(tree, RAW_TREE_PRUNE_XPATH)
         if options.focus == "precision" or not is_forum:
-            tree = prune_unwanted_nodes(copy(tree), REMOVE_COMMENTS_XPATH)
+            tree = prune_unwanted_nodes(tree, REMOVE_COMMENTS_AND_LISTS_XPATH)
         yield stage, ser(tree)
         stage = "clean"
         cleaned_tree, cleaned_tree_backup = core._prepare_tree(tree, options, None)
@@ -66,7 +71,7 @@ def run_stages(html, cfg):
         yield stage, ser(cleaned_tree)
         stage = "content"
         result = extract_content(cleaned_tree, options)
-        yield stage, triple(result)
+        yield stage, pair(result)
         stage = "txt_content"
         yield stage, xmltotxt(deepcopy(result[0]), options.formatting)
         stage = "baseline_raw"
@@ -77,33 +82,35 @@ def run_stages(html, cfg):
         if not options.fast:
             stage = "compare"
             result = compare_extraction(cleaned_tree_backup, copy(tree), *result, options)
-            yield stage, triple(result)
-        if result[2] < options.min_extracted_size and options.focus != "precision":
+            yield stage, pair(result)
+        if len(result[1]) < options.min_extracted_size and options.focus != "precision":
             stage = "baseline"
-            result = baseline(tree)
-            yield stage, triple(result)
-        len_text = result[2]
+            b_body, b_text, b_len = baseline(tree)
+            if b_len > len(result[1]):
+                result = (b_body, b_text)
+            yield stage, pair(result)
+        len_text = len(result[1])
         if options.focus == "balanced" and 0 < len_text < core.ESCALATION_MAX_LENGTH \
                 and len_text < core.ESCALATION_PAGE_SHARE * len(page_text):
             stage = "escalate"
             r_options = copy(options)
             r_options.focus = "recall"
-            esc_tree = tree if is_forum else prune_unwanted_nodes(copy(tree), REMOVE_COMMENTS_XPATH)
-            r_len = j_len = 0
+            r_text = j_text = ""
             try:
-                r_body, r_text, r_len = core._recall_retry(esc_tree, r_options, None)
+                r_body, r_text = core._recall_retry(tree, r_options, None)
             except Exception:  # noqa: BLE001 - as in trafilatura_sequence
                 pass
             if not options.fast:
                 try:
-                    j_body, j_text, j_len = justext_rescue(copy(esc_tree), options)
+                    j_body, j_text = justext_rescue(copy(tree), options)
                 except Exception:  # noqa: BLE001
                     pass
+            r_len, j_len = len(r_text), len(j_text)
             if j_len > r_len and j_len > core.ESCALATION_JUSTEXT_RATIO * len_text:
-                result = (j_body, j_text, j_len)
+                result = (j_body, j_text)
             elif r_len >= options.min_extracted_size and r_len > core.ESCALATION_ACCEPT_RATIO * len_text:
-                result = (r_body, r_text, r_len)
-            yield stage, triple(result)
+                result = (r_body, r_text)
+            yield stage, pair(result)
         stage = "txt"
         text = f"{xmltotxt(result[0], options.formatting)}\n{xmltotxt(Element('body'), options.formatting)}".strip()
         yield stage, normalize_unicode(text)

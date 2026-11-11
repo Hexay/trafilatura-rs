@@ -1,13 +1,16 @@
-//! trafilatura 2.2.0 external.py: readability/jusText fallbacks and the choice between them and the own extraction.
+//! trafilatura 2.3.1 external.py: readability/jusText fallbacks and the choice between them and the own extraction.
 use super::baseline::basic_cleaning;
 use super::htmlprocessing::{prune_unwanted_nodes, tree_cleaning};
 use super::htmlprocessing_convert::convert_tags;
+use super::main_extractor_extract::Extraction;
+use super::main_extractor_table::handle_image;
 use super::settings::{Focus, Options};
+use super::xml::delete_element;
 use super::xpaths::{OVERALL_DISCARD_XPATH, SANITIZED_XPATH};
 use crate::dom::{html_element, Ctx, Method, Node, Result};
 use crate::justext::{classify_paragraphs, make_paragraphs, revise_paragraph_classification, Params, Stoplist};
 use crate::py;
-use crate::readability::Document;
+use crate::readability::v23;
 use crate::trafilatura::htmlprocessing::Env;
 use crate::trafilatura::text::trim;
 use crate::trafilatura::utils::fromstring_bytes;
@@ -20,16 +23,13 @@ const TEI_VALID_TAGS: &[&str] = &[
 /// Adopt justext only when the text it replaces is at most this much longer.
 const JUSTEXT_OVERRIDE_RATIO: usize = 3;
 
-pub type Extraction = (Node, String, usize);
-
 fn joined_text(n: Node) -> String {
     trim(&n.itertext(true).join(" "))
 }
 
 /// `try_readability`: the summary re-parsed as bytes, or an empty `HtmlElement()` when anything fails.
 fn try_readability(ctx: &Ctx, tree: Node) -> Result<Node> {
-    let summary = Document::new(tree, 25, 250).with_drop_tags(&["script", "style", "fencedframe"]).summary(ctx);
-    match summary.ok().and_then(|s| fromstring_bytes(ctx, &s)) {
+    match v23::summary(ctx, tree, 25).ok().and_then(|s| fromstring_bytes(ctx, &s)) {
         Some(n) => Ok(n),
         None => html_element(ctx, "HtmlElement"),
     }
@@ -56,16 +56,17 @@ fn prefer_readability(
         || (recall && len_algo as f64 > 1.5 * len_text as f64 && !algo_text.starts_with('{'))
         || (recall
             && body.xpath_nodes(".//head")?.is_empty()
-            && !algo.xpath_nodes(".//h2|.//h3|.//h4")?.is_empty()
+            && algo.iter(&["h2", "h3", "h4"]).next().is_some()
             && len_algo > len_text))
 }
 
-/// `compare_extraction(cleaned_tree, raw_tree, body, text, len_text, options)`.
+/// `compare_extraction(cleaned_tree, raw_tree, body, text, options)`.
 pub fn compare_extraction(env: &mut Env, cleaned_tree: Node, raw_tree: Node, own: Extraction) -> Result<Extraction> {
     let (ctx, opts) = (env.ctx, env.opts);
-    let (mut body, mut text, mut len_text) = own;
+    let (mut body, mut text) = own;
+    let mut len_text = py::len(&text);
     if opts.focus == Focus::Recall && len_text > opts.min_extracted_size * 10 {
-        return Ok((body, text, len_text));
+        return Ok((body, text));
     }
     let mut raw_tree = raw_tree;
     if opts.focus == Focus::Precision {
@@ -74,22 +75,29 @@ pub fn compare_extraction(env: &mut Env, cleaned_tree: Node, raw_tree: Node, own
     let algo = try_readability(ctx, raw_tree)?;
     let algo_text = trim(&algo.tostring(Method::Text, true));
     let len_algo = py::len(&algo_text);
-    let use_readability = prefer_readability(body, algo, &algo_text, len_text, len_algo, opts)?;
+    let mut use_readability = prefer_readability(body, algo, &algo_text, len_text, len_algo, opts)?;
     if use_readability {
         (body, text, len_text) = (algo, algo_text, len_algo);
     }
-    let mut jt_result = false;
-    if !body.xpath_nodes(SANITIZED_XPATH)?.is_empty() || len_text < opts.min_extracted_size {
-        let (body2, text2, len2) = justext_rescue(ctx, cleaned_tree)?;
-        if !text2.is_empty() && len_text <= JUSTEXT_OVERRIDE_RATIO * len2 {
-            (body, text, len_text) = (body2, text2, len2);
-            jt_result = true;
+    let unclean = !body.xpath_nodes(SANITIZED_XPATH)?.is_empty();
+    if unclean || len_text < opts.min_extracted_size {
+        let (body2, text2) = justext_rescue(ctx, cleaned_tree)?;
+        let len2 = py::len(&text2);
+        let accept = if unclean {
+            len_text <= JUSTEXT_OVERRIDE_RATIO * len2
+                && (len2 > len_text || !opts.images || body.find(".//graphic").is_none())
+        } else {
+            len_text < len2
+        };
+        if !text2.is_empty() && accept {
+            (body, text) = (body2, text2);
+            use_readability = false;
         }
     }
-    if use_readability && !jt_result {
+    if use_readability {
         return sanitize_tree(ctx, body, opts);
     }
-    Ok((body, text, len_text))
+    Ok((body, text))
 }
 
 /// `try_justext` with target_language None (the full JT_STOPLIST); any jusText exception gives an empty body.
@@ -119,18 +127,25 @@ pub fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Extraction> {
     let tree = basic_cleaning(ctx, tree)?;
     let body = try_justext(ctx, tree)?;
     let text = joined_text(body);
-    let n = py::len(&text);
-    Ok((body, text, n))
+    Ok((body, text))
 }
 
 /// `sanitize_tree`: readability output converted to trafilatura's vocabulary.
 fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Extraction> {
     let cleaned = tree_cleaning(ctx, tree, opts)?;
-    if !opts.links {
-        cleaned.strip_tags(ctx, &["a"]);
-    }
-    cleaned.strip_tags(ctx, &["span"]);
+    cleaned.strip_tags(ctx, if opts.links { &["span"] } else { &["span", "a"] });
     let cleaned = convert_tags(ctx, cleaned, opts)?;
+    for elem in cleaned.iter(&["graphic"]).collect::<Vec<_>>() {
+        match handle_image(ctx, elem)? {
+            None => delete_element(ctx, elem, true)?,
+            Some(image) => {
+                elem.clear_attrs();
+                for (key, value) in image.attrs() {
+                    elem.set(&key, Some(&value))?;
+                }
+            }
+        }
+    }
     let mut seen_groups: HashSet<Option<Node>> = HashSet::new();
     for tr in cleaned.iter(&["tr"]) {
         let parent = tr.parent();
@@ -148,6 +163,5 @@ fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Extraction> {
     let invalid: Vec<&str> = cleaned.iter(&["*"]).map(|e| e.tag()).filter(|t| !TEI_VALID_TAGS.contains(t)).collect();
     cleaned.strip_tags(ctx, &invalid);
     let text = joined_text(cleaned);
-    let n = py::len(&text);
-    Ok((cleaned, text, n))
+    Ok((cleaned, text))
 }

@@ -1,4 +1,4 @@
-//! trafilatura 2.2.0 htmlprocessing.py `convert_tags`. Unchanged converters (lists, headings, details) are 1.11's.
+//! trafilatura 2.3.1 htmlprocessing.py `convert_tags`. Unchanged converters (lists, headings, details) are 1.11's.
 use super::settings::Options;
 use super::xml::delete_element;
 use crate::dom::{Ctx, Error, Node, Result};

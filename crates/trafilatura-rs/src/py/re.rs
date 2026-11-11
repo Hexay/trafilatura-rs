@@ -105,7 +105,42 @@ pub fn compile(pat: &str, ignorecase: bool) -> Rc<Regex> {
     })
 }
 
-/// `re.search(pat, s) is not None`.
+thread_local! {
+    static FANCY: RefCell<HashMap<(String, bool), Rc<fancy_regex::Regex>>> = RefCell::new(HashMap::new());
+}
+
+pub fn has_lookaround(pat: &str) -> bool {
+    ["(?=", "(?!", "(?<=", "(?<!"].iter().any(|l| pat.contains(l))
+}
+
+/// `re.search(pat, s) is not None`; lookaround patterns (trafilatura 2.3's XPaths) go through fancy-regex.
 pub fn search(pat: &str, ignorecase: bool, s: &str) -> bool {
-    compile(pat, ignorecase).is_match(s)
+    if !has_lookaround(pat) {
+        return compile(pat, ignorecase).is_match(s);
+    }
+    let re = FANCY.with(|cache| {
+        let key = (pat.to_owned(), ignorecase);
+        if let Some(r) = cache.borrow().get(&key) {
+            return r.clone();
+        }
+        let r =
+            Rc::new(fancy_regex::Regex::new(&translate(pat, ignorecase)).unwrap_or_else(|e| panic!("{pat:?}: {e}")));
+        cache.borrow_mut().insert(key, r.clone());
+        r
+    });
+    re.is_match(s).expect("regex backtrack limit")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::search;
+
+    #[test]
+    fn lookahead() {
+        let pat = "^(?:[Cc]omment(?!ary)|comol)";
+        assert!(search(pat, false, "comments"));
+        assert!(!search(pat, false, "commentary"));
+        assert!(search(pat, true, "COMOL\u{130}"));
+        assert!(search("x(?!y)$", false, "ax\n"));
+    }
 }

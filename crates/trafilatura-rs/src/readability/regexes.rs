@@ -31,6 +31,12 @@ macro_rules! re_i {
 
 re_i!(UNLIKELY_CANDIDATES, "combx|comment|community|disqus|extra|foot|header|menu|remark|rss|shoutbox|sidebar|sponsor|ad-break|agegate|pagination|pager|popup|tweet|twitter");
 re_i!(OK_MAYBE_CANDIDATE, "and|article|body|column|main|shadow");
+/// trafilatura 2.3.1: case-sensitive, matched against lowercased attributes.
+pub static UNLIKELY_CANDIDATES_LOWER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new("combx|comment|community|disqus|extra|foot|header|menu|remark|rss|shoutbox|sidebar|sponsor|ad-break|agegate|pagination|pager|popup|tweet|twitter").expect("valid pattern")
+});
+pub static OK_MAYBE_CANDIDATE_LOWER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("and|article|body|column|content|main|shadow").expect("valid pattern"));
 re_i!(POSITIVE, "article|body|content|entry|hentry|main|page|pagination|post|text|blog|story");
 re_i!(NEGATIVE, "button|combx|comment|com-|contact|figure|foot|footer|footnote|form|input|masthead|media|meta|outbrain|promo|related|scroll|shoutbox|sidebar|sponsor|shopping|tags|tool|widget");
 re_i!(DIV_TO_P_ELEMENTS, "<(?:a|blockquote|dl|div|img|ol|p|pre|table|ul)");

@@ -26,7 +26,7 @@ def original_extract():
 
 def install():
     """Route `trafilatura.extract` to trafilatura_rs; returns the original function. Idempotent. Does nothing (warns,
-    returns None) unless the installed trafilatura and lxml are the versions in REPRODUCES."""
+    returns None) unless the installed trafilatura and lxml are a pair in REPRODUCES."""
     global _original
     if _original is not None:
         return _original
@@ -34,9 +34,10 @@ def install():
 
     mismatch = mismatched_versions()
     if mismatch:
-        warnings.warn(f"trafilatura_rs reproduces {REPRODUCES} but found {mismatch}; trafilatura.extract left "
-                      'unpatched. Install the matching versions with: pip install "trafilatura-rs[trafilatura]"',
-                      RuntimeWarning, stacklevel=2)
+        pairs = ", ".join(f"trafilatura {t} + lxml {x}" for t, x in sorted(REPRODUCES))
+        warnings.warn(f"trafilatura_rs reproduces {pairs} but found {mismatch}; trafilatura.extract left unpatched. "
+                      'Install a matching pair with: pip install "trafilatura-rs[trafilatura2]" (2.3.1) or '
+                      '"trafilatura-rs[trafilatura]" (1.11.0)', RuntimeWarning, stacklevel=2)
         return None
     from ._api import extract
 

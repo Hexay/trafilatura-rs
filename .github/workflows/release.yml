@@ -37,6 +37,8 @@ jobs:
           python -m pip install "$(ls dist/*.whl)[test]"
           python tests/smoke.py
           TRAFILATURA_RS=1 python -c "from trafilatura import extract; import trafilatura_rs; assert extract is trafilatura_rs.extract"
+          python -m pip install "$(ls dist/*.whl)[test2]"
+          python tests/smoke.py
       - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.os }}-${{ matrix.target }}

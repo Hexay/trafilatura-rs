@@ -126,6 +126,9 @@ fn parse_preds(body: &str) -> Option<(Vec<AttrTests>, Vec<UnionTest>)> {
     let mut unions = Vec::new();
     for atom in split_top(body, " or ").into_iter().map(str::trim) {
         if let Some(c) = RE_TEST.captures(atom) {
+            if crate::py::re::has_lookaround(&c[2]) {
+                return None;
+            }
             let ignorecase = c.get(3).is_some_and(|f| f.as_str().contains('i'));
             let regex = crate::py::re::compile(&c[2], ignorecase);
             unions.push(UnionTest { names: attr_names(&c[1]), kind: UnionKind::Regex(regex) });

@@ -7,11 +7,12 @@ import sys
 import pytest
 import trafilatura
 import trafilatura.core
-from parity import pages
+from parity import TRAFILATURA, pages
 
 import trafilatura_rs
 
 HTML = pages()[0]["html"]
+V1 = TRAFILATURA.startswith("1.")
 _REF = {"extract": trafilatura.core.extract}  # in a dict: install() swaps module attributes holding the original
 
 
@@ -34,7 +35,7 @@ def test_install_patches_earlier_imported_copies():
     assert not trafilatura_rs.is_installed() and trafilatura.extract is _REF["extract"]
 
 
-@pytest.mark.parametrize("pkg,ver", [("trafilatura", "2.3.1"), ("lxml", "5.3.0")])
+@pytest.mark.parametrize("pkg,ver", [("trafilatura", "2.2.0"), ("lxml", "5.3.0")])
 def test_mismatched_versions_stay_on_python(monkeypatch, pkg, ver):
     from trafilatura_rs import _versions
 
@@ -66,16 +67,31 @@ def test_supports():
     assert not trafilatura_rs.supports(output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, favor_precision=True, favor_recall=True)
-    assert trafilatura_rs.supports(include_comments=False, output_format="markdown", favor_precision=True)
-    assert trafilatura_rs.supports(include_comments=False, output_format="json", with_metadata=True, url="http://a.b/")
     assert not trafilatura_rs.supports(include_comments=False, with_metadata=True, deduplicate=True)
     assert not trafilatura_rs.supports(include_comments=False, date_extraction_params={"original_date": False})
+    # markdown, json and metadata are ported for 1.11 only
+    assert trafilatura_rs.supports(include_comments=False, output_format="markdown", favor_precision=True) == V1
+    assert trafilatura_rs.supports(include_comments=False, output_format="json", with_metadata=True,
+                                   url="http://a.b/") == V1
+    assert trafilatura_rs.supports(include_comments=False, url="http://a.b/") == V1
+
+
+@pytest.mark.parametrize("kwargs", [dict(output_format="markdown"), dict(output_format="json"),
+                                    dict(with_metadata=True)])
+def test_new_outputs_stay_on_python_for_2x(monkeypatch, kwargs):
+    if V1:
+        pytest.skip("ported for trafilatura 1.11")
+    kwargs = dict(include_comments=False, **kwargs)
+    monkeypatch.setattr(trafilatura_rs._api, "_rust_extract", lambda *a, **k: pytest.fail("ran Rust"))
+    assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
+    with pytest.raises(ValueError, match="txt output"):
+        trafilatura_rs.Extractor(**kwargs)
 
 
 def test_metadata_date_params():
     kwargs = dict(include_comments=False, with_metadata=True, output_format="json",
                   date_extraction_params={"original_date": True, "extensive_search": True, "max_date": "2020-01-01"})
-    assert trafilatura_rs.supports(**kwargs)
+    assert trafilatura_rs.supports(**kwargs) == V1
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 
@@ -97,9 +113,41 @@ def test_unsupported_document_falls_back_to_python(monkeypatch):
 
 
 def test_positional_options_bind_like_trafilatura():
-    # extract(filecontent, url, record_id, no_fallback, favor_precision, ...)
-    assert trafilatura_rs.extract(HTML, None, None, False, True, include_comments=False) == _REF["extract"](
+    # 1.11: extract(filecontent, url, record_id, no_fallback, favor_precision, ...); 2.x: a `fast` before no_fallback
+    flags = (False,) if TRAFILATURA.startswith("1.") else (False, False)
+    assert trafilatura_rs.extract(HTML, None, None, *flags, True, include_comments=False) == _REF["extract"](
         HTML, favor_precision=True, include_comments=False)
+
+
+def test_engine_follows_installed_trafilatura(monkeypatch):
+    from trafilatura_rs import _versions
+
+    assert trafilatura_rs.engine() == TRAFILATURA
+    real = _versions._installed_version
+    monkeypatch.setattr(_versions, "_installed_version", lambda p: None if p == "trafilatura" else real(p))
+    assert trafilatura_rs.engine() == _versions.DEFAULT_TRAFILATURA and not trafilatura_rs.mismatched_versions()
+
+
+def test_fast_flag_per_version(monkeypatch):
+    if TRAFILATURA.startswith("1."):  # not a 1.11 parameter: Python's **kwargs swallows it, so it must not mean fast
+        assert not trafilatura_rs.supports(include_comments=False, fast=True)
+        assert trafilatura_rs.extract(HTML, fast=True, include_comments=False) == _REF["extract"](
+            HTML, include_comments=False)
+        return
+    assert trafilatura_rs.supports(include_comments=False, fast=True)
+    with pytest.warns(DeprecationWarning, match="no_fallback"):
+        old = trafilatura_rs.extract(HTML, no_fallback=True, include_comments=False)
+    assert old == trafilatura_rs.extract(HTML, fast=True, include_comments=False)
+
+
+def test_scoped_lru_cache_falls_back_to_python(monkeypatch):
+    if TRAFILATURA.startswith("1."):
+        pytest.skip("deduplicate takes an LRUCache from trafilatura 2.x on")
+    from trafilatura.deduplication import LRUCache
+
+    assert not trafilatura_rs.supports(include_comments=False, deduplicate=LRUCache(maxsize=10))
+    monkeypatch.setattr(trafilatura_rs._api, "_rust_extract", lambda *a, **k: pytest.fail("ran Rust"))
+    trafilatura_rs.extract(HTML, include_comments=False, deduplicate=LRUCache(maxsize=10))
 
 
 def _python(code, **env):

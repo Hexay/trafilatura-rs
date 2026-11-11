@@ -1,6 +1,7 @@
 //! Tree preparation passes: `remove_unlikely_candidates`, `transform_misused_divs_into_paragraphs`.
+use super::new_p;
 use super::regexes::{DIV_TO_P_ELEMENTS, OK_MAYBE_CANDIDATE, UNLIKELY_CANDIDATES};
-use crate::dom::{fragment_fromstring, Ctx, Method, Node, Result};
+use crate::dom::{Ctx, Method, Node, Result};
 use crate::py;
 
 pub fn remove_unlikely_candidates(ctx: &Ctx, doc: Node) -> Result<()> {
@@ -23,12 +24,6 @@ pub fn remove_unlikely_candidates(ctx: &Ctx, doc: Node) -> Result<()> {
 
 fn is_blank(s: &Option<String>) -> bool {
     s.as_deref().is_none_or(|t| py::strip(t).is_empty())
-}
-
-fn new_p(ctx: &Ctx, text: &str) -> Result<Node> {
-    let p = fragment_fromstring(ctx, "<p/>")?;
-    p.set_text(Some(text))?;
-    Ok(p)
 }
 
 /// Python searches the XML serialization of the children (tails included). There '<' only opens start tags,

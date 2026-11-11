@@ -2,7 +2,7 @@
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 D=${TRAFILATURA_RS_DATA:-/srv/agents/cache/trafilatura-rs-data}
 PY=$ROOT/.venv/bin/python
-PY22=$ROOT/.venv-t22/bin/python
+PY23=$ROOT/.venv-t23/bin/python
 H=${HARNESS:-$ROOT/target/release/harness}
 CONFIGS=(fineweb balanced recall fast notables)
 # include_comments=True variants (harness/ref_stages.py CONFIGS), final and final2 only
