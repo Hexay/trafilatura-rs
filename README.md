@@ -98,6 +98,16 @@ Single thread, CPU time per page, 10,666 Common Crawl pages, `favor_precision=Tr
 
 Measured by instruction count, the speedup is 11.3x.
 
+The default call, `extract(html)` (comments included, `CALL=default tools/bench.sh`):
+
+| | mean | p50 | p99 | Speedup |
+|---|---:|---:|---:|---:|
+| trafilatura 1.11 | 12.56 ms | 7.91 ms | 78.49 ms | 1x |
+| rs-trafilatura 0.1.1 | 9.63 ms | 6.20 ms | 61.98 ms | 1.3x |
+| **trafilatura-rs** | **2.10 ms** | **1.53 ms** | **10.91 ms** | **6.0x** |
+
+Measured by instruction count, the speedup is 7.1x.
+
 ## Contributing
 
 Development setup, the parity harness, benchmarks and releasing: [CONTRIBUTING.md](CONTRIBUTING.md).
