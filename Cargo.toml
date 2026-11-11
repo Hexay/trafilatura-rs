@@ -11,3 +11,8 @@ version = "0.1.0"
 debug = 1
 lto = "fat"
 codegen-units = 1
+
+# release with full debug info, for perf/samply (pair with frame pointers, see CONTRIBUTING.md)
+[profile.profiling]
+inherits = "release"
+debug = 2
