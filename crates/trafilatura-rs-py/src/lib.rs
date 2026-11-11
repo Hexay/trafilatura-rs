@@ -1,5 +1,6 @@
 //! `trafilatura_rs._core`: extraction entry points per reproduced trafilatura version. Python-level argument checking,
 //! engine selection, fallback and the trafilatura monkeypatch live in python/trafilatura_rs/.
+mod dates;
 mod hooks;
 
 use hooks::PyHooks;
@@ -250,6 +251,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract, m)?)?;
     m.add_function(wrap_pyfunction!(_find_date, m)?)?;
     m.add_function(wrap_pyfunction!(reset_caches, m)?)?;
+    m.add_function(wrap_pyfunction!(dates::_native_dateutil, m)?)?;
+    m.add_function(wrap_pyfunction!(dates::_native_external_date, m)?)?;
     m.add_class::<Extractor>()?;
     m.add("Unsupported", m.py().get_type::<Unsupported>())?;
     Ok(())

@@ -15,7 +15,7 @@ case ${1:?command} in
     echo "$DATATROVE_SRC" > "$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/datatrove_src.pth"
     [ -x "$PY23" ] || uv venv -q -p 3.13 "$ROOT/.venv-t23"
     uv pip install -q -p "$ROOT/.venv-t23" trafilatura==2.3.1 lxml==6.1.3 lxml-html-clean==0.4.6 justext==3.0.2 \
-      courlan==1.4.0 htmldate==1.11.0 charset-normalizer==3.5.2 maturin==1.16.0 pytest ;;
+      courlan==1.4.0 htmldate==1.11.0 dateparser==1.5.0 python-dateutil==4.0.0 charset-normalizer==3.5.2 maturin==1.16.0 pytest ;;
   build) cargo build --release --manifest-path "$ROOT/Cargo.toml" -p harness ;;
   py) venv=$ROOT/.venv${V:+-t$V}  # V=23: into .venv-t23
     (cd "$ROOT" && VIRTUAL_ENV="$venv" "$venv/bin/maturin" develop --release -q) ;;
