@@ -25,32 +25,42 @@ Python 3.10+, with libxml2 statically linked.
 
 ## Quickstart
 
-Keep calling trafilatura as you do now; supported calls run in Rust:
+Your existing code, unchanged:
+
+```bash
+TRAFILATURA_RS=1 python my_script.py
+```
+
+Every `trafilatura.extract` call trafilatura-rs supports now runs in Rust; every other call runs Python trafilatura
+as before. That includes calls made inside other libraries; datatrove's `Trafilatura` step, for example, is covered
+(or use [datatrove-rs](https://github.com/Hexay/datatrove-rs)).
+
+Prefer it in code? Any of these works too:
 
 ```python
-import trafilatura
 import trafilatura_rs
+trafilatura_rs.install()          # patch trafilatura.extract, including copies imported earlier
 
-trafilatura_rs.install()
-
-text = trafilatura.extract(html, favor_precision=True)  # runs in Rust, same result
+from trafilatura_rs import extract  # or swap the import: same signature, falls back to Python when needed
 ```
 
-Calls trafilatura-rs doesn't cover (metadata, XML/JSON output, comments, ...) keep running Python trafilatura. That
-also makes it work in libraries that call trafilatura internally. For example, datatrove's `Trafilatura` step is
-accelerated by [datatrove-rs](https://github.com/Hexay/datatrove-rs).
+You can also run a script unmodified with `python -m trafilatura_rs my_script.py`.
 
-Or call it directly:
+To run in Rust, a call has to pass `include_comments=False`; trafilatura's default is `True`:
 
 ```python
-from trafilatura_rs import extract
-
-text = extract(html, favor_precision=True)  # raises NotImplementedError for unsupported options
+trafilatura.extract(html, include_comments=False, favor_precision=True)  # Rust
+trafilatura.extract(html, favor_precision=True)                          # Python (comments not ported yet)
 ```
+
+`trafilatura_rs.supports(**kwargs)` tells you which path a call takes. If your installed trafilatura or lxml
+isn't the version trafilatura-rs reproduces, every call stays on Python and `install()` warns, so results never
+change.
 
 ## What's supported
 
-Plain-text `extract()` with `include_comments=False`, in these configurations (`trafilatura_rs.VERIFIED`):
+Plain-text `extract()` with `include_comments=False`, string input, in these configurations
+(`trafilatura_rs.VERIFIED`). Other arguments, bytes input and other output formats run Python trafilatura.
 
 | Configuration | Arguments | Identical to trafilatura |
 |---|---|---|

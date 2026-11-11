@@ -26,6 +26,7 @@ def run(engine, html, kwargs):
         import trafilatura_rs
 
         fn = trafilatura_rs.extract
+        assert trafilatura_rs.supports(include_comments=False, **kwargs), f"would fall back to Python: {kwargs}"
     else:
         from trafilatura import extract as fn
     try:

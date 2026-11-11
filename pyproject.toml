@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "trafilatura-rs"
-version = "0.1.0"
+version = "0.1.1"
 description = "Byte-exact drop-in Rust port of trafilatura 1.11's extract()"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -49,3 +49,4 @@ python-source = "python"
 module-name = "trafilatura_rs._core"
 # The release profile keeps debug info for perf; shipped wheels don't need it.
 strip = true
+include = [{ path = "python/trafilatura_rs.pth", format = "wheel" }]

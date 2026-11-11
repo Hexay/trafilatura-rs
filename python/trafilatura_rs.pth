@@ -1,0 +1,1 @@
+import os; os.environ.get("TRAFILATURA_RS", "0") not in ("", "0") and __import__("trafilatura_rs._autoinstall")
