@@ -9,6 +9,7 @@
 
 mod alloc;
 mod cleanup;
+mod copy;
 mod error;
 mod exslt;
 mod fastpath;

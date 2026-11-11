@@ -161,7 +161,10 @@ impl Node {
         unsafe {
             let doc = ffi::xmlCopyDoc(self.doc(), 0);
             ctx.adopt_doc(doc);
-            let c = ffi::xmlDocCopyNode(self.raw(), doc, 1);
+            let mut c = super::copy::copy_tree(self.raw(), doc);
+            if c.is_null() {
+                c = ffi::xmlDocCopyNode(self.raw(), doc, 1);
+            }
             assert!(!c.is_null(), "out of memory");
             ffi::xmlDocSetRootElement(doc, c);
             raw::copy_tail((*self.raw()).next, c);
