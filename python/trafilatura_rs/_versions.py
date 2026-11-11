@@ -1,3 +1,4 @@
+import os
 from importlib.metadata import PackageNotFoundError, version
 
 # The (trafilatura, lxml) pairs whose output trafilatura_rs reproduces; Python trafilatura's output depends on both.
@@ -7,6 +8,9 @@ DEFAULT_TRAFILATURA = "2.3.1"
 # With metadata (trafilatura 1.11 only), also the ported htmldate (courlan, dateparser and python-dateutil are called,
 # not ported).
 REPRODUCES_METADATA = {"htmldate": "1.11.0"}
+# The native date shortcuts (see docs/metadata-formats-scope.md) answer for these versions only; at any other, the
+# dateparser and python-dateutil calls all run in Python, so output still follows the installed packages.
+REPRODUCES_DATES = {"dateparser": "1.5.0", "python-dateutil": "4.0.0"}
 
 
 def _installed_version(package):
@@ -41,3 +45,11 @@ def mismatched_versions(with_metadata=False):
         installed = {pkg: _installed_version(pkg) for pkg in REPRODUCES_METADATA}
         mismatch |= {pkg: v for pkg, v in installed.items() if v is not None and v != REPRODUCES_METADATA[pkg]}
     return mismatch
+
+
+def native_dates():
+    """Whether the native date shortcuts may stand in for dateparser and python-dateutil (read once per process);
+    TRAFILATURA_RS_NATIVE_DATES=0 turns them off."""
+    if os.environ.get("TRAFILATURA_RS_NATIVE_DATES", "1") == "0":
+        return False
+    return all(_installed_version(pkg) == v for pkg, v in REPRODUCES_DATES.items())

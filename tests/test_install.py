@@ -60,6 +60,18 @@ def test_mismatched_htmldate_keeps_metadata_on_python(monkeypatch):
     trafilatura_rs.extract(HTML, include_comments=False, with_metadata=True)
 
 
+def test_native_dates_need_the_reproduced_versions(monkeypatch):
+    from trafilatura_rs import _versions
+
+    real = _versions._installed_version
+    assert _versions.native_dates()
+    monkeypatch.setattr(_versions, "_installed_version", lambda p: "1.4.0" if p == "dateparser" else real(p))
+    assert not _versions.native_dates() and trafilatura_rs.mismatched_versions(with_metadata=True) == {}
+    monkeypatch.undo()
+    monkeypatch.setenv("TRAFILATURA_RS_NATIVE_DATES", "0")
+    assert not _versions.native_dates()
+
+
 def test_supports():
     assert trafilatura_rs.supports(include_comments=False, favor_precision=True, deduplicate=True)
     assert trafilatura_rs.supports()  # trafilatura's defaults, include_comments=True

@@ -40,7 +40,12 @@ TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast
 tools/parity.sh meta:balanced_json   # markdown/metadata/json configs (harness/ref_meta.py), via the extension
 harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc
 harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_date alone, with and without url
+harness/diff_dates.py collect docs.jsonl strings.jsonl balanced_json   # log the corpus' date strings, then
+harness/diff_dates.py check strings.jsonl                     # native date shortcuts vs dateutil/dateparser
 ```
+
+After a dateparser, python-dateutil or htmldate bump, regenerate `crates/trafilatura-rs/src/dates/dateparser/tables.txt`
+(`harness/gen_dateparser_tables.py`), rerun `diff_dates.py` and update `REPRODUCES_DATES`.
 
 `meta:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`
