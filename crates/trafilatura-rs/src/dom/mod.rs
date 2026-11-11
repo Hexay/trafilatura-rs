@@ -19,6 +19,7 @@ mod mutate;
 mod parse;
 mod raw;
 mod serialize;
+mod slots;
 mod tree;
 mod xpath;
 

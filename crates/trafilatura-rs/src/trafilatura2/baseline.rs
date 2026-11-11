@@ -1,12 +1,13 @@
 //! trafilatura 2.3.1 baseline.py: `basic_cleaning`, `baseline` (JSON, articles, paragraphs, teasers, body dump)
 //! and `html2txt`, for element input (what the pipeline passes; the element is copied, not mutated).
-use super::baseline_json::{collect_json_content, render_text, spaced_text};
+use super::baseline_json::{collect_json_content, render_text, spaced_text, BLOCK_ELEMS};
 use super::settings::{DEDUPE_SCAN_CAP, MIN_DUPLICATE_LENGTH};
 use super::xml::delete_element;
 use super::xpaths::BASIC_CLEAN_XPATH;
 use crate::dom::{Ctx, Node, Result};
 use crate::py;
-use crate::trafilatura::text::{remove_control_characters, trim};
+use crate::trafilatura::text::{remove_control_characters, trim, without_control_characters};
+use std::collections::HashSet;
 
 pub type Extraction = (Node, String, usize);
 
@@ -107,4 +108,21 @@ pub fn html2txt(ctx: &Ctx, tree: Node) -> Result<String> {
     let tree = tree.deep_copy(ctx);
     let body = tree.find(".//body").unwrap_or(tree);
     spaced_text(basic_cleaning(ctx, body)?)
+}
+
+/// `len(html2txt(tree))`, read from `tree` in place: `basic_cleaning` as skipped subtrees, `spaced_text`'s block
+/// spacing applied per text slot.
+pub fn html2txt_len(tree: Node) -> Result<usize> {
+    let body = tree.find(".//body").unwrap_or(tree);
+    let removed: HashSet<Node> = body.xpath_nodes(BASIC_CLEAN_XPATH)?.into_iter().collect();
+    let mut len = py::TrimLen::default();
+    body.text_slots(&removed, &mut |owner, pieces| {
+        if BLOCK_ELEMS.contains(&owner.tag()) {
+            len.feed(" ");
+            pieces.iter().for_each(|p| len.feed(&without_control_characters(p)));
+        } else {
+            pieces.iter().for_each(|p| len.feed(p));
+        }
+    });
+    Ok(len.finish())
 }

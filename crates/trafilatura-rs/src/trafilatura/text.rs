@@ -73,10 +73,15 @@ pub fn text_chars_test(s: Option<&str>) -> bool {
 
 /// `remove_control_characters`: keep printable or whitespace characters.
 pub fn remove_control_characters(s: &str) -> String {
+    without_control_characters(s).into_owned()
+}
+
+/// `remove_control_characters`, borrowing when nothing is removed.
+pub fn without_control_characters(s: &str) -> std::borrow::Cow<'_, str> {
     if s.bytes().all(|b| matches!(b, b'\t'..=b'\r' | 0x1c..=0x7e)) {
-        return s.to_owned();
+        return s.into();
     }
-    s.chars().filter(|&c| py::is_printable(c) || py::is_space(c)).collect()
+    s.chars().filter(|&c| py::is_printable(c) || py::is_space(c)).collect::<String>().into()
 }
 
 pub fn normalize_unicode(s: &str) -> String {
