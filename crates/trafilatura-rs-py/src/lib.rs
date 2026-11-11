@@ -38,6 +38,7 @@ fn options(
     include_tables: bool,
     deduplicate: bool,
     no_fallback: bool,
+    include_comments: bool,
 ) -> Options {
     let focus = if favor_recall {
         Focus::Recall
@@ -48,7 +49,7 @@ fn options(
     };
     Options {
         focus,
-        comments: false,
+        comments: include_comments,
         tables: include_tables,
         dedup: deduplicate,
         fast: no_fallback,
@@ -56,9 +57,10 @@ fn options(
     }
 }
 
-/// `trafilatura.extract` (txt output, include_comments=False) with the process-wide dedup state.
+/// `trafilatura.extract` (txt output; trafilatura's defaults) with the process-wide dedup state.
 #[pyfunction]
-#[pyo3(signature = (html, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false, no_fallback=false))]
+#[pyo3(signature = (html, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false, no_fallback=false, include_comments=true))]
+#[allow(clippy::too_many_arguments)]
 fn extract(
     py: Python<'_>,
     html: &str,
@@ -67,8 +69,9 @@ fn extract(
     include_tables: bool,
     deduplicate: bool,
     no_fallback: bool,
+    include_comments: bool,
 ) -> PyResult<Option<String>> {
-    let opts = options(favor_precision, favor_recall, include_tables, deduplicate, no_fallback);
+    let opts = options(favor_precision, favor_recall, include_tables, deduplicate, no_fallback, include_comments);
     py.detach(|| {
         if deduplicate {
             core::extract(html, &opts, &mut GLOBAL_LRU.lock().expect("lru lock"))
@@ -94,15 +97,16 @@ struct Extractor {
 #[pymethods]
 impl Extractor {
     #[new]
-    #[pyo3(signature = (favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false, no_fallback=false))]
+    #[pyo3(signature = (favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false, no_fallback=false, include_comments=true))]
     fn new(
         favor_precision: bool,
         favor_recall: bool,
         include_tables: bool,
         deduplicate: bool,
         no_fallback: bool,
+        include_comments: bool,
     ) -> Self {
-        let opts = options(favor_precision, favor_recall, include_tables, deduplicate, no_fallback);
+        let opts = options(favor_precision, favor_recall, include_tables, deduplicate, no_fallback, include_comments);
         Extractor { inner: core::Extractor::new(opts) }
     }
 

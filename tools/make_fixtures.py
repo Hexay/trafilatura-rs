@@ -1,7 +1,8 @@
 """Pick the parity-test fixtures (tests/fixtures/pages.jsonl) from the corpus: ~30 varied pages under 2 MB.
 usage: make_fixtures.py $TRAFILATURA_RS_DATA > tests/fixtures/pages.jsonl
-Buckets cover each PEP-393 parser path, XML declarations, tables, empty results, config-sensitive pages and a
-same-host run (exercises deduplicate=True). Needs ref_final_{fineweb,balanced,recall}.jsonl (tools/make_reference.sh).
+Buckets cover each PEP-393 parser path, XML declarations, tables, empty results, config-sensitive pages, pages whose
+output changes with include_comments and a same-host run (exercises deduplicate=True). Needs
+ref_final_{fineweb,balanced,recall,fineweb_comments,balanced_comments}.jsonl (tools/make_reference.sh).
 """
 import json
 import re
@@ -24,17 +25,18 @@ def kind(html):
 
 def rows(data):
     files = [open(f"{data}/{n}.jsonl", encoding="utf-8") for n in
-             ("docs", "ref_final_fineweb", "ref_final_balanced", "ref_final_recall")]
+             ("docs", "ref_final_fineweb", "ref_final_balanced", "ref_final_recall", "ref_final_fineweb_comments",
+              "ref_final_balanced_comments")]
     for lines in zip(*files):
-        doc, fw, bal, rec = (json.loads(x) for x in lines)
-        yield doc, fw["out"], bal["out"], rec["out"]
+        doc, *outs = (json.loads(x) for x in lines)
+        yield doc, *(o["out"] for o in outs)
 
 
 def main():
     quota = {"astral": 3, "bmp": 4, "latin1": 2, "latin1_c1": 1, "xmldecl": 2, "table": 3, "none": 3,
-             "config": 4, "ascii": 4}
+             "config": 4, "ascii": 4, "comments": 3, "comments_precision": 2}
     picked, hosts = {}, defaultdict(list)
-    for doc, fw, bal, rec in rows(sys.argv[1]):
+    for doc, fw, bal, rec, fw_c, bal_c in rows(sys.argv[1]):
         html = doc["html"]
         if len(html.encode("utf-8", "surrogatepass")) > MAX_DOC:
             continue
@@ -48,6 +50,10 @@ def main():
             tags.append("none")
         if fw != bal and bal != rec:
             tags.append("config")
+        if bal != bal_c:
+            tags.append("comments")
+        if fw != fw_c:
+            tags.append("comments_precision")
         for tag in reversed(tags):
             if quota.get(tag, 0) > 0 and doc["i"] not in picked:
                 quota[tag] -= 1

@@ -73,7 +73,7 @@ pub fn recover_wild_text(
     Ok(result_body)
 }
 
-fn body_text(body: Node) -> String {
+pub(crate) fn body_text(body: Node) -> String {
     py::strip(&body.itertext(true).join(" ")).to_owned()
 }
 

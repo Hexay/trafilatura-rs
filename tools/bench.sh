@@ -2,12 +2,13 @@
 # Extraction benchmark on the first N corpus docs (default all): trafilatura 1.11 via datatrove's call, the same
 # call after trafilatura_rs.install(), and rs-trafilatura. Measures per-doc CPU time and user-space instructions (perf
 # stat), never wall time; engines alternate within each of ROUNDS rounds so load drift on the shared box hits all.
-# Each run is a fresh process (trafilatura's dedup LRU is process-global). Usage: [ROUNDS=2] tools/bench.sh [N]
-# Needs the trafilatura-rs wheel in .venv (tools/dev.sh py). Output: $D/bench/, report on stdout.
+# Each run is a fresh process (trafilatura's dedup LRU is process-global). Usage: [ROUNDS=2] [CALL=default] tools/bench.sh [N]
+# CALL=default benches the default call extract(html) instead (see harness/bench_extract.py).
+# Needs the trafilatura-rs wheel in .venv (tools/dev.sh py). Output: $D/bench[_default]/, report on stdout.
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 N=${1:-}
-B=$D/bench
+B=$D/bench${CALL:+_$CALL}
 rm -rf "$B" && mkdir -p "$B"
 for r in $(seq "${ROUNDS:-2}"); do
   for e in none trafilatura trafilatura_rs rs; do

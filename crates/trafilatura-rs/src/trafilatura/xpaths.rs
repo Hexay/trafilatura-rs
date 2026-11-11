@@ -42,6 +42,30 @@ pub const BODY_XPATH: [&str; 5] = [
     r#"(.//*[(self::article or self::div or self::section)][starts-with(@class, "main") or starts-with(@id, "main") or starts-with(@role, "main")])[1]|(.//main)[1]"#,
 ];
 
+pub const COMMENTS_XPATH: [&str; 4] = [
+    r#".//*[(self::div or self::list or self::section)][contains(@id, 'commentlist')
+    or contains(@class, 'commentlist') or contains(@class, 'comment-page') or
+    contains(@id, 'comment-list') or contains(@class, 'comments-list') or
+    contains(@class, 'comments-content') or contains(@class, 'post-comments')]"#,
+    r#".//*[(self::div or self::section or self::list)][starts-with(@id, 'comments')
+    or starts-with(@class, 'comments') or starts-with(@class, 'Comments') or
+    starts-with(@id, 'comment-') or starts-with(@class, 'comment-') or
+    contains(@class, 'article-comments')]"#,
+    r#".//*[(self::div or self::section or self::list)][starts-with(@id, 'comol') or
+    starts-with(@id, 'disqus_thread') or starts-with(@id, 'dsq-comments')]"#,
+    ".//*[(self::div or self::section)][starts-with(@id, 'social') or contains(@class, 'comment')]",
+];
+
+pub const COMMENTS_DISCARD_XPATH: [&str; 3] = [
+    r#".//*[(self::div or self::section)][starts-with(@id, "respond")]"#,
+    ".//cite|.//quote",
+    r#".//*[@class="comments-title" or contains(@class, "comments-title") or
+    contains(@class, "nocomments") or starts-with(@id, "reply-") or
+    starts-with(@class, "reply-") or contains(@class, "-reply-") or contains(@class, "message")
+    or contains(@class, "signin") or
+    contains(@id, "akismet") or contains(@class, "akismet") or contains(@style, "display:none")]"#,
+];
+
 pub const REMOVE_COMMENTS_XPATH: [&str; 1] = [r#".//*[(self::div or self::list or self::section)][
     starts-with(translate(@id, "C","c"), 'comment') or
     starts-with(translate(@class, "C","c"), 'comment') or

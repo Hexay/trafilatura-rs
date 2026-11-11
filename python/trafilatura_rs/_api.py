@@ -3,19 +3,23 @@ import inspect
 from . import _versions
 from ._core import extract as _rust_extract
 
-# (favor_precision, favor_recall, include_tables, no_fallback) combinations with full-corpus parity.
+# (favor_precision, favor_recall, include_tables, no_fallback, include_comments) combinations with full-corpus parity:
+# each option set below, with and without comments.
 VERIFIED = {
-    (True, False, True, False),   # favor_precision (datatrove/FineWeb, with deduplicate=True)
-    (False, False, True, False),  # defaults
-    (False, True, True, False),   # favor_recall
-    (False, False, True, True),   # no_fallback
-    (False, False, False, False),  # include_tables=False
+    (*options, include_comments)
+    for options in (
+        (True, False, True, False),   # favor_precision (datatrove/FineWeb, also with deduplicate=True)
+        (False, False, True, False),  # defaults
+        (False, True, True, False),   # favor_recall
+        (False, False, True, True),   # no_fallback
+        (False, False, False, False),  # include_tables=False
+    )
+    for include_comments in (True, False)
 }
 
-_RUST_KWARGS = {"favor_precision", "favor_recall", "include_tables", "deduplicate", "no_fallback"}
-# Arguments that may be passed as long as they hold these values. include_comments defaults to True in trafilatura,
-# so it must be passed explicitly as False.
-_NEUTRAL = {"include_comments": False, "output_format": "txt", "url": None, "record_id": None,
+_RUST_KWARGS = {"favor_precision", "favor_recall", "include_tables", "deduplicate", "no_fallback", "include_comments"}
+# Arguments that may be passed as long as they hold these values.
+_NEUTRAL = {"output_format": "txt", "url": None, "record_id": None,
             "target_language": None, "include_images": False, "include_formatting": False,
             "include_links": False, "with_metadata": False, "only_with_metadata": False, "max_tree_size": None,
             "url_blacklist": None, "author_blacklist": None, "settingsfile": None, "prune_xpath": None,
@@ -24,8 +28,6 @@ _NEUTRAL = {"include_comments": False, "output_format": "txt", "url": None, "rec
 
 def _rust_kwargs(kwargs):
     """The Rust keyword arguments for these extract() options, or None when the call must run in Python."""
-    if kwargs.get("include_comments", True) is not False:
-        return None
     rust = {}
     for key, value in kwargs.items():
         if key in _RUST_KWARGS:
@@ -33,7 +35,7 @@ def _rust_kwargs(kwargs):
         elif key not in _NEUTRAL or not (value is _NEUTRAL[key] or value == _NEUTRAL[key]):
             return None
     combo = (rust.get("favor_precision", False), rust.get("favor_recall", False),
-             rust.get("include_tables", True), rust.get("no_fallback", False))
+             rust.get("include_tables", True), rust.get("no_fallback", False), rust.get("include_comments", True))
     return rust if combo in VERIFIED else None
 
 
@@ -66,6 +68,6 @@ def extract(filecontent, *args, **kwargs):
     if rust is not None and (python is None or not _versions.mismatched_versions()):
         return _rust_extract(filecontent, **rust)
     if python is None:
-        raise NotImplementedError(f"trafilatura_rs covers only {sorted(VERIFIED)} with include_comments=False and "
-                                  "txt output; install trafilatura to fall back to it for other calls")
+        raise NotImplementedError(f"trafilatura_rs covers only {sorted(VERIFIED)} with txt output; install "
+                                  "trafilatura to fall back to it for other calls")
     return python(filecontent, **kwargs)

@@ -50,12 +50,14 @@ def test_mismatched_versions_stay_on_python(monkeypatch, pkg, ver):
 
 def test_supports():
     assert trafilatura_rs.supports(include_comments=False, favor_precision=True, deduplicate=True)
-    assert not trafilatura_rs.supports(favor_precision=True)  # trafilatura's default include_comments=True
+    assert trafilatura_rs.supports()  # trafilatura's defaults, include_comments=True
+    assert trafilatura_rs.supports(favor_precision=True, deduplicate=True)
+    assert not trafilatura_rs.supports(output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, favor_precision=True, favor_recall=True)
 
 
-@pytest.mark.parametrize("kwargs", [dict(favor_precision=True), dict(include_comments=False, with_metadata=True),
+@pytest.mark.parametrize("kwargs", [dict(favor_precision=True, favor_recall=True), dict(with_metadata=True),
                                     dict(include_comments=False, output_format="json")])
 def test_uncovered_calls_fall_back_to_python(kwargs):
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)

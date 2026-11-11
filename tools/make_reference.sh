@@ -32,6 +32,7 @@ jobs=("$@")
 if [ ${#jobs[@]} -eq 0 ]; then
   jobs=(stages justext readability stages2:balanced stages2:fineweb)
   for c in "${CONFIGS[@]}"; do jobs+=("final:$c" "final2:$c"); done
+  for c in "${COMMENT_CONFIGS[@]}"; do jobs+=("final:$c" "final2:$c"); done
 fi
 printf '%s\n' "${jobs[@]}" | xargs -P "${REF_JOBS:-4}" -I{} bash -c 'job {}'
 echo REFDONE

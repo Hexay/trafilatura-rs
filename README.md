@@ -46,29 +46,24 @@ from trafilatura_rs import extract  # or swap the import: same signature, falls 
 
 You can also run a script unmodified with `python -m trafilatura_rs my_script.py`.
 
-To run in Rust, a call has to pass `include_comments=False`; trafilatura's default is `True`:
-
-```python
-trafilatura.extract(html, include_comments=False, favor_precision=True)  # Rust
-trafilatura.extract(html, favor_precision=True)                          # Python (comments not ported yet)
-```
-
 `trafilatura_rs.supports(**kwargs)` tells you which path a call takes. If your installed trafilatura or lxml
 isn't the version trafilatura-rs reproduces, every call stays on Python and `install()` warns, so results never
 change.
 
 ## What's supported
 
-Plain-text `extract()` with `include_comments=False`, string input, in these configurations
-(`trafilatura_rs.VERIFIED`). Other arguments, bytes input and other output formats run Python trafilatura.
+Plain-text `extract()`, string input, in these configurations, each with comments (`include_comments=True`,
+trafilatura's default) and without (`trafilatura_rs.VERIFIED`). Other arguments, bytes input and other output
+formats run Python trafilatura.
 
-| Configuration | Arguments | Identical to trafilatura |
-|---|---|---|
-| Default | | 10,666 / 10,666 |
-| Precision (datatrove / FineWeb) | `favor_precision=True, deduplicate=True` | 10,666 / 10,666 |
-| Recall | `favor_recall=True` | 10,666 / 10,666 |
-| Fast | `no_fallback=True` | 10,666 / 10,666 |
-| No tables | `include_tables=False` | 10,666 / 10,666 |
+| Configuration | Arguments | Identical, comments | Identical, `include_comments=False` |
+|---|---|---|---|
+| Default | | 10,666 / 10,666 | 10,666 / 10,666 |
+| Precision | `favor_precision=True` | 10,666 / 10,666 | 10,666 / 10,666 |
+| datatrove / FineWeb | `favor_precision=True, deduplicate=True` | 10,666 / 10,666 | 10,666 / 10,666 |
+| Recall | `favor_recall=True` | 10,666 / 10,666 | 10,666 / 10,666 |
+| Fast | `no_fallback=True` | 10,666 / 10,666 | 10,666 / 10,666 |
+| No tables | `include_tables=False` | 10,666 / 10,666 | 10,666 / 10,666 |
 
 `deduplicate=True` is verified with the precision configuration (datatrove's call). Like trafilatura, it keeps a
 process-global cache, so output depends on document order exactly as in Python; `trafilatura_rs.reset_caches()`

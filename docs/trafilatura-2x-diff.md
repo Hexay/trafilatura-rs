@@ -1,7 +1,7 @@
 # trafilatura 1.11 → 2.2.0: semantic diff of the extract() path
 
-Scope: `extract(html, include_comments=False, output_format="txt")` with the 5 parity configs (fineweb,
-balanced, recall, fast, notables); no metadata, comments, links, images, formatting, target_language.
+Scope: `extract(html, output_format="txt")` with the 5 parity configs (fineweb, balanced, recall, fast, notables),
+each with and without include_comments; no metadata, links, images, formatting, target_language.
 "same" = pure refactor (typing, formatting, renames). The Rust port (`crates/trafilatura-rs/src/trafilatura2`) reuses
 1.11 code only where this says "same".
 
@@ -106,6 +106,10 @@ Port: generated verbatim by `harness/gen_xpaths2.py`; `re:test` added to the DOM
 - `trafilatura_sequence` (new): forum detection (DiscussionForumPosting JSON-LD); comment prune on the **raw
   tree** unless a forum; cleaning on a copy; baseline rescue **skipped in precision**; **recall escalation**
   for balanced (recall retry vs jusText, gated by `html2txt` page share).
+- include_comments=True: no raw-tree prune; `extract_comments` (same flow, 2.x XPaths, `delete_element(...,
+  keep_tail=False)`) on a forum page routes the comments into the body: extracts from a fresh conversion of the
+  cleaned backup and,
+  unless baseline or escalation replaced the result, appends captured posts whose text is missing from the body.
 - `bare_extraction`: same checks. `extract`: **no longer catches RuntimeError** (exceptions propagate);
   output = `(xmltotxt(body) + "\n" + xmltotxt(empty comments body)).strip()` → **leading/trailing whitespace
   stripped**, then NFC.

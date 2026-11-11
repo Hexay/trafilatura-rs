@@ -34,6 +34,37 @@ pub const BODY_XPATH: [&str; 5] = [
         starts-with(@class, 'main') or starts-with(@id, 'main') or starts-with(@role, 'main')])[1]|(.//main)[1]
         "##,
 ];
+pub const COMMENTS_XPATH: [&str; 4] = [
+    r##"
+        .//*[self::div or self::list or self::section][
+        re:test(@id|@class, 'comment-?list') or
+        re:test(@class, 'comment-page|comments-content|post-comments')]
+        "##,
+    r##"
+        .//*[self::div or self::section or self::list][
+        re:test(@id|@class, '^comment[s-]') or
+        re:test(@class, '^Comments|article-comments')]
+        "##,
+    r##"
+        .//*[self::div or self::section or self::list][
+        re:test(@id, '^(?:comol|disqus_thread|dsq-comments)')]
+        "##,
+    r##"
+        .//*[self::div or self::section][
+        starts-with(@id, 'social') or contains(@class, 'comment')]
+        "##,
+];
+pub const COMMENTS_DISCARD_XPATH: [&str; 3] = [
+    r##".//*[self::div or self::section][starts-with(@id, 'respond')]"##,
+    r##".//cite|.//quote"##,
+    r##"
+        .//*[
+        @class='comments-title' or 
+        contains(@style, 'display:none') or
+        re:test(@class, 'comments-title|nocomments|-reply-|message|signin') or
+        re:test(@id|@class, '^reply-|akismet')]
+        "##,
+];
 pub const REMOVE_COMMENTS_XPATH: [&str; 1] = [r##"
         .//*[self::div or self::list or self::section or self::details][
         re:test(@id, '^(?:[Cc]omment|comol|disqus_thread|dsq-comments)') or

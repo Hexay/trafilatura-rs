@@ -11,6 +11,7 @@ use trafilatura_rs::trafilatura::deduplication::Lru;
 use trafilatura_rs::trafilatura::external::compare_extraction;
 use trafilatura_rs::trafilatura::htmlprocessing::{prune_unwanted_nodes, tree_cleaning, Env};
 use trafilatura_rs::trafilatura::htmlprocessing_convert::convert_tags;
+use trafilatura_rs::trafilatura::main_extractor_comments::extract_comments;
 use trafilatura_rs::trafilatura::main_extractor_extract::extract_content;
 use trafilatura_rs::trafilatura::settings::{Focus, Options};
 use trafilatura_rs::trafilatura::text::normalize_unicode;
@@ -54,11 +55,15 @@ fn run_stages(html: &str) -> Vec<(&'static str, String)> {
         stage = "convert";
         let cleaned = convert_tags(&ctx, cleaned, &opts)?;
         out.push((stage, ser(Some(cleaned))));
+        stage = "comments";
+        let mut env = Env { ctx: &ctx, opts: &opts, lru: &mut lru };
+        let c_tree = cleaned.deep_copy(&ctx);
+        let comments = extract_comments(&mut env, c_tree)?;
+        out.push((stage, format!("{}\x00{}", ser_triple(&comments), ser(Some(c_tree)))));
         stage = "prune_comments";
         let cleaned = prune_unwanted_nodes(&ctx, cleaned, &REMOVE_COMMENTS_XPATH, false)?;
         out.push((stage, ser(Some(cleaned))));
         stage = "content";
-        let mut env = Env { ctx: &ctx, opts: &opts, lru: &mut lru };
         let content = extract_content(&mut env, cleaned)?;
         out.push((stage, ser_triple(&content)));
         stage = "txt_content";
@@ -85,11 +90,13 @@ fn run_stages(html: &str) -> Vec<(&'static str, String)> {
     out
 }
 
-/// Mirrors CONFIGS in harness/ref_stages.py (all with include_comments=False).
+/// Mirrors CONFIGS in harness/ref_stages.py: `<cfg>_comments` is `<cfg>` with include_comments=True.
 fn config(name: &str) -> Options {
-    let base = Options { comments: false, ..Options::default() };
+    let (name, comments) = name.strip_suffix("_comments").map_or((name, false), |n| (n, true));
+    let base = Options { comments, ..Options::default() };
     match name {
-        "fineweb" => Options::fineweb(),
+        "fineweb" => Options { comments, ..Options::fineweb() },
+        "precision" if comments => Options { focus: Focus::Precision, ..base },
         "balanced" => base,
         "recall" => Options { focus: Focus::Recall, ..base },
         "fast" => Options { fast: true, ..base },

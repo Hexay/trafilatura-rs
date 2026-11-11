@@ -17,7 +17,7 @@ def test_every_config_is_verified():
 
     combos = {
         (c.get("favor_precision", False), c.get("favor_recall", False), c.get("include_tables", True),
-         c.get("no_fallback", False))
+         c.get("no_fallback", False), c["include_comments"])
         for c in CONFIGS.values()
     }
     assert combos == trafilatura_rs.VERIFIED
@@ -31,15 +31,17 @@ def test_parity(cfg):
     assert not diffs
 
 
-def dedup_outputs(engine):
+def dedup_outputs(engine, cfg):
     worker = Path(__file__).with_name("dedup_worker.py")
-    out = subprocess.run([sys.executable, str(worker), engine, str(DEDUP_PASSES)], check=True, capture_output=True)
+    out = subprocess.run([sys.executable, str(worker), engine, cfg, str(DEDUP_PASSES)], check=True,
+                         capture_output=True)
     return json.loads(out.stdout)
 
 
-def test_parity_fineweb_dedup_fresh_process():
+@pytest.mark.parametrize("cfg", [c for c in CONFIGS if CONFIGS[c].get("deduplicate")])
+def test_parity_dedup_fresh_process(cfg):
     docs = pages()
-    ours, ref = dedup_outputs("trafilatura_rs"), dedup_outputs("trafilatura")
+    ours, ref = dedup_outputs("trafilatura_rs", cfg), dedup_outputs("trafilatura", cfg)
     assert len(ours) == len(ref) == DEDUP_PASSES * len(docs)
     diffs = [(k // len(docs), docs[k % len(docs)]["i"]) for k, (a, b) in enumerate(zip(ours, ref)) if a != b]
     assert not diffs

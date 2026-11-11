@@ -9,6 +9,7 @@ pub mod htmlprocessing;
 pub mod htmlprocessing_convert;
 mod json;
 pub mod main_extractor;
+pub mod main_extractor_comments;
 pub mod main_extractor_extract;
 mod main_extractor_lists;
 pub mod main_extractor_table;

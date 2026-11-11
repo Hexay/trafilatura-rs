@@ -32,7 +32,8 @@ tools/build_wheel.sh   # abi3 wheel in target/wheels (PGO=1 for profile-guided, 
 ```bash
 tools/make_reference.sh   # exports docs.jsonl (first 10,666 URLFilter-passing HTML records of a CC WARC) and all
                           # Python references; REF_JOBS parallel, skips existing files (~50 CPU-min)
-tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall
+tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall_comments
+                          # (configs: tools/env.sh; `<cfg>_comments` runs include_comments=True)
 LIMIT=500 tools/parity.sh final:fineweb
 tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.2.0)
 TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
@@ -46,7 +47,7 @@ Any output difference from trafilatura is a bug. New options join `VERIFIED` onl
 and `rs_trafilatura.extract(...)`. Each engine runs in a fresh process, on the same docs in the same order, single
 thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min over rounds) and `perf stat`
 user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
-trafilatura's on every doc.
+trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead.
 
 ## Releasing
 

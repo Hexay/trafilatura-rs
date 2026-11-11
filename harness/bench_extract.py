@@ -4,12 +4,17 @@ usage: bench_extract.py {none|trafilatura|trafilatura_rs|rs} docs.jsonl out.json
   trafilatura_rs  the same call after trafilatura_rs.install()
   rs           rs_trafilatura.extract(html, favor_precision=True, include_comments=False).main_content
   none         no extraction (load/loop baseline for instruction counts)
+CALL=default switches every engine to its default call: trafilatura.extract(html) (include_comments=True, no dedup)
+and rs_trafilatura.extract(html).main_content.
 out.jsonl: {"i", "ns", "out"} per doc; summary on stdout (bench_report.py aggregates runs)."""
 import importlib.metadata  # noqa: F401  datatrove 0.10 uses it without importing it
 import json
+import os
 import statistics
 import sys
 import time
+
+DEFAULT_CALL = os.environ.get("CALL", "datatrove") == "default"
 
 
 def extractor(engine):
@@ -18,15 +23,21 @@ def extractor(engine):
     if engine == "rs":
         import rs_trafilatura
 
+        if DEFAULT_CALL:
+            return lambda html: rs_trafilatura.extract(html).main_content
         return lambda html: rs_trafilatura.extract(html, favor_precision=True, include_comments=False).main_content
-    from datatrove.pipeline.extractors import Trafilatura
-
     if engine == "trafilatura_rs":
         import trafilatura_rs
 
         trafilatura_rs.install()
     elif engine != "trafilatura":
         raise SystemExit(f"unknown engine {engine}")
+    if DEFAULT_CALL:
+        import trafilatura
+
+        return trafilatura.extract
+    from datatrove.pipeline.extractors import Trafilatura
+
     return Trafilatura(favour_precision=True).extract
 
 

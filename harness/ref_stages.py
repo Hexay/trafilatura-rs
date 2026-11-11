@@ -8,19 +8,26 @@ import json
 import sys
 from copy import copy, deepcopy
 
-# txt_content and baseline_raw are auxiliary (not in bare_extraction's flow): xmltotxt right after extract_content
-# and an unconditional baseline(), so xml.py and baseline.py can be verified before compare_extraction is ported.
+# comments, txt_content and baseline_raw are auxiliary (not in this flow): extract_comments on a copy of the converted
+# tree (comments body, text, length, remaining tree), xmltotxt right after extract_content and an unconditional
+# baseline(), so each is verified on every page. comments is listed last (compared after the flow's stages).
 STAGES = ["load", "clean", "convert", "prune_comments", "content", "txt_content", "baseline_raw", "compare",
-          "baseline", "txt"]
+          "baseline", "txt", "comments"]
 
 
-# extract() keyword sets checked in final mode (include_comments=False always); mirrored in crates/harness.
-CONFIGS = {
+# extract() keyword sets checked in final mode; mirrored in crates/harness. `<cfg>_comments` runs with
+# include_comments=True (trafilatura's default), the rest with include_comments=False.
+_BASE = {
     "fineweb": {"favor_precision": True, "deduplicate": True},
     "balanced": {},
     "recall": {"favor_recall": True},
     "fast": {"no_fallback": True},
     "notables": {"include_tables": False},
+}
+CONFIGS = {
+    **{k: {**v, "include_comments": False} for k, v in _BASE.items()},
+    **{f"{k}_comments": {**v, "include_comments": True}
+       for k, v in {**_BASE, "precision": {"favor_precision": True}}.items()},
 }
 
 
@@ -37,7 +44,7 @@ def run_stages(html):
     from trafilatura.baseline import baseline
     from trafilatura.external import compare_extraction
     from trafilatura.htmlprocessing import convert_tags, prune_unwanted_nodes, tree_cleaning
-    from trafilatura.main_extractor import extract_content
+    from trafilatura.main_extractor import extract_comments, extract_content
     from trafilatura.settings import Extractor
     from trafilatura.utils import load_html, normalize_unicode
     from trafilatura.xml import xmltotxt
@@ -58,6 +65,9 @@ def run_stages(html):
         stage = "convert"
         cleaned = convert_tags(cleaned, options, None)
         yield stage, ser(cleaned)
+        stage = "comments"
+        c_body, c_text, c_n, c_tree = extract_comments(deepcopy(cleaned), options)
+        yield stage, f"{ser(c_body)}\x00{c_text}\x00{c_n}\x00{ser(c_tree)}"
         stage = "prune_comments"
         cleaned = prune_unwanted_nodes(cleaned, REMOVE_COMMENTS_XPATH)
         yield stage, ser(cleaned)
@@ -111,7 +121,7 @@ def main():
             kwargs = CONFIGS[sys.argv[4] if len(sys.argv) > 4 else "fineweb"]
             for d in docs(path):
                 try:
-                    text = extract(d["html"], include_comments=False, **kwargs)
+                    text = extract(d["html"], **kwargs)
                 except Exception as e:  # noqa: BLE001
                     text = f"EXC:{type(e).__name__}"
                 out.write(json.dumps({"i": d["i"], "out": text}) + "\n")

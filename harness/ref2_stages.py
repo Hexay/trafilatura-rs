@@ -140,7 +140,7 @@ def main():
             kwargs = CONFIGS[sys.argv[4] if len(sys.argv) > 4 else "fineweb"]
             for d in docs(path):
                 try:
-                    text = extract(d["html"], include_comments=False, **kwargs)
+                    text = extract(d["html"], **kwargs)
                 except Exception as e:  # noqa: BLE001
                     text = f"EXC:{type(e).__name__}"
                 out.write(json.dumps({"i": d["i"], "out": text}) + "\n")
