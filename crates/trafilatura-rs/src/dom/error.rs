@@ -11,6 +11,8 @@ pub enum Error {
     Syntax(String),
     /// AttributeError / IndexError / AssertionError raised by Python code paths being mirrored.
     Runtime(String),
+    /// A Python-only leaf (dateparser, dateutil, IDNA, public-suffix lookup) was needed and no hook provides it.
+    Unsupported(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

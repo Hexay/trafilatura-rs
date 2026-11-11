@@ -14,6 +14,7 @@ fn exc_name(e: &Error) -> String {
         Error::Parser(_) => "ParserError",
         Error::Syntax(_) => "XMLSyntaxError",
         Error::Runtime(m) => m.split(':').next().filter(|n| n.ends_with("Error")).unwrap_or("RuntimeError"),
+        Error::Unsupported(_) => "Unsupported",
     };
     format!("EXC:{name}")
 }

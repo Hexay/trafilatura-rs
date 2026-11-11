@@ -5,8 +5,8 @@ use super::main_extractor::{define_newelem, handle_lists, handle_textelem, iter_
 use super::settings::Focus;
 use super::utils::is_image_file;
 use crate::dom::{Ctx, Node, Result};
+use crate::py::int::decimal_value;
 use crate::trafilatura::htmlprocessing::Env;
-use crate::trafilatura::main_extractor_table::decimal_value;
 use std::collections::{HashMap, HashSet};
 
 const TABLE_ELEMS: &[&str] = &["td", "th"];

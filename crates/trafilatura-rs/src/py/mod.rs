@@ -1,7 +1,15 @@
 //! Python 3.12 str/re semantics the port depends on. Rust's notions differ at the edges (`char::is_whitespace`
 //! lacks U+001C..U+001F; `regex`'s `\s`/`\w` use other Unicode properties), and those edges change output.
 
+pub mod case;
+#[rustfmt::skip]
+mod case_tables;
+pub mod datetime;
+pub mod int;
+pub mod json;
+pub mod pyre;
 pub mod re;
+pub mod value;
 #[rustfmt::skip]
 mod tables;
 

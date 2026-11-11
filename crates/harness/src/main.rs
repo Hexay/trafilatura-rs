@@ -34,6 +34,7 @@ fn exc_name(e: &Error) -> String {
         Error::Parser(_) => "ParserError".into(),
         Error::Syntax(_) => "XMLSyntaxError".into(),
         Error::Runtime(s) => s.split(':').next().unwrap_or("RuntimeError").to_owned(),
+        Error::Unsupported(_) => "Unsupported".into(),
     }
 }
 

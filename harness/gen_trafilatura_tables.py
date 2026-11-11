@@ -1,5 +1,4 @@
-"""Generate crates/trafilatura-rs/src/trafilatura/tables.rs from the reference interpreter: html.unescape's tables
-and the Unicode decimal digits int() accepts.
+"""Generate crates/trafilatura-rs/src/trafilatura/tables.rs from the reference interpreter: html.unescape's tables.
 usage: gen_trafilatura_tables.py > crates/trafilatura-rs/src/trafilatura/tables.rs"""
 import html
 import sys
@@ -25,20 +24,6 @@ def main():
     cps = sorted(html._invalid_codepoints)
     out.append(f"pub static INVALID_CODEPOINTS: [u32; {len(cps)}] = [")
     out += ["    " + ", ".join(f"0x{c:x}" for c in cps[i:i + 12]) + "," for i in range(0, len(cps), 12)]
-    out.append("];")
-    zeros = []
-    for cp in range(sys.maxunicode + 1):
-        if 0xD800 <= cp <= 0xDFFF:
-            continue
-        if unicodedata.decimal(chr(cp), -1) == 0:
-            assert all(unicodedata.decimal(chr(cp + d), -1) == d for d in range(10)), hex(cp)
-            zeros.append(cp)
-    n_dec = sum(1 for cp in range(sys.maxunicode + 1)
-                if not 0xD800 <= cp <= 0xDFFF and unicodedata.decimal(chr(cp), -1) >= 0)
-    assert n_dec == 10 * len(zeros), (n_dec, len(zeros))
-    out.append("/// Code points of Unicode decimal digit zero; each starts a run of ten (int() accepts them all).")
-    out.append(f"pub static DECIMAL_ZEROS: [u32; {len(zeros)}] = [")
-    out += ["    " + ", ".join(f"0x{c:x}" for c in zeros[i:i + 12]) + "," for i in range(0, len(zeros), 12)]
     out.append("];")
     print("\n".join(out))
 

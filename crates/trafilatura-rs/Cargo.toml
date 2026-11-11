@@ -10,3 +10,6 @@ libxml2-sys = { path = "../libxml2-sys" }
 regex = "1"
 aho-corasick = "1"
 unicode-normalization = "0.1"
+fancy-regex = "0.20.1"
+blake2 = "0.11.0"
+libc = "0.2.191"

@@ -56,6 +56,7 @@ fn exc_name(e: &Error) -> &'static str {
         Error::Parser(_) => "ParserError",
         Error::Syntax(_) => "XMLSyntaxError",
         Error::Runtime(_) => "RuntimeError",
+        Error::Unsupported(_) => "Unsupported",
     }
 }
 

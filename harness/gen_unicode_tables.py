@@ -42,6 +42,21 @@ def main():
         for i in range(0, len(rs), 6):
             print("    " + " ".join(f"({a:#x}, {b:#x})," for a, b in rs[i:i + 6]))
         print("];")
+    zeros = []
+    for cp in range(sys.maxunicode + 1):
+        if 0xD800 <= cp <= 0xDFFF:
+            continue
+        if unicodedata.decimal(chr(cp), -1) == 0:
+            assert all(unicodedata.decimal(chr(cp + d), -1) == d for d in range(10)), hex(cp)
+            zeros.append(cp)
+    n_dec = sum(1 for cp in range(sys.maxunicode + 1)
+                if not 0xD800 <= cp <= 0xDFFF and unicodedata.decimal(chr(cp), -1) >= 0)
+    assert n_dec == 10 * len(zeros), (n_dec, len(zeros))
+    print("/// Code points of Unicode decimal digit zero; each starts a run of ten (int() accepts them all).")
+    print(f"pub static DECIMAL_ZEROS: [u32; {len(zeros)}] = [")
+    for i in range(0, len(zeros), 12):
+        print("    " + ", ".join(f"0x{c:x}" for c in zeros[i:i + 12]) + ",")
+    print("];")
 
 
 if __name__ == "__main__":
