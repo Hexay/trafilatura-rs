@@ -83,8 +83,10 @@ but never verified for 1.11; verified by the new `*_md` parity configs.
 
 Whole calls, decided by `trafilatura_rs.supports()`:
 
-- `include_comments=True` (separate work), `include_links`, `include_images`, `xml`/`xmltei`/`csv`/`html` formats,
-  `target_language`, `only_with_metadata`, blacklists, bytes input.
+- `include_comments=True` with markdown, json or metadata (the code path exists; it is not parity-verified, so the
+  combination is not in `VERIFIED_OUTPUTS`). Plain text with comments is covered.
+- `include_links`, `include_images`, `xml`/`xmltei`/`csv`/`html` formats, `target_language`,
+  `only_with_metadata`, blacklists, bytes input.
 - `date_extraction_params` other than `original_date=True, extensive_search=True` with an optional
   `"YYYY-MM-DD"` `max_date` (custom `outputformat`, `min_date`, ...).
 - `with_metadata=True` together with `deduplicate=True`: a document that falls back to Python would update

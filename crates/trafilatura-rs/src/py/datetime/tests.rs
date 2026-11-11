@@ -42,7 +42,9 @@ const ISO: &[(&str, Option<Fields>)] = &[
     ("2019-01-01T12:00:00+05:30:15", Some((2019, 1, 1, 12, 0, 0, 0, Some(19815)))),
 ];
 
-const STRPTIME: &[(&str, Option<(i32, u32, u32)>)] = &[
+type Ymd = (i32, u32, u32);
+
+const STRPTIME: &[(&str, Option<Ymd>)] = &[
     ("2020-1-15", Some((2020, 1, 15))),
     ("2020-01-05", Some((2020, 1, 5))),
     ("2020-1-5", Some((2020, 1, 5))),
