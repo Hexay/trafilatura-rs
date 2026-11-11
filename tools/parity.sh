@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rust outputs vs the tools/make_reference.sh references (build first: tools/dev.sh build). Usage:
-#   [LIMIT=N] tools/parity.sh [job ...]   job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | justext | readability
+#   [LIMIT=N] tools/parity.sh [job ...]   job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg>
+#                                         | justext | readability   (meta: through the extension, tools/dev.sh py)
 #                                         default: every job; LIMIT compares only the first N docs
 #   tools/parity.sh show[2] <i> <stage> [cfg]   diff one doc's stage output (reference vs Rust)
 # TRAFILATURA_RS_VERIFY_XPATH=1 cross-checks every fast-path XPath against libxml2 while running.
@@ -28,6 +29,10 @@ run() {
       [ "$mode" = stages ] && tag=stages
       "$H" "$mode" "$DOCS" "$D/rust${ref#ref}$tag.jsonl" $cfg
       "$PY" "$ROOT/harness/compare.py" "$mode" "$D/$ref$tag.jsonl" "$D/rust${ref#ref}$tag.jsonl" ;;
+    meta)
+      "$PY" "$ROOT/harness/ref_meta.py" rust "$DOCS" "$D/rust_meta_$cfg.jsonl" "$cfg"
+      echo "fallbacks: $(grep -c '"EXC:Unsupported"' "$D/rust_meta_$cfg.jsonl" || true)"
+      "$PY" "$ROOT/harness/compare.py" final "$D/ref_meta_$cfg.jsonl" "$D/rust_meta_$cfg.jsonl" ;;
     justext | readability)
       "$BIN/${mode}_parity" run "$DOCS" "$D/rust_$mode.jsonl"
       "$PY" "$ROOT/harness/compare_$mode.py" "$D/ref_$mode.jsonl" "$D/rust_$mode.jsonl" ;;

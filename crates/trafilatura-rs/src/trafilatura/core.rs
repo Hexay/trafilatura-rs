@@ -1,18 +1,36 @@
-//! trafilatura/core.py: `bare_extraction` and `extract` for txt output (no metadata or language checks).
+//! trafilatura/core.py: `bare_extraction` and `extract` for txt, markdown and json output (no language checks).
 use super::baseline::baseline;
-use super::deduplication::{duplicate_test, Lru};
+use super::deduplication::{content_fingerprint, duplicate_test, Lru};
+use super::document::Document;
 use super::external::compare_extraction;
 use super::htmlprocessing::{prune_unwanted_nodes, tree_cleaning, Env};
 use super::htmlprocessing_convert::convert_tags;
 use super::main_extractor_comments::extract_comments;
 use super::main_extractor_extract::extract_content;
-use super::settings::{Focus, Options};
-use super::text::normalize_unicode;
+use super::metadata::extract_metadata;
+use super::output::determine_returnstring;
+use super::settings::{Focus, Format, Options};
 use super::utils::load_html;
-use super::xml::xmltotxt;
 use super::xpaths::REMOVE_COMMENTS_XPATH;
-use crate::dom::{Ctx, Error, Node, Result};
-use crate::py;
+use crate::dom::{Ctx, Error, Result};
+use crate::hooks::{Hooks, NoHooks};
+use crate::py::value::Value;
+
+/// Per-call `extract()` arguments besides the HTML and the options.
+#[derive(Clone, Copy)]
+pub struct Request<'a> {
+    pub url: Option<&'a str>,
+    pub record_id: Option<&'a str>,
+    /// htmldate's `max_date` as `set_date_params` formats today ("YYYY-MM-DD"); required with metadata.
+    pub max_date: Option<&'a str>,
+    pub hooks: &'a dyn Hooks,
+}
+
+impl Default for Request<'_> {
+    fn default() -> Self {
+        Request { url: None, record_id: None, max_date: None, hooks: &NoHooks }
+    }
+}
 
 /// Extraction state that trafilatura keeps per process: the options and the deduplication LRU, which makes
 /// results depend on the order documents are processed in (as in datatrove's per-worker Python).
@@ -33,36 +51,46 @@ impl Extractor {
     pub fn extract(&mut self, html: &str) -> Result<Option<String>> {
         extract(html, &self.opts, &mut self.lru)
     }
+
+    pub fn extract_with(&mut self, html: &str, req: &Request) -> Result<Option<String>> {
+        extract_with(html, &self.opts, req, &mut self.lru)
+    }
 }
 
-/// `trafilatura.extract(html, ...)` with txt output: `Ok(None)` where Python returns None, `Err` where Python
-/// raises. `lru` is the deduplication state Python keeps module-global.
+/// `trafilatura.extract(html, ...)` without per-call arguments.
 pub fn extract(html: &str, opts: &Options, lru: &mut Lru) -> Result<Option<String>> {
+    extract_with(html, opts, &Request::default(), lru)
+}
+
+/// `trafilatura.extract(html, url=..., record_id=..., ...)`: `Ok(None)` where Python returns None, `Err` where
+/// Python raises. `lru` is the deduplication state Python keeps module-global.
+pub fn extract_with(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<String>> {
     let ctx = Ctx::new();
-    let doc = match bare_extraction(&ctx, html, opts, lru) {
+    let document = match bare_extraction(&ctx, html, opts, req, lru) {
         Err(Error::Runtime(msg)) if is_runtime_error(&msg) => return Ok(None),
         other => other?,
     };
-    let Some((body, comments)) = doc else { return Ok(None) };
-    let text = xmltotxt(body, opts.formatting)?;
-    let Some(comments) = comments else { return Ok(Some(normalize_unicode(&text))) };
-    let comments = xmltotxt(comments, opts.formatting)?;
-    Ok(Some(normalize_unicode(py::strip(&format!("{text}\n{comments}")))))
+    let Some(mut document) = document else { return Ok(None) };
+    if opts.format == Format::Json {
+        document.id = req.record_id.map_or(Value::None, Value::str);
+        let content = format!("{} {}", document.title.to_py_str(), document.raw_text.to_py_str());
+        document.fingerprint = Value::Str(content_fingerprint(&content));
+    }
+    determine_returnstring(&document, opts).map(Some)
 }
 
-/// Extracted body and, with include_comments, the comments body.
-type Document = (Node, Option<Node>);
-
 /// `bare_extraction`: the document, or None where Python catches TypeError/ValueError.
-fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, lru: &mut Lru) -> Result<Option<Document>> {
-    match extract_document(ctx, html, opts, lru) {
+fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<Document>> {
+    match extract_document(ctx, html, opts, req, lru) {
         Err(Error::Value(_) | Error::Type(_)) => Ok(None),
         other => other.map(Some),
     }
 }
 
-fn extract_document(ctx: &Ctx, html: &str, opts: &Options, lru: &mut Lru) -> Result<Document> {
+fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| value_error("empty HTML tree"))?;
+    // url_blacklist is empty, so no blacklisted-URL check.
+    let mut document = if opts.with_metadata { extract_metadata(ctx, tree, req)? } else { Document::default() };
     let tree_backup = tree.deep_copy(ctx);
     let cleaned = tree_cleaning(ctx, tree, opts)?;
     let cleaned_backup = cleaned.deep_copy(ctx);
@@ -84,7 +112,7 @@ fn extract_document(ctx: &Ctx, html: &str, opts: &Options, lru: &mut Lru) -> Res
     if result.2 < opts.min_extracted_size {
         result = baseline(ctx, tree_backup)?;
     }
-    let (postbody, _, len_text) = result;
+    let (postbody, temp_text, len_text) = result;
     if let Some(max) = opts.max_tree_size {
         if postbody.len() > max {
             postbody.strip_tags(ctx, &["hi"]);
@@ -99,7 +127,10 @@ fn extract_document(ctx: &Ctx, html: &str, opts: &Options, lru: &mut Lru) -> Res
     if opts.dedup && duplicate_test(postbody, opts, env.lru) {
         return Err(value_error("duplicate document"));
     }
-    Ok((postbody, comments))
+    document.raw_text = Value::Str(temp_text);
+    document.body = Some(postbody);
+    document.commentsbody = comments;
+    Ok(document)
 }
 
 /// `extract` catches RuntimeError around bare_extraction, which includes RecursionError and NotImplementedError.

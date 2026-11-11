@@ -49,6 +49,39 @@ impl Lru {
     }
 }
 
+/// `sample_tokens(inputstring, length=64)`.
+fn sample_tokens(input: &str) -> Vec<&str> {
+    const LENGTH: usize = 64;
+    let tokens: Vec<&str> = crate::py::split(input)
+        .map(|t| t.trim_matches(|c: char| c.is_ascii_punctuation()))
+        .filter(|t| !t.is_empty() && t.chars().all(crate::py::is_alnum))
+        .collect();
+    let mut sample = Vec::new();
+    for i in (0..=4).rev() {
+        sample = tokens.iter().copied().filter(|t| crate::py::len(t) > i).collect();
+        if sample.len() * 2 >= LENGTH {
+            return sample;
+        }
+    }
+    sample
+}
+
+/// `content_fingerprint`: hex of a 64-bit Charikar simhash over blake2b-8 token hashes (`Simhash.to_hex`).
+pub fn content_fingerprint(content: &str) -> String {
+    use blake2::digest::consts::U8;
+    use blake2::{Blake2b, Digest};
+    let mut vector = [0i64; 64];
+    for token in sample_tokens(content) {
+        let digest = Blake2b::<U8>::digest(token.as_bytes());
+        let hash = u64::from_be_bytes(digest.as_slice().try_into().expect("8 bytes"));
+        for (i, v) in vector.iter_mut().enumerate() {
+            *v += if hash & (1 << i) != 0 { 1 } else { -1 };
+        }
+    }
+    let hash = vector.iter().enumerate().filter(|(_, v)| **v >= 0).fold(0u64, |h, (i, _)| h | 1 << i);
+    format!("{hash:x}")
+}
+
 fn put_in_cache(lru: &mut Lru, key: &str) {
     let cached = lru.get(key);
     lru.put(key, if cached != -1 { cached + 1 } else { 1 });
