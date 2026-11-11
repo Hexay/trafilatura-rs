@@ -4,8 +4,9 @@ from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pages.jsonl"
 
-# extract() keyword sets of trafilatura_rs.VERIFIED; fineweb is datatrove's Trafilatura call, `<cfg>_comments` adds
-# include_comments=True (trafilatura's default). Mirrors harness/ref_stages.py.
+# extract() keyword sets of trafilatura_rs.VERIFIED_OUTPUTS; fineweb is datatrove's Trafilatura call, `<cfg>_comments`
+# adds include_comments=True (trafilatura's default). "url": True passes the page's URL. Mirrors
+# harness/ref_stages.py and harness/ref_meta.py.
 _BASE = {
     "fineweb": {"favor_precision": True, "deduplicate": True},
     "balanced": {},
@@ -13,8 +14,16 @@ _BASE = {
     "fast": {"no_fallback": True},
     "notables": {"include_tables": False},
 }
+_OUTPUTS = {
+    "fineweb_md": {"favor_precision": True, "deduplicate": True, "output_format": "markdown"},
+    "balanced_md": {"output_format": "markdown"},
+    "balanced_meta": {"with_metadata": True, "url": True},
+    "balanced_json": {"output_format": "json", "with_metadata": True},
+    "precision_json": {"favor_precision": True, "output_format": "json", "with_metadata": True, "url": True},
+    "json_text": {"output_format": "json"},
+}
 CONFIGS = {
-    **{k: {**v, "include_comments": False} for k, v in _BASE.items()},
+    **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_OUTPUTS}.items()},
     **{f"{k}_comments": {**v, "include_comments": True}
        for k, v in {**_BASE, "precision": {"favor_precision": True}}.items()},
 }
@@ -23,6 +32,13 @@ CONFIGS = {
 def pages():
     with open(FIXTURES, encoding="utf-8") as f:
         return [json.loads(line) for line in f]
+
+
+def kwargs_for(cfg, page):
+    kwargs = dict(CONFIGS[cfg])
+    if kwargs.pop("url", False):
+        kwargs["url"] = page["url"]
+    return kwargs
 
 
 def run(engine, html, kwargs):

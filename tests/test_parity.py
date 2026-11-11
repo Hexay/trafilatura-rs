@@ -1,4 +1,4 @@
-"""trafilatura_rs.extract == trafilatura.extract (1.11.0 + lxml 6.1.3) on the committed fixtures, per VERIFIED
+"""trafilatura_rs.extract == trafilatura.extract (1.11.0 + lxml 6.1.3) on the committed fixtures, per verified
 config."""
 import json
 import subprocess
@@ -6,28 +6,30 @@ import sys
 from pathlib import Path
 
 import pytest
-from parity import CONFIGS, pages, run
+from parity import CONFIGS, kwargs_for, pages, run
 
 # 3 passes so repeated segments cross trafilatura's duplicate threshold (max_repetitions=2).
 DEDUP_PASSES = 3
+DEDUP_CONFIGS = [c for c in CONFIGS if CONFIGS[c].get("deduplicate")]
 
 
 def test_every_config_is_verified():
     import trafilatura_rs
 
     combos = {
-        (c.get("favor_precision", False), c.get("favor_recall", False), c.get("include_tables", True),
-         c.get("no_fallback", False), c["include_comments"])
+        ((c.get("output_format", "txt"), c.get("with_metadata", False)),
+         (c.get("favor_precision", False), c.get("favor_recall", False), c.get("include_tables", True),
+          c.get("no_fallback", False), c["include_comments"]))
         for c in CONFIGS.values()
     }
-    assert combos == trafilatura_rs.VERIFIED
+    verified = {(out, combo) for out, combos in trafilatura_rs.VERIFIED_OUTPUTS.items() for combo in combos}
+    assert combos == verified
 
 
-@pytest.mark.parametrize("cfg", [c for c in CONFIGS if not CONFIGS[c].get("deduplicate")])
+@pytest.mark.parametrize("cfg", [c for c in CONFIGS if c not in DEDUP_CONFIGS])
 def test_parity(cfg):
-    kwargs = CONFIGS[cfg]
     diffs = [(p["i"], p["why"]) for p in pages()
-             if run("trafilatura_rs", p["html"], kwargs) != run("trafilatura", p["html"], kwargs)]
+             if run("trafilatura_rs", p["html"], kwargs_for(cfg, p)) != run("trafilatura", p["html"], kwargs_for(cfg, p))]
     assert not diffs
 
 
@@ -38,7 +40,7 @@ def dedup_outputs(engine, cfg):
     return json.loads(out.stdout)
 
 
-@pytest.mark.parametrize("cfg", [c for c in CONFIGS if CONFIGS[c].get("deduplicate")])
+@pytest.mark.parametrize("cfg", DEDUP_CONFIGS)
 def test_parity_dedup_fresh_process(cfg):
     docs = pages()
     ours, ref = dedup_outputs("trafilatura_rs", cfg), dedup_outputs("trafilatura", cfg)

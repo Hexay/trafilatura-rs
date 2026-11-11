@@ -6,6 +6,8 @@ usage: bench_extract.py {none|trafilatura|trafilatura_rs|rs} docs.jsonl out.json
   none         no extraction (load/loop baseline for instruction counts)
 CALL=default switches every engine to its default call: trafilatura.extract(html) (include_comments=True, no dedup)
 and rs_trafilatura.extract(html).main_content.
+With BENCH_CFG=<cfg> (a harness/ref_meta.py config), trafilatura and trafilatura_rs call extract() with that
+config's arguments instead of datatrove's (rs is not comparable there).
 out.jsonl: {"i", "ns", "out"} per doc; summary on stdout (bench_report.py aggregates runs)."""
 import importlib.metadata  # noqa: F401  datatrove 0.10 uses it without importing it
 import json
@@ -17,15 +19,30 @@ import time
 DEFAULT_CALL = os.environ.get("CALL", "datatrove") == "default"
 
 
+def config_extractor(engine, cfg):
+    from ref_meta import kwargs_for, pin_wall_clock
+
+    pin_wall_clock()
+    if engine == "trafilatura_rs":
+        from trafilatura_rs import extract
+    else:
+        from trafilatura import extract
+    return lambda doc: extract(doc["html"], include_comments=False, **kwargs_for(cfg, doc))
+
+
 def extractor(engine):
+    cfg = os.environ.get("BENCH_CFG")
     if engine == "none":
-        return lambda html: None
+        return lambda doc: None
+    if cfg:
+        return config_extractor(engine, cfg)
     if engine == "rs":
         import rs_trafilatura
 
         if DEFAULT_CALL:
-            return lambda html: rs_trafilatura.extract(html).main_content
-        return lambda html: rs_trafilatura.extract(html, favor_precision=True, include_comments=False).main_content
+            return lambda doc: rs_trafilatura.extract(doc["html"]).main_content
+        return lambda doc: rs_trafilatura.extract(doc["html"], favor_precision=True,
+                                                  include_comments=False).main_content
     if engine == "trafilatura_rs":
         import trafilatura_rs
 
@@ -35,27 +52,28 @@ def extractor(engine):
     if DEFAULT_CALL:
         import trafilatura
 
-        return trafilatura.extract
+        return lambda doc: trafilatura.extract(doc["html"])
     from datatrove.pipeline.extractors import Trafilatura
 
-    return Trafilatura(favour_precision=True).extract
+    extract = Trafilatura(favour_precision=True).extract
+    return lambda doc: extract(doc["html"])
 
 
 def main():
     engine, path, out_path = sys.argv[1:4]
     n = int(sys.argv[4]) if len(sys.argv) > 4 else None
     with open(path, encoding="utf-8") as f:
-        docs = [(r["i"], r["html"]) for r in map(json.loads, (line for _, line in zip(range(n or 10**9), f)))]
+        docs = [json.loads(line) for _, line in zip(range(n or 10**9), f)]
     extract = extractor(engine)
     clock = time.process_time_ns
     rows = []
-    for i, html in docs:
+    for doc in docs:
         t = clock()
         try:
-            out = extract(html)
+            out = extract(doc)
         except Exception as e:  # noqa: BLE001 - the exception type is part of the compared output
             out = f"EXC:{type(e).__name__}"
-        rows.append((i, clock() - t, out))
+        rows.append((doc["i"], clock() - t, out))
     with open(out_path, "w", encoding="utf-8") as f:
         for i, ns, out in rows:
             f.write(json.dumps({"i": i, "ns": ns, "out": out}) + "\n")

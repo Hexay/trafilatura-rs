@@ -7,8 +7,18 @@ pub enum Focus {
     Balanced,
 }
 
+/// `output_format` values the port covers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Format {
+    Txt,
+    Markdown,
+    Json,
+}
+
 #[derive(Clone, Debug)]
 pub struct Options {
+    pub format: Format,
+    pub with_metadata: bool,
     pub fast: bool,
     pub focus: Focus,
     pub comments: bool,
@@ -30,6 +40,8 @@ impl Default for Options {
     /// `Extractor()` defaults: balanced focus, comments and tables on, txt output.
     fn default() -> Options {
         Options {
+            format: Format::Txt,
+            with_metadata: false,
             fast: false,
             focus: Focus::Balanced,
             comments: true,
@@ -54,5 +66,10 @@ impl Options {
     /// include_comments=False, deduplicate=True)`.
     pub fn fineweb() -> Options {
         Options { focus: Focus::Precision, comments: false, dedup: true, ..Options::default() }
+    }
+
+    /// `Extractor(output_format=...)`: markdown implies `formatting`.
+    pub fn with_format(self, format: Format) -> Options {
+        Options { format, formatting: self.formatting || format == Format::Markdown, ..self }
     }
 }

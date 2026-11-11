@@ -1,9 +1,9 @@
 //! trafilatura/xml.py: tree helpers and the plain-text serializer `xmltotxt`.
-use super::main_extractor_table::py_int;
 use super::text::{sanitize, text_chars_test};
 use super::xml_unescape::unescape;
 use crate::dom::{Ctx, Error, Node, Result};
 use crate::py;
+use crate::py::int::py_int;
 
 const NEWLINE_ELEMS: &[&str] = &["code", "graphic", "head", "lb", "list", "p", "quote", "row", "table"];
 const SPECIAL_FORMATTING: &[&str] = &["del", "head", "hi", "ref"];

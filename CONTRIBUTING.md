@@ -37,9 +37,16 @@ tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fine
 LIMIT=500 tools/parity.sh final:fineweb
 tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.2.0)
 TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
+tools/parity.sh meta:balanced_json   # markdown/metadata/json configs (harness/ref_meta.py), via the extension
+harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc
+harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_date alone, with and without url
 ```
 
-Any output difference from trafilatura is a bug. New options join `VERIFIED` only with full-corpus parity.
+`meta:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
+callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`
+counts documents the core declined (`Unsupported`), which the Python API reruns in Python.
+
+Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTPUTS` only with full-corpus parity.
 
 ## Benchmark
 
@@ -47,7 +54,8 @@ Any output difference from trafilatura is a bug. New options join `VERIFIED` onl
 and `rs_trafilatura.extract(...)`. Each engine runs in a fresh process, on the same docs in the same order, single
 thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min over rounds) and `perf stat`
 user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
-trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead.
+trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead, and
+`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura.
 
 ## Releasing
 

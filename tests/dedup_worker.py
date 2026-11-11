@@ -3,8 +3,8 @@ usage: dedup_worker.py <trafilatura_rs|trafilatura> <cfg> <passes>; prints the o
 import json
 import sys
 
-from parity import CONFIGS, pages, run
+from parity import kwargs_for, pages, run
 
 engine, cfg, passes = sys.argv[1], sys.argv[2], int(sys.argv[3])
 docs = pages()
-print(json.dumps([run(engine, d["html"], CONFIGS[cfg]) for _ in range(passes) for d in docs]))
+print(json.dumps([run(engine, d["html"], kwargs_for(cfg, d)) for _ in range(passes) for d in docs]))
