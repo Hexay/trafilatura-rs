@@ -20,8 +20,8 @@ pip install "trafilatura-rs[trafilatura]"
 ```
 
 The `[trafilatura]` extra installs the exact versions trafilatura-rs is verified against (trafilatura 1.11.0,
-lxml 6.1.3), so you can fall back to and compare with the original. Wheels are built for Linux, macOS and Windows,
-Python 3.10+, with libxml2 statically linked.
+lxml 6.1.3, htmldate 1.11.0), so you can fall back to and compare with the original. Wheels are built for Linux,
+macOS and Windows, Python 3.10+, with libxml2 statically linked.
 
 ## Quickstart
 
@@ -48,13 +48,14 @@ You can also run a script unmodified with `python -m trafilatura_rs my_script.py
 
 `trafilatura_rs.supports(**kwargs)` tells you which path a call takes. If your installed trafilatura or lxml
 isn't the version trafilatura-rs reproduces, every call stays on Python and `install()` warns, so results never
-change.
+change. Markdown, JSON and metadata output are covered too (see below).
 
 ## What's supported
 
-Plain-text `extract()`, string input, in these configurations, each with comments (`include_comments=True`,
-trafilatura's default) and without (`trafilatura_rs.VERIFIED`). Other arguments, bytes input and other output
-formats run Python trafilatura.
+`extract()` with string input, in the configurations below (`trafilatura_rs.VERIFIED_OUTPUTS`). Other arguments,
+bytes input and other output formats run Python trafilatura.
+
+Plain text, each with comments (`include_comments=True`, trafilatura's default) and without:
 
 | Configuration | Arguments | Identical, comments | Identical, `include_comments=False` |
 |---|---|---|---|
@@ -65,9 +66,40 @@ formats run Python trafilatura.
 | Fast | `no_fallback=True` | 10,666 / 10,666 | 10,666 / 10,666 |
 | No tables | `include_tables=False` | 10,666 / 10,666 | 10,666 / 10,666 |
 
-`deduplicate=True` is verified with the precision configuration (datatrove's call). Like trafilatura, it keeps a
-process-global cache, so output depends on document order exactly as in Python; `trafilatura_rs.reset_caches()`
-clears it.
+Markdown, JSON and metadata, with `include_comments=False`:
+
+| Configuration | Arguments | Identical to trafilatura |
+|---|---|---|
+| Markdown | `output_format="markdown"` | 10,666 / 10,666 |
+| Markdown, datatrove / FineWeb | `output_format="markdown", favor_precision=True, deduplicate=True` | 10,666 / 10,666 |
+| Text with metadata | `with_metadata=True` | 10,666 / 10,666 |
+| JSON | `output_format="json"` | 10,666 / 10,666 |
+| JSON with metadata | `output_format="json", with_metadata=True` | 10,666 / 10,666 |
+| JSON with metadata, precision | `output_format="json", with_metadata=True, favor_precision=True` | 10,666 / 10,666 |
+
+`url` and `record_id` can be passed with any of them. `deduplicate=True` is verified with the precision
+configurations. Like trafilatura, it keeps a process-global cache, so output depends on document order exactly as in
+Python; `trafilatura_rs.reset_caches()` clears it.
+
+### Metadata
+
+```python
+trafilatura.extract(html, include_comments=False, with_metadata=True, url=url)        # Rust: text with a --- header
+trafilatura.extract(html, include_comments=False, output_format="json", with_metadata=True)  # Rust
+trafilatura.extract(html, include_comments=False, with_metadata=True, deduplicate=True)      # Python
+```
+
+Title, author, date, sitename, categories, tags, license and the JSON-LD parsing run in Rust, including a port of
+htmldate 1.11's `find_date`. A few leaves run in Python: courlan's URL helpers, and the dateutil and dateparser
+calls htmldate makes for unusual date strings. Those calls cost little and keep results exact for any installed
+version. Metadata calls therefore need trafilatura installed and Python 3.11+. They also need htmldate 1.11.0
+(`REPRODUCES_METADATA`); with another version they stay on Python.
+
+As in trafilatura, the date search is bounded by today's date (`max_date`). `date_extraction_params` is supported
+when it only sets `max_date`. `with_metadata=True` with `deduplicate=True` stays on Python, because a document that
+needs Python would update the wrong deduplication cache. Rare documents the port leaves to Python (listed in
+[docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)) are rerun there automatically. None occur in the
+10,666-page corpus.
 
 ## Exactness
 

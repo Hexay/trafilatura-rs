@@ -38,7 +38,7 @@ Issues = "https://github.com/Hexay/trafilatura-rs/issues"
 
 [project.optional-dependencies]
 # install() patches trafilatura; the parity guarantee is against these exact versions.
-trafilatura = ["trafilatura==1.11.0", "lxml==6.1.3"]
+trafilatura = ["trafilatura==1.11.0", "lxml==6.1.3", "htmldate==1.11.0"]
 # Pins of tools/requirements.txt that affect extract() output.
 test = ["pytest", "trafilatura==1.11.0", "lxml==6.1.3", "lxml-html-clean==0.4.6", "justext==3.0.2",
         "courlan==1.4.0", "htmldate==1.11.0"]

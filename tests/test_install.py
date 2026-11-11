@@ -48,6 +48,17 @@ def test_mismatched_versions_stay_on_python(monkeypatch, pkg, ver):
     trafilatura_rs.extract(HTML, include_comments=False)
 
 
+def test_mismatched_htmldate_keeps_metadata_on_python(monkeypatch):
+    from trafilatura_rs import _versions
+
+    real = _versions._installed_version
+    monkeypatch.setattr(_versions, "_installed_version", lambda p: "1.9.0" if p == "htmldate" else real(p))
+    assert trafilatura_rs.mismatched_versions() == {}
+    assert trafilatura_rs.mismatched_versions(with_metadata=True) == {"htmldate": "1.9.0"}
+    monkeypatch.setattr(trafilatura_rs._api, "_rust_extract", lambda *a, **k: pytest.fail("ran Rust"))
+    trafilatura_rs.extract(HTML, include_comments=False, with_metadata=True)
+
+
 def test_supports():
     assert trafilatura_rs.supports(include_comments=False, favor_precision=True, deduplicate=True)
     assert trafilatura_rs.supports()  # trafilatura's defaults, include_comments=True
@@ -55,11 +66,33 @@ def test_supports():
     assert not trafilatura_rs.supports(output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, favor_precision=True, favor_recall=True)
+    assert trafilatura_rs.supports(include_comments=False, output_format="markdown", favor_precision=True)
+    assert trafilatura_rs.supports(include_comments=False, output_format="json", with_metadata=True, url="http://a.b/")
+    assert not trafilatura_rs.supports(include_comments=False, with_metadata=True, deduplicate=True)
+    assert not trafilatura_rs.supports(include_comments=False, date_extraction_params={"original_date": False})
+
+
+def test_metadata_date_params():
+    kwargs = dict(include_comments=False, with_metadata=True, output_format="json",
+                  date_extraction_params={"original_date": True, "extensive_search": True, "max_date": "2020-01-01"})
+    assert trafilatura_rs.supports(**kwargs)
+    assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 
 @pytest.mark.parametrize("kwargs", [dict(favor_precision=True, favor_recall=True), dict(with_metadata=True),
-                                    dict(include_comments=False, output_format="json")])
+                                    dict(output_format="json"), dict(include_comments=False, output_format="xml"),
+                                    dict(include_comments=False, with_metadata=True, deduplicate=True),
+                                    dict(include_comments=False, with_metadata=True, favor_recall=True)])
 def test_uncovered_calls_fall_back_to_python(kwargs):
+    assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
+
+
+def test_unsupported_document_falls_back_to_python(monkeypatch):
+    def unsupported(*args, **kwargs):
+        raise trafilatura_rs._api.Unsupported("forced")
+
+    monkeypatch.setattr(trafilatura_rs._api, "_rust_extract", unsupported)
+    kwargs = dict(include_comments=False, with_metadata=True)
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 
