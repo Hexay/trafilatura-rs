@@ -5,10 +5,16 @@ Supported: ``extract()`` with txt output and ``include_comments=False``, for the
 ``install()`` routes matching ``trafilatura.extract`` calls (e.g. datatrove's Trafilatura step) to Rust and leaves
 every other call on Python trafilatura.
 """
+import warnings
+from importlib.metadata import PackageNotFoundError, version
+
 from ._core import Extractor, reset_caches
 from ._core import extract as _extract
 
-__all__ = ["Extractor", "extract", "install", "reset_caches", "VERIFIED"]
+__all__ = ["Extractor", "extract", "install", "mismatched_versions", "reset_caches", "REPRODUCES", "VERIFIED"]
+
+# The Python versions whose output trafilatura_rs reproduces; Python trafilatura's output depends on both.
+REPRODUCES = {"trafilatura": "1.11.0", "lxml": "6.1.3"}
 
 # (favor_precision, favor_recall, include_tables, no_fallback) combinations with full-corpus parity.
 VERIFIED = {
@@ -50,11 +56,32 @@ def extract(filecontent, **kwargs):
     return _extract(filecontent, **rust)
 
 
+def _installed_version(package):
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return None
+
+
+def mismatched_versions():
+    """{package: installed version} for each package in REPRODUCES installed at a different version. When non-empty,
+    trafilatura_rs output would differ from what the installed Python trafilatura returns."""
+    installed = {pkg: _installed_version(pkg) for pkg in REPRODUCES}
+    return {pkg: v for pkg, v in installed.items() if v is not None and v != REPRODUCES[pkg]}
+
+
 def install():
-    """Patch trafilatura.extract so covered calls run in Rust; returns the original function."""
+    """Patch trafilatura.extract so covered calls run in Rust; returns the original function. Does nothing (warns,
+    returns None) unless the installed trafilatura and lxml are the versions in REPRODUCES."""
     import trafilatura
     import trafilatura.core
 
+    mismatch = mismatched_versions()
+    if mismatch:
+        warnings.warn(f"trafilatura_rs reproduces {REPRODUCES} but found {mismatch}; trafilatura.extract left "
+                      'unpatched. Install the matching versions with: pip install "trafilatura-rs[trafilatura]"',
+                      RuntimeWarning, stacklevel=2)
+        return None
     original = trafilatura.core.extract
 
     def patched(filecontent, *args, **kwargs):
