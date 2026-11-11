@@ -378,6 +378,7 @@ dependencies = [
  "fancy-regex",
  "libc",
  "libxml2-sys",
+ "memchr",
  "regex",
  "unicode-normalization",
 ]

@@ -78,7 +78,9 @@ pub fn remove_control_characters(s: &str) -> String {
 
 /// `remove_control_characters`, borrowing when nothing is removed.
 pub fn without_control_characters(s: &str) -> std::borrow::Cow<'_, str> {
-    if s.bytes().all(|b| matches!(b, b'\t'..=b'\r' | 0x1c..=0x7e)) {
+    // branch-free per chunk so the scan vectorizes
+    let plain = |c: &[u8]| c.iter().fold(true, |acc, &b| acc & matches!(b, b'\t'..=b'\r' | 0x1c..=0x7e));
+    if s.as_bytes().chunks(64).all(plain) {
         return s.into();
     }
     s.chars().filter(|&c| py::is_printable(c) || py::is_space(c)).collect::<String>().into()

@@ -28,10 +28,10 @@ fn prefix_chars(s: &str, n: usize) -> &str {
 pub fn repair_faulty_html<'a>(html: &'a str, beginning: &str) -> Cow<'a, str> {
     // U+FFFE/U+FFFF are EF BF BE / EF BF BF in UTF-8.
     let bytes = html.as_bytes();
-    let has_invalid = bytes.iter().enumerate().any(|(i, &b)| {
-        (b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r'))
-            || (b == 0xef && bytes.get(i + 1) == Some(&0xbf) && bytes.get(i + 2).is_some_and(|&c| c >= 0xbe))
-    });
+    // branch-free per chunk so the scan vectorizes
+    let control = |c: &[u8]| c.iter().fold(false, |acc, &b| acc | (b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r')));
+    let has_invalid = bytes.chunks(64).any(control)
+        || memchr::memmem::find_iter(bytes, b"\xef\xbf").any(|i| bytes.get(i + 2).is_some_and(|&c| c >= 0xbe));
     let mut s: Cow<str> = if has_invalid {
         Cow::Owned(html.chars().filter(|&c| !invalid_xml_char(c)).collect())
     } else {
