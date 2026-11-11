@@ -23,13 +23,19 @@ struct Parser<'a> {
     src: &'a str,
     pos: usize,
     depth: usize,
+    strict: bool,
 }
 
 pub fn loads(s: &str) -> Res<Value> {
+    loads_with(s, true)
+}
+
+/// `json.loads(s, strict=strict)`: strict=False accepts raw control characters inside strings.
+pub fn loads_with(s: &str, strict: bool) -> Res<Value> {
     if s.starts_with('\u{feff}') {
         return Err(LoadError::Decode);
     }
-    let mut p = Parser { s: s.as_bytes(), src: s, pos: 0, depth: 0 };
+    let mut p = Parser { s: s.as_bytes(), src: s, pos: 0, depth: 0, strict };
     p.ws();
     let v = p.value()?;
     p.ws();
@@ -152,7 +158,7 @@ impl Parser<'_> {
         loop {
             let start = self.pos;
             while let Some(&b) = self.s.get(self.pos) {
-                if b == b'"' || b == b'\\' || b < 0x20 {
+                if b == b'"' || b == b'\\' || (b < 0x20 && self.strict) {
                     break;
                 }
                 self.pos += 1;

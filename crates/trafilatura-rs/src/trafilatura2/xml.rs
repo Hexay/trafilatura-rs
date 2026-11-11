@@ -1,8 +1,9 @@
 //! trafilatura 2.3.1 xml.py: `delete_element`, `separates_inline` and the plain-text serializer `xmltotxt` /
-//! `process_element` (element text rendering lives in xml_text). Markdown output (include_formatting) is not ported.
+//! `process_element`, plain text or markdown (element text rendering lives in xml_text, markdown helpers in xml_md).
 use super::settings::INLINE_CARRIED;
+use super::xml_md::{collapse_emphasis, escape_and_convert_math_tree, merge_adjacent_hi, strip_block_whitespace};
 use super::xml_text::{
-    append_spaced, append_tail, closes_container, consumes_inline_children, escape_cell, image_markup,
+    append_spaced, append_tail, closes_container, consumes_inline_children, escape_cell, heading_prefix, image_markup,
     item_needs_marker, last_char, list_marker, opens_item, replace_element_text,
 };
 use crate::dom::{Ctx, Node, Result};
@@ -40,8 +41,15 @@ fn is_space_char(s: &str) -> bool {
     s.chars().next().is_some_and(crate::py::is_space)
 }
 
-/// `process_element` with include_formatting=False.
-pub fn process_element(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: bool) -> Result<()> {
+/// `process_element`; `fmt` is include_formatting.
+pub fn process_element(
+    ctx: &Ctx,
+    el: Node,
+    out: &mut Vec<String>,
+    fmt: bool,
+    in_cell: bool,
+    in_item: bool,
+) -> Result<()> {
     let tag = el.tag();
     let in_cell = in_cell || tag == "cell";
     let in_item = in_item || tag == "item";
@@ -62,22 +70,24 @@ pub fn process_element(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: 
     let consumes = consumes_inline_children(el);
     let renders_inline = truthy(&el.text()) || consumes;
     if tag == "item" && !in_cell && item_needs_marker(el) {
-        out.push(list_marker(el));
+        out.push(list_marker(el, fmt));
     }
     if renders_inline && (tag != "item" || consumes || text_chars_test(el.text().as_deref())) {
-        out.push(escape_cell(&replace_element_text(el, in_cell), in_cell));
+        out.push(escape_cell(&replace_element_text(ctx, el, fmt, in_cell)?, in_cell));
+    } else if fmt && tag == "head" && !in_cell && !el.is_empty() {
+        out.push(format!("{} ", heading_prefix(el)));
     }
     if tag == "list" && in_item && !matches!(last_char(out), "\n" | "") {
         out.push("\n".into());
     }
     if !consumes {
         for child in el.children() {
-            process_element(child, out, in_cell, in_item)?;
+            process_element(ctx, child, out, fmt, in_cell, in_item)?;
         }
     }
     if !renders_inline {
         if tag == "graphic" {
-            out.push(escape_cell(&image_markup(el), in_cell));
+            out.push(escape_cell(&image_markup(el, fmt), in_cell));
             if let Some(t) = el.tail().filter(|t| !t.is_empty()) {
                 out.push(escape_cell(&format!(" {}", crate::py::strip(&t)), in_cell));
             }
@@ -92,7 +102,7 @@ pub fn process_element(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: 
             }
         } else if tag != "cell" && tag != "item" {
             if in_cell {
-                append_tail(el, out, in_cell, in_item);
+                append_tail(el, out, in_cell, in_item, false);
             }
             return Ok(());
         }
@@ -100,7 +110,7 @@ pub fn process_element(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: 
     let last_in_item = in_item && closes_container(el, "item");
     let last_in_cell = in_cell && closes_container(el, "cell");
     if newline_elem && !in_cell && !in_item {
-        out.push("\n".into());
+        out.push(if fmt && tag != "row" { "\n\u{2424}\n" } else { "\n" }.into());
     } else if tag == "cell" {
         out.push(" | ".into());
     } else if (tag == "head" || tag == "item") && in_cell && !last_in_cell {
@@ -109,7 +119,7 @@ pub fn process_element(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: 
         append_spaced(out, " ");
     }
     if tag != "graphic" {
-        append_tail(el, out, in_cell, in_item);
+        append_tail(el, out, in_cell, in_item, fmt);
     }
     if last_in_item && !in_cell {
         out.push("\n".into());
@@ -117,9 +127,17 @@ pub fn process_element(el: Node, out: &mut Vec<String>, in_cell: bool, in_item: 
     Ok(())
 }
 
-/// `xmltotxt(xmloutput, include_formatting=False)`.
-pub fn xmltotxt(xmloutput: Node) -> Result<String> {
+/// `xmltotxt(xmloutput, include_formatting)`; with formatting the markdown passes run on a copy.
+pub fn xmltotxt(ctx: &Ctx, xmloutput: Node, include_formatting: bool) -> Result<String> {
+    let mut xmloutput = xmloutput;
+    if include_formatting {
+        xmloutput = xmloutput.deep_copy(ctx);
+        escape_and_convert_math_tree(xmloutput)?;
+        collapse_emphasis(ctx, xmloutput, &[])?;
+        merge_adjacent_hi(ctx, xmloutput)?;
+        strip_block_whitespace(xmloutput)?;
+    }
     let mut out = Vec::new();
-    process_element(xmloutput, &mut out, false, false)?;
+    process_element(ctx, xmloutput, &mut out, include_formatting, false, false)?;
     Ok(unescape(&sanitize(&out.concat(), true, false).unwrap_or_default()))
 }

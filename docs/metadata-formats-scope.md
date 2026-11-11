@@ -1,7 +1,11 @@
-# Metadata, JSON and Markdown output: scope (trafilatura 1.11.0)
+# Metadata, JSON and Markdown output: scope (trafilatura 1.11.0 and 2.3.1)
 
 What `with_metadata=True`, `output_format="json"` and `output_format="markdown"` touch, and how the port keeps them
-byte-exact.
+byte-exact. Written against 1.11.0; trafilatura 2.3.1 follows the same structure, and its changes are listed in
+[trafilatura-23-diff.md](trafilatura-23-diff.md) (Markdown, Metadata, Output). Both versions resolve htmldate 1.11.0,
+so the htmldate port, the courlan/dateutil/dateparser callbacks (with their native shortcuts) and every caveat below apply to both. 2.3.1 adds one
+callback, `trafilatura.utils.safe_base_url`, and its `trafilatura2/` modules reuse the 1.11 code where behaviour is
+unchanged. Its regexes, XPaths and `str.isalpha`/punctuation tables come from `harness/gen_meta23.sh`.
 
 ## Call graph
 
@@ -113,6 +117,7 @@ Single documents inside a covered call (`Unsupported` raised by the core, then r
 occur on the 10,666-page corpus:
 
 - `str.title()` on a string containing `Σ` (Final_Sigma context rule not ported).
+- 2.3.1: a truthy non-str sitename (Python raises AttributeError from `lstrip`).
 - `\N{...}` escapes or lone surrogates produced by `normalize_authors`' `unicode_escape` decode.
 - JSON-LD nested deeper than 900 levels (Python's RecursionError limit) or with lone `\uD800`-style surrogates.
 - Python exceptions that `extract()` lets escape (odd JSON-LD sitename types, `';'.join` over non-str

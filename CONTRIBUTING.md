@@ -38,7 +38,9 @@ LIMIT=500 tools/parity.sh final:fineweb
 tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.3.1)
 TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
 tools/parity.sh meta:balanced_json   # markdown/metadata/json configs (harness/ref_meta.py), via the extension
+tools/parity.sh meta2:balanced_json  # same against 2.3.1 (.venv-t23; build with V=23 tools/dev.sh py)
 harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc
+harness/gen_meta23.sh                # regenerate 2.3.1 metadata regexes, XPaths and Unicode tables
 harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_date alone, with and without url
 harness/diff_dates.py collect docs.jsonl strings.jsonl balanced_json   # log the corpus' date strings, then
 harness/diff_dates.py check strings.jsonl                     # native date shortcuts vs dateutil/dateparser
@@ -47,7 +49,7 @@ harness/diff_dates.py check strings.jsonl                     # native date shor
 After a dateparser, python-dateutil or htmldate bump, regenerate `crates/trafilatura-rs/src/dates/dateparser/tables.txt`
 (`harness/gen_dateparser_tables.py`), rerun `diff_dates.py` and update `REPRODUCES_DATES`.
 
-`meta:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
+`meta:`/`meta2:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`
 counts documents the core declined (`Unsupported`), which the Python API reruns in Python.
 

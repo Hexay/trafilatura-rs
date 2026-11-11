@@ -50,8 +50,8 @@ You can also run a script unmodified with `python -m trafilatura_rs my_script.py
 
 `trafilatura_rs.supports(**kwargs)` tells you which path a call takes, and `trafilatura_rs.engine()` which
 trafilatura version is reproduced. If your installed trafilatura or lxml isn't a pair trafilatura-rs reproduces
-(`trafilatura_rs.REPRODUCES`), every call stays on Python and `install()` warns, so results never change. With
-trafilatura 1.11, markdown, JSON and metadata output are covered too (see below).
+(`trafilatura_rs.REPRODUCES`), every call stays on Python and `install()` warns, so results never change. Markdown,
+JSON and metadata output are covered too (see below).
 
 ## What's supported
 
@@ -70,19 +70,18 @@ without:
 | Fast | `no_fallback=True` (2.3.1: also `fast=True`) | 10,666 | 10,666 | 10,666 | 10,666 |
 | No tables | `include_tables=False` | 10,666 | 10,666 | 10,666 | 10,666 |
 
-With 2.3.1, `deduplicate` given an `LRUCache` and any `url` run Python trafilatura.
+With 2.3.1, `deduplicate` given an `LRUCache` runs Python trafilatura.
 
-Markdown, JSON and metadata, trafilatura 1.11 only (with 2.3.1 they run Python trafilatura), with
-`include_comments=False`:
+Markdown, JSON and metadata, identical pages out of 10,666, with `include_comments=False`:
 
-| Configuration | Arguments | Identical to trafilatura |
-|---|---|---|
-| Markdown | `output_format="markdown"` | 10,666 / 10,666 |
-| Markdown, datatrove / FineWeb | `output_format="markdown", favor_precision=True, deduplicate=True` | 10,666 / 10,666 |
-| Text with metadata | `with_metadata=True` | 10,666 / 10,666 |
-| JSON | `output_format="json"` | 10,666 / 10,666 |
-| JSON with metadata | `output_format="json", with_metadata=True` | 10,666 / 10,666 |
-| JSON with metadata, precision | `output_format="json", with_metadata=True, favor_precision=True` | 10,666 / 10,666 |
+| Configuration | Arguments | 1.11.0 | 2.3.1 |
+|---|---|---|---|
+| Markdown | `output_format="markdown"` | 10,666 | 10,666 |
+| Markdown, datatrove / FineWeb | `output_format="markdown", favor_precision=True, deduplicate=True` | 10,666 | 10,666 |
+| Text with metadata | `with_metadata=True` | 10,666 | 10,666 |
+| JSON | `output_format="json"` | 10,666 | 10,666 |
+| JSON with metadata | `output_format="json", with_metadata=True` | 10,666 | 10,666 |
+| JSON with metadata, precision | `output_format="json", with_metadata=True, favor_precision=True` | 10,666 | 10,666 |
 
 `url` and `record_id` can be passed with any of them. `deduplicate=True` is verified with the precision
 configurations. Like trafilatura, it keeps a process-global cache, so output depends on document order exactly as in
@@ -97,7 +96,7 @@ trafilatura.extract(html, include_comments=False, with_metadata=True, deduplicat
 ```
 
 Title, author, date, sitename, categories, tags, license and the JSON-LD parsing run in Rust, including a port of
-htmldate 1.11's `find_date`. A few leaves run in Python: courlan's URL helpers, and the dateutil and dateparser
+htmldate 1.11's `find_date` (the htmldate both trafilatura versions resolve). A few leaves run in Python: courlan's URL helpers, and the dateutil and dateparser
 calls htmldate makes for unusual date strings. Those calls cost little and keep results exact for any installed
 version. Metadata calls therefore need trafilatura installed and Python 3.11+. They also need htmldate 1.11.0
 (`REPRODUCES_METADATA`); with another version they stay on Python.
@@ -160,6 +159,14 @@ Markdown, metadata and JSON (first 3,000 pages, `include_comments=False`, `BENCH
 | `output_format="markdown"` | 8.36 ms | 1.58 ms | 5.3x | 6.5x |
 | `with_metadata=True, url=...` | 18.07 ms | 9.53 ms | 1.9x | 2.3x |
 | `output_format="json", with_metadata=True` | 21.02 ms | 9.09 ms | 2.3x | 2.6x |
+
+The same calls against trafilatura 2.3.1 (`V=23 BENCH_CFG=<cfg> tools/bench.sh 3000`):
+
+| Call | trafilatura 2.3.1 | trafilatura-rs | Speedup (CPU) | Speedup (instructions) |
+|---|---:|---:|---:|---:|
+| `output_format="markdown"` | 18.70 ms | 3.88 ms | 4.8x | 4.4x |
+| `with_metadata=True, url=...` | 41.07 ms | 16.14 ms | 2.5x | 2.5x |
+| `output_format="json", with_metadata=True` | 36.82 ms | 13.22 ms | 2.8x | 2.5x |
 
 Mean CPU time per page. With metadata, about half of the remaining time is dateparser, which htmldate calls for
 unusual date strings and which trafilatura-rs calls back into rather than ports (see

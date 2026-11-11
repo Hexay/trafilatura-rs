@@ -9,7 +9,7 @@ use crate::hooks::Hooks;
 use crate::py::pyre::group;
 
 /// `extract_metainfo`.
-fn extract_metainfo(tree: Node, expressions: &[&str], len_limit: usize) -> Result<Option<String>> {
+pub(crate) fn extract_metainfo(tree: Node, expressions: &[&str], len_limit: usize) -> Result<Option<String>> {
     for expression in expressions {
         for elem in tree.xpath_nodes(expression)? {
             let content = trim(&elem.itertext(true).join(" "));

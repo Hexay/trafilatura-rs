@@ -24,7 +24,7 @@ VERIFIED = {
     for include_comments in (True, False)
 }
 
-# The combinations verified per (output_format, with_metadata) for trafilatura 1.11.
+# The combinations verified per (output_format, with_metadata), for trafilatura 1.11.0 and 2.3.1 alike.
 VERIFIED_OUTPUTS = {
     ("txt", False): VERIFIED,
     ("markdown", False): {(True, False, True, False, False), (False, False, True, False, False)},
@@ -32,8 +32,7 @@ VERIFIED_OUTPUTS = {
     ("json", True): {(True, False, True, False, False), (False, False, True, False, False)},
     ("json", False): {(False, False, True, False, False)},
 }
-# Metadata, markdown and json are ported for 1.11 only.
-_VERIFIED_BY_ENGINE = {"1.11.0": VERIFIED_OUTPUTS, "2.3.1": {("txt", False): VERIFIED}}
+_VERIFIED_BY_ENGINE = {"1.11.0": VERIFIED_OUTPUTS, "2.3.1": VERIFIED_OUTPUTS}
 
 _BOOL_KWARGS = {"favor_precision", "favor_recall", "include_tables", "deduplicate", "include_comments",
                 "with_metadata"}
@@ -68,9 +67,9 @@ def _max_date(params):
     return max_date if isinstance(max_date, str) and _ISO_DAY.fullmatch(max_date) else None
 
 
-def _rust_kwargs(kwargs, engine):
-    """The `_core.extract` keyword arguments for these extract() options under trafilatura `engine`, or None when the
-    call must run in Python."""
+def _core_kwargs(kwargs, engine):
+    """The `_core.extract` keyword arguments for these extract() options under trafilatura `engine`, whether verified
+    or not, or None when the port has no code path for them."""
     if engine == "1.11.0" and "fast" in kwargs:  # not a 1.11 parameter (its **kwargs ignores it)
         return None
     rust = {"engine": engine, "no_fallback": False}
@@ -86,28 +85,36 @@ def _rust_kwargs(kwargs, engine):
                 return None
             rust[key] = value
         elif key in ("url", "record_id"):
-            # only 1.11 is verified with a url (and record_id only matters with metadata)
-            if value is not None and (engine != "1.11.0" or not isinstance(value, str)):
+            if value is not None and not isinstance(value, str):
                 return None
             rust[key] = value
         elif key == "date_extraction_params":
             continue
         elif not _neutral(key, value):
             return None
+    if rust.get("with_metadata"):
+        rust["max_date"] = _max_date(kwargs.get("date_extraction_params"))
+        if rust["max_date"] is None:
+            return None
+    elif kwargs.get("date_extraction_params") is not None:
+        return None
+    return rust
+
+
+def _rust_kwargs(kwargs, engine):
+    """The `_core.extract` keyword arguments for these extract() options under trafilatura `engine`, or None when the
+    call must run in Python."""
+    rust = _core_kwargs(kwargs, engine)
+    if rust is None:
+        return None
     output = (rust.get("output_format", "txt"), rust.get("with_metadata", False))
     combo = (rust.get("favor_precision", False), rust.get("favor_recall", False),
              rust.get("include_tables", True), rust["no_fallback"], rust.get("include_comments", True))
     if combo not in _VERIFIED_BY_ENGINE[engine].get(output, ()):
         return None
-    if output[1]:
-        # fromisoformat (htmldate) has the full ISO grammar from 3.11; a document that falls back to Python would
-        # update Python's dedup cache instead of ours
-        if sys.version_info < (3, 11) or rust.get("deduplicate"):
-            return None
-        rust["max_date"] = _max_date(kwargs.get("date_extraction_params"))
-        if rust["max_date"] is None:
-            return None
-    elif kwargs.get("date_extraction_params") is not None:
+    # fromisoformat (htmldate) has the full ISO grammar from 3.11; a document that falls back to Python would update
+    # Python's dedup cache instead of ours
+    if output[1] and (sys.version_info < (3, 11) or rust.get("deduplicate")):
         return None
     return rust
 

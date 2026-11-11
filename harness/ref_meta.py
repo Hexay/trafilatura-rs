@@ -1,5 +1,6 @@
-"""Parity for the markdown / metadata / json configs: Python trafilatura 1.11 vs the Rust core (through the
-extension module, so htmldate's dateutil/dateparser leaves run as callbacks into Python).
+"""Parity for the markdown / metadata / json configs: the installed Python trafilatura (1.11 in .venv, 2.3.1 in
+.venv-t23) vs the Rust core reproducing it (through the extension module, so htmldate's dateutil/dateparser leaves run
+as callbacks into Python).
   ref_meta.py ref  docs.jsonl out.jsonl <cfg>    trafilatura.extract(html, include_comments=False, **CONFIGS[cfg])
   ref_meta.py rust docs.jsonl out.jsonl <cfg>    trafilatura_rs._core.extract with the same options, no fallback
   ref_meta.py show docs.jsonl <i> <cfg>          print both outputs of one doc
@@ -23,6 +24,7 @@ CONFIGS = {
     "balanced_json": {"output_format": "json", "with_metadata": True},
     "precision_json": {"favor_precision": True, "output_format": "json", "with_metadata": True, "url": True},
     "json_text": {"output_format": "json"},
+    "url_text": {"url": True},
 }
 
 
@@ -50,8 +52,8 @@ def rust_extract():
     import trafilatura_rs
 
     def run(html, kw):
-        rust = trafilatura_rs._api._rust_kwargs(dict(kw, include_comments=False), "1.11.0")
-        assert rust is not None, f"not covered by Rust: {kw}"
+        rust = trafilatura_rs._api._core_kwargs(dict(kw, include_comments=False), trafilatura_rs.engine())
+        assert rust is not None, f"no Rust code path: {kw}"
         return trafilatura_rs._core.extract(html, **rust)
 
     return run

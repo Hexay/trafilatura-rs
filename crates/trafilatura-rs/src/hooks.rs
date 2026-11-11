@@ -37,6 +37,12 @@ pub trait Hooks: Sync {
         unsupported("courlan")
     }
 
+    /// trafilatura 2.3.1 `utils.safe_base_url(url)`: `courlan.get_base_url`, "" where it raises ValueError.
+    fn safe_base_url(&self, url: &str) -> Result<String> {
+        let _ = url;
+        unsupported("courlan")
+    }
+
     /// `validate_url(url)` then `normalize_url(parsed)` as in trafilatura's `extract_url`; None when invalid.
     fn validated_url(&self, url: &str) -> Result<Option<String>> {
         let _ = url;

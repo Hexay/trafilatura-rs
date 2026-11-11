@@ -5,8 +5,8 @@ from importlib.metadata import PackageNotFoundError, version
 REPRODUCES = frozenset({("1.11.0", "6.1.3"), ("2.3.1", "6.1.3")})
 # The trafilatura version reproduced when trafilatura isn't installed.
 DEFAULT_TRAFILATURA = "2.3.1"
-# With metadata (trafilatura 1.11 only), also the ported htmldate (courlan, dateparser and python-dateutil are called,
-# not ported).
+# With metadata, also the ported htmldate, the version both trafilatura 1.11.0 and 2.3.1 resolve (courlan, dateparser
+# and python-dateutil are called, not ported).
 REPRODUCES_METADATA = {"htmldate": "1.11.0"}
 # The native date shortcuts (see docs/metadata-formats-scope.md) answer for these versions only; at any other, the
 # dateparser and python-dateutil calls all run in Python, so output still follows the installed packages.

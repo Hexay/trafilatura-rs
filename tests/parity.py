@@ -26,7 +26,7 @@ _OUTPUTS = {
     "balanced_json": {"output_format": "json", "with_metadata": True},
     "precision_json": {"favor_precision": True, "output_format": "json", "with_metadata": True, "url": True},
     "json_text": {"output_format": "json"},
-} if TRAFILATURA.startswith("1.") else {}  # markdown, json and metadata are ported for 1.11 only
+}
 CONFIGS = {
     **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_OUTPUTS}.items()},
     **{f"{k}_comments": {**v, "include_comments": True}

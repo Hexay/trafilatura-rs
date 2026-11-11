@@ -13,7 +13,7 @@ use crate::py::json::{loads, LoadError};
 use crate::py::pyre::{group, Pattern};
 use crate::py::value::Value;
 
-const JSON_ARTICLE_SCHEMA: &[&str] = &[
+pub(crate) const JSON_ARTICLE_SCHEMA: &[&str] = &[
     "article",
     "backgroundnewsarticle",
     "blogposting",
@@ -25,7 +25,7 @@ const JSON_ARTICLE_SCHEMA: &[&str] = &[
     "socialmediaposting",
     "liveblogposting",
 ];
-const JSON_OGTYPE_SCHEMA: &[&str] = &[
+pub(crate) const JSON_OGTYPE_SCHEMA: &[&str] = &[
     "aboutpage",
     "checkoutpage",
     "collectionpage",
@@ -60,11 +60,15 @@ const JSON_OGTYPE_SCHEMA: &[&str] = &[
     "blog",
     "jobposting",
 ];
-const JSON_PUBLISHER_SCHEMA: &[&str] = &["newsmediaorganization", "organization", "webpage", "website"];
+pub(crate) const JSON_PUBLISHER_SCHEMA: &[&str] = &["newsmediaorganization", "organization", "webpage", "website"];
 const AUTHOR_ATTRS: [&str; 3] = ["givenName", "additionalName", "familyName"];
 
 /// `is_plausible_sitename`.
-fn is_plausible_sitename(metadata: &Document, candidate: &Value, content_type: Option<&str>) -> Result<bool> {
+pub(crate) fn is_plausible_sitename(
+    metadata: &Document,
+    candidate: &Value,
+    content_type: Option<&str>,
+) -> Result<bool> {
     let Some(candidate) = candidate.as_str().filter(|c| !c.is_empty()) else { return Ok(false) };
     let sitename = &metadata.sitename;
     if !sitename.truthy() || (sitename.py_len()? < crate::py::len(candidate) && content_type != Some("webpage")) {
