@@ -1,6 +1,6 @@
-//! Port of trafilatura 2.2.0 (reference/trafilatura-2.2.0), one Rust module per Python module (large ones split
-//! as `<module>_<part>`). Code whose behaviour is unchanged since 1.11 is called from `crate::trafilatura`; see
-//! research/trafilatura-2x-diff.md for what changed.
+//! Port of trafilatura 2.2.0 (github.com/adbar/trafilatura, tag v2.2.0), one Rust module per Python module (large
+//! ones split as `<module>_<part>`). Code whose behaviour is unchanged since 1.11 is called from `crate::trafilatura`;
+//! see docs/trafilatura-2x-diff.md for what changed.
 pub mod baseline;
 mod baseline_json;
 pub mod core;

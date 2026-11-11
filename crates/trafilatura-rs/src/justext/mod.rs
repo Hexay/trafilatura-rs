@@ -1,4 +1,4 @@
-//! Port of jusText 3.0.2 (reference/justext) as used by trafilatura/external.py.
+//! Port of jusText 3.0.2 (github.com/miso-belica/jusText, tag v3.0.2) as used by trafilatura/external.py.
 mod classify;
 mod maker;
 mod paragraph;

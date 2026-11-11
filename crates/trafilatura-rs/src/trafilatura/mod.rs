@@ -1,4 +1,4 @@
-//! Port of trafilatura 1.11 (reference/trafilatura), one Rust module per Python module (large ones split by
+//! Port of trafilatura 1.11.0 (github.com/adbar/trafilatura, tag v1.11.0), one Rust module per Python module (large ones split by
 //! responsibility into `<module>_<part>`).
 pub mod baseline;
 mod baseline_json;

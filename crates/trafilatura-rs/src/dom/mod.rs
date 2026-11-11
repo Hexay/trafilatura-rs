@@ -1,5 +1,5 @@
 //! lxml 6.1.3's element model over libxml2 2.14.6 nodes. Every mutating operation replays lxml's libxml2 call
-//! sequence (reference/lxml-src/apihelpers.pxi, etree.pyx), so trees, text-node merging and serialization stay
+//! sequence (lxml-6.1.3 src/lxml/apihelpers.pxi, etree.pyx), so trees, text-node merging and serialization stay
 //! byte-identical to Python.
 //!
 //! Ownership: a `Ctx` owns one name dict shared by all its documents (lxml's per-thread global dict), every

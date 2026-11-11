@@ -9,8 +9,8 @@ crates/libxml2-sys        vendored static libxml2 2.14.6 (lxml 6.1.3's version),
 crates/harness            parity and bench binaries
 python/trafilatura_rs     Python API, install() patching
 harness/                  Python reference generators and comparers
-reference/                vendored Python sources the port follows
 tests/                    pytest parity smoke on tests/fixtures (runs in CI)
+docs/                     trafilatura 1.11 → 2.2.0 diff, README assets
 ```
 
 ## Setup (Linux)

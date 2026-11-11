@@ -1,4 +1,4 @@
-//! `lxml.sax.saxify` (reference/lxml/sax.py `ElementTreeProducer`) reduced to the events a jusText handler reads.
+//! `lxml.sax.saxify` (lxml 6.1.3 src/lxml/sax.py `ElementTreeProducer`) reduced to the events a jusText handler reads.
 //! HTML-parser trees carry no namespaces, so every name is `(None, tag)` and qname == tag; attributes are never
 //! read by ParagraphMaker and building them cannot fail for str keys, so they are not produced.
 use crate::dom::{Error, Node, Result, COMMENT_TAG, PI_TAG};

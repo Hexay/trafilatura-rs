@@ -1,4 +1,4 @@
-//! Port of trafilatura/readability_lxml.py (reference/trafilatura/readability_lxml.py) and
+//! Port of trafilatura 1.11.0's trafilatura/readability_lxml.py and
 //! `external.try_readability`.
 mod prep;
 mod regexes;

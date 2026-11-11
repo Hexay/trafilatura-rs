@@ -1,0 +1,5 @@
+crates/libxml2-sys/libxml2/** linguist-vendored
+crates/libxml2-sys/win-iconv/** linguist-vendored
+crates/libxml2-sys/src/bindings.rs linguist-generated
+crates/trafilatura-rs/src/py/tables.rs linguist-generated
+crates/trafilatura-rs/src/trafilatura/tables.rs linguist-generated

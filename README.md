@@ -72,7 +72,7 @@ because the parser is the same: trafilatura-rs vendors and statically links libx
 bundles, with the same parsing options (see [PATCHES.md](crates/libxml2-sys/PATCHES.md)).
 
 A port of trafilatura 2.2.0's extraction is verified by the same harness but not yet exposed in Python
-(differences: [research/trafilatura-2x-diff.md](research/trafilatura-2x-diff.md)).
+(differences: [docs/trafilatura-2x-diff.md](docs/trafilatura-2x-diff.md)).
 
 ### How is this different from rs-trafilatura?
 
