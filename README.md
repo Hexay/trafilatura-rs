@@ -21,8 +21,9 @@ pip install "trafilatura-rs[trafilatura2]"   # trafilatura 2.3.1
 ```
 
 trafilatura-rs reproduces whichever of the two is installed (2.3.1 when neither is). The extras install the versions
-it is verified against (`[trafilatura]`: trafilatura 1.11.0, lxml 6.1.3, htmldate 1.11.0;
-`[trafilatura2]`: trafilatura 2.3.1, lxml 6.1.3), so you can fall back to and compare with the original. Wheels
+it is verified against (`[trafilatura]`: trafilatura 1.11.0, lxml 6.0.0–6.1.3, htmldate 1.11.0;
+`[trafilatura2]`: trafilatura 2.3.1, lxml 6.0.0–6.1.3; htmldate 1.11.0 itself requires lxml 6.1.3, and with an
+older htmldate metadata calls stay on Python), so you can fall back to and compare with the original. Wheels
 are built for Linux (glibc and musl, x86_64 and aarch64), macOS and Windows (x64 and arm64), Python 3.10+, with
 libxml2 statically linked.
 
@@ -128,6 +129,9 @@ Each configuration is checked page by page against trafilatura 1.11.0 and 2.3.1 
 comparing final output and per-stage tree hashes. The jusText and readability fallbacks are checked separately.
 Exactness holds because the parser is the same: trafilatura-rs vendors and statically links libxml2 2.14.6, the
 version lxml 6.1.3 bundles, with the same parsing options (see [PATCHES.md](crates/libxml2-sys/PATCHES.md)).
+trafilatura's output under every other lxml 6.0.x/6.1.x release (libxml2 2.14.4 to 2.14.6) is identical to its
+output under 6.1.3 on the full corpus (default, FineWeb, markdown-with-comments and JSON-with-metadata calls, both
+versions); any other lxml runs Python.
 What changed between the two versions: [docs/trafilatura-2x-diff.md](docs/trafilatura-2x-diff.md) and
 [docs/trafilatura-23-diff.md](docs/trafilatura-23-diff.md).
 
