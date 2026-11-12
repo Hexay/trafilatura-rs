@@ -103,11 +103,16 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<Extraction> {
     Ok(teaser.unwrap_or((postbody, String::new(), 0)))
 }
 
-/// `html2txt(tree)` (clean=True): whitespace-normalized text of the body with block boundaries spaced.
-pub fn html2txt(ctx: &Ctx, tree: Node) -> Result<String> {
-    let tree = tree.deep_copy(ctx);
-    let body = tree.find(".//body").unwrap_or(tree);
-    spaced_text(basic_cleaning(ctx, body)?)
+/// `html2txt(content, clean)`: whitespace-normalized text of the body with block boundaries spaced. An `element`
+/// input is copied and is its own body when it has none; a tree parsed from str/bytes without a body gives "".
+pub fn html2txt(ctx: &Ctx, tree: Node, clean: bool, element: bool) -> Result<String> {
+    let tree = if element { tree.deep_copy(ctx) } else { tree };
+    let body = match tree.find(".//body") {
+        Some(body) => body,
+        None if element => tree,
+        None => return Ok(String::new()),
+    };
+    spaced_text(if clean { basic_cleaning(ctx, body)? } else { body })
 }
 
 /// `len(html2txt(tree))`, read from `tree` in place: `basic_cleaning` as skipped subtrees, `spaced_text`'s block

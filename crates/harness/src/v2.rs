@@ -59,7 +59,7 @@ pub fn run_stages(html: &str, cfg: &str) -> Vec<(&'static str, String)> {
         stage = "baseline_raw";
         out.push((stage, triple(&baseline(&ctx, tree)?)));
         stage = "html2txt";
-        let page_text = html2txt(&ctx, tree)?;
+        let page_text = html2txt(&ctx, tree, true, true)?;
         assert_eq!(py::len(&page_text), trafilatura_rs::trafilatura2::baseline::html2txt_len(tree)?, "html2txt_len");
         out.push((stage, page_text.clone()));
         if !opts.fast {

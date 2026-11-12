@@ -1,7 +1,10 @@
 //! `trafilatura_rs._core`: extraction entry points per reproduced trafilatura version. Python-level argument checking,
 //! engine selection, fallback and the trafilatura monkeypatch live in python/trafilatura_rs/.
+mod bare;
+mod convert;
 mod dates;
 mod extra;
+mod funcs;
 mod hooks;
 mod memo;
 
@@ -14,7 +17,7 @@ use pyo3::exceptions::{
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use std::sync::{LazyLock, Mutex};
-use trafilatura_rs::dom::{Ctx, Error, Result};
+use trafilatura_rs::dom::{Ctx, Error, Node, Result};
 use trafilatura_rs::htmldate::{find_date, DateParams};
 use trafilatura_rs::trafilatura::core::Request;
 use trafilatura_rs::trafilatura::deduplication::Lru;
@@ -29,13 +32,13 @@ static GLOBAL_LRU: LazyLock<Mutex<Lru>> = LazyLock::new(|| Mutex::new(Lru::defau
 
 /// The trafilatura release an extraction reproduces.
 #[derive(Clone, Copy)]
-enum Engine {
+pub(crate) enum Engine {
     V1_11,
     V2_3,
 }
 
 impl Engine {
-    fn parse(version: &str) -> PyResult<Engine> {
+    pub(crate) fn parse(version: &str) -> PyResult<Engine> {
         match version {
             "1.11.0" => Ok(Engine::V1_11),
             "2.3.1" => Ok(Engine::V2_3),
@@ -49,9 +52,17 @@ impl Engine {
             Engine::V2_3 => trafilatura2::core::extract(html, opts, req, lru),
         }
     }
+
+    /// The version's `load_html` for str input.
+    pub(crate) fn load_html(self, ctx: &Ctx, html: &str) -> Option<Node> {
+        match self {
+            Engine::V1_11 => load_html(ctx, html),
+            Engine::V2_3 => trafilatura2::utils::load_html(ctx, html),
+        }
+    }
 }
 
-fn to_py_err(e: Error) -> PyErr {
+pub(crate) fn to_py_err(e: Error) -> PyErr {
     match e {
         Error::Value(m) => PyValueError::new_err(m),
         Error::Type(m) => PyTypeError::new_err(m),
@@ -82,7 +93,7 @@ fn format(output_format: &str) -> PyResult<Format> {
 
 /// The engine and its options; `no_fallback` is 1.11's name for 2.x's `fast`.
 #[allow(clippy::too_many_arguments)]
-fn options(
+pub(crate) fn options(
     engine: &str,
     favor_precision: bool,
     favor_recall: bool,
@@ -114,7 +125,7 @@ fn options(
     Ok((engine, opts))
 }
 
-fn request<'a>(url: Option<&'a str>, record_id: Option<&'a str>, max_date: Option<&'a str>) -> Request<'a> {
+pub(crate) fn request<'a>(url: Option<&'a str>, record_id: Option<&'a str>, max_date: Option<&'a str>) -> Request<'a> {
     Request { url, record_id, max_date, hooks: &PyHooks }
 }
 
@@ -247,6 +258,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract, m)?)?;
     m.add_function(wrap_pyfunction!(_find_date, m)?)?;
     m.add_function(wrap_pyfunction!(reset_caches, m)?)?;
+    m.add_function(wrap_pyfunction!(funcs::html2txt, m)?)?;
+    m.add_function(wrap_pyfunction!(funcs::baseline, m)?)?;
+    m.add_function(wrap_pyfunction!(funcs::extract_metadata, m)?)?;
+    m.add_function(wrap_pyfunction!(funcs::find_date, m)?)?;
+    m.add_function(wrap_pyfunction!(bare::bare_extraction, m)?)?;
     m.add_function(wrap_pyfunction!(dates::_native_dateutil, m)?)?;
     m.add_function(wrap_pyfunction!(dates::_native_external_date, m)?)?;
     m.add_class::<Extractor>()?;

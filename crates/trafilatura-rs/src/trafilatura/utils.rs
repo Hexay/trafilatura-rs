@@ -5,8 +5,8 @@ use regex::Regex;
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
-static DOCTYPE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^< ?! ?DOCTYPE.+?/ ?>").unwrap());
-static FAULTY_HTML: LazyLock<Regex> =
+pub(crate) static DOCTYPE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^< ?! ?DOCTYPE.+?/ ?>").unwrap());
+pub(crate) static FAULTY_HTML: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!(r"(?i)(<html.*?)[{}]*/>", py::SPACE_CLASS)).unwrap());
 
 /// `repair_faulty_html`. Python rebuilds the string after the doctype fix; that rebuild only differs from the

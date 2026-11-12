@@ -52,6 +52,16 @@ def mismatched_versions(with_metadata=False):
     return mismatch
 
 
+def htmldate_mismatch():
+    """{package: installed version} keeping htmldate's own `find_date` on Python: lxml outside REPRODUCES, htmldate
+    not REPRODUCES_METADATA's (or not installed). trafilatura's version doesn't matter there."""
+    lxml, htmldate = _installed_version("lxml"), _installed_version("htmldate")
+    mismatch = {} if lxml in {x for _, x in REPRODUCES} else {"lxml": lxml}
+    if htmldate != REPRODUCES_METADATA["htmldate"]:
+        mismatch["htmldate"] = htmldate
+    return mismatch
+
+
 def native_dates():
     """Whether the native date shortcuts may stand in for dateparser and python-dateutil (read once per process);
     TRAFILATURA_RS_NATIVE_DATES=0 turns them off."""

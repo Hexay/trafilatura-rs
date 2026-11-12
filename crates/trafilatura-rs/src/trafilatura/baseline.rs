@@ -55,6 +55,13 @@ fn json_article_text(ctx: &Ctx, script_text: &str) -> Result<Option<String>> {
     }
 }
 
+/// `html2txt(content, clean)` on the tree `load_html` parsed (mutated when `clean`).
+pub fn html2txt(ctx: &Ctx, tree: Node, clean: bool) -> Result<String> {
+    let Some(body) = tree.find(".//body") else { return Ok(String::new()) };
+    let body = if clean { basic_cleaning(ctx, body)? } else { body };
+    Ok(py::Collapse::of(&body.text_content()))
+}
+
 /// `baseline`: (body, text, text length in code points).
 pub fn baseline(ctx: &Ctx, tree: Node) -> Result<(Node, String, usize)> {
     let postbody = ctx.element("body")?;

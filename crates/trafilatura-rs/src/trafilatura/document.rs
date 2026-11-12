@@ -25,6 +25,8 @@ pub struct Document {
     pub image: Value,
     pub pagetype: Value,
     pub filedate: Value,
+    /// Not a slot: `date_config["url"]` as extract_metadata sets it (1.11 mutates the caller's date params).
+    pub date_url: Value,
 }
 
 impl Document {

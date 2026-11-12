@@ -6,6 +6,9 @@ import re
 from datetime import datetime
 
 _FORMATS = {"txt", "markdown", "json"}
+_BARE_FORMATS = _FORMATS | {"python"}
+# extract() parameters bare_extraction doesn't take (it takes `as_dict` instead)
+_NOT_BARE = {"record_id", "tei_validation", "settingsfile"}
 _ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 _FOCUS = {"precision", "recall", "balanced"}
 # settings.cfg values of the Extractor size attributes, the port's defaults (1.11's MIN_EXTRACTED_COMM_SIZE only logs)
@@ -139,10 +142,10 @@ def _metadata(spec, rust, extra):
     return True
 
 
-def _translate(spec):
+def _translate(spec, formats):
     """`_core.extract` keywords for an Extractor's attributes, or None."""
     fmt, focus, dedup, url = spec["format"], spec["focus"], spec["dedup"], spec["url"]
-    if fmt not in _FORMATS or focus not in _FOCUS or spec["links"] or spec["images"] or spec["lang"]:
+    if fmt not in formats or focus not in _FOCUS or spec["links"] or spec["images"] or spec["lang"]:
         return None
     if fmt == "json" and spec["formatting"]:
         return None
@@ -182,25 +185,32 @@ def _prune_xpath(value):
     return None
 
 
-def core_kwargs(kwargs, engine):
+def core_kwargs(kwargs, engine, bare=False):
     """(`_core.extract` keywords, max_file_size for decoding bytes) for these extract() options under trafilatura
-    `engine`, verified or not, or None when the port has no code path for them."""
+    `engine`, verified or not, or None when the port has no code path for them. With `bare`, the options are
+    bare_extraction()'s and the keywords `_core.bare_extraction`'s."""
     v1 = engine == "1.11.0"
     params = _PARAMS if v1 else _PARAMS_2
-    if not kwargs.keys() <= params.keys():
+    allowed = params.keys() - _NOT_BARE | {"as_dict"} if bare else params.keys()
+    if not kwargs.keys() <= allowed:
         return None
-    kw = {**params, **kwargs}
+    kw = {**params, **({"output_format": "python"} if bare else {}), **kwargs}
     if not v1 and kw["max_tree_size"]:  # 2.x raises
         return None
     ext = _extractor(kw, v1)
     if ext is _UNSUPPORTED:
         return None
     spec = _spec(kw, v1) if ext is None else {f: getattr(ext, f, None) for f in _EXTRACTOR_FIELDS}
-    rust = _translate(spec)
+    rust = _translate(spec, _BARE_FORMATS if bare else _FORMATS)
     prune, record_id = _prune_xpath(kw["prune_xpath"]), kw["record_id"]
     if rust is None or prune is None or not (record_id is None or isinstance(record_id, str)):
         return None
     if prune:
         rust.setdefault("extra", {})["prune_xpath"] = prune
-    rust.update(engine=engine, record_id=record_id)
+    rust["engine"] = engine
+    if bare:
+        rust["python_format"] = spec["format"] == "python"
+        rust["date_params"] = spec["date_params"]  # not a `_core` keyword: 1.11 writes the date URL into it
+    else:
+        rust["record_id"] = record_id
     return rust, spec["max_file_size"]
