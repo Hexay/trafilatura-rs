@@ -75,5 +75,5 @@ fn element(node: Node) -> Option<Value> {
 pub fn tree(node: Option<Node>) -> Result<Value> {
     let Some(node) = node else { return Ok(Value::None) };
     let spec = element(node).ok_or_else(|| Error::Unsupported("comment or PI in an output tree".into()))?;
-    Ok(Value::List(vec![spec, Value::Str(node.tostring(Method::Xml, false))]))
+    Ok(Value::List(vec![spec, Value::Str(node.tostring(Method::Xml, true))]))
 }
