@@ -1,3 +1,4 @@
+import functools
 import os
 from importlib.metadata import PackageNotFoundError, version
 
@@ -13,6 +14,7 @@ REPRODUCES_METADATA = {"htmldate": "1.11.0"}
 REPRODUCES_DATES = {"dateparser": "1.5.0", "python-dateutil": "4.0.0"}
 
 
+@functools.cache  # metadata lookups cost more than a whole Rust extraction; packages don't change mid-process
 def _installed_version(package):
     try:
         return version(package)
