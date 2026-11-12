@@ -112,12 +112,12 @@ but never verified for 1.11; verified by the new `*_md` parity configs.
 
 Whole calls, decided by `trafilatura_rs.supports()`:
 
-- `include_comments=True` with markdown, json or metadata (the code path exists; it is not parity-verified, so the
-  combination is not in `VERIFIED_OUTPUTS`). Plain text with comments is covered.
-- `include_links`, `include_images`, `xml`/`xmltei`/`csv`/`html` formats, `target_language`,
-  `only_with_metadata`, blacklists, bytes input.
-- `date_extraction_params` other than `original_date=True, extensive_search=True` with an optional
-  `"YYYY-MM-DD"` `max_date` (custom `outputformat`, `min_date`, ...).
+- `include_links`, `include_images`, `xml`/`xmltei`/`csv`/`html` formats, `target_language`, json with
+  `include_formatting=True`, input other than str/bytes (lxml trees, responses).
+- `date_extraction_params` with keys beyond `original_date`, `extensive_search`, `max_date` (`"YYYY-MM-DD"`, required)
+  and `url`, or a custom `outputformat` / `min_date`.
+- Blacklists other than a set/frozenset/list/tuple of str; `prune_xpath` other than str or a list/tuple of str.
+- 2.3.1 with a truthy `max_tree_size` argument (Python raises; `MAX_TREE_SIZE` in a config is covered).
 - `with_metadata=True` together with `deduplicate=True`: a document that falls back to Python would update
   Python's dedup cache instead of Rust's, changing later results.
 - Metadata on Python < 3.11 (`fromisoformat` grammar), and metadata without trafilatura installed (the callbacks
@@ -127,7 +127,12 @@ Whole calls, decided by `trafilatura_rs.supports()`:
 Single documents inside a covered call (`Unsupported` raised by the core, then rerun in Python). None of these
 occur on the 10,666-page corpus:
 
-- `str.title()` on a string containing `Σ` (Final_Sigma context rule not ported).
+- `str.title()` on a string containing `Σ` (Final_Sigma context rule not ported); with an `author_blacklist`,
+  `str.lower()` on an author with cased letters outside long-stable Unicode blocks, or with a `Σ` whose nearest
+  neighbor (past `'.:^` and backtick) is not ASCII, whitespace or a Latin, Greek or Cyrillic letter.
+- A `prune_xpath` expression that errors or selects anything but non-root elements (strings, attributes, numbers),
+  or uses `re:` (unbound for a bare `XPath(expr)` in lxml).
+- A str with lone surrogates (lxml's parser takes them; Rust strings cannot).
 - 2.3.1: a truthy non-str sitename (Python raises AttributeError from `lstrip`).
 - `\N{...}` escapes or lone surrogates produced by `normalize_authors`' `unicode_escape` decode.
 - JSON-LD nested deeper than 900 levels (Python's RecursionError limit) or with lone `\uD800`-style surrogates.

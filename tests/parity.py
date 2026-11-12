@@ -11,7 +11,7 @@ FAST = "no_fallback" if TRAFILATURA.startswith("1.") else "fast"
 
 # extract() keyword sets of trafilatura_rs.VERIFIED_OUTPUTS; fineweb is datatrove's Trafilatura call, `<cfg>_comments`
 # adds include_comments=True (trafilatura's default). "url": True passes the page's URL. Mirrors
-# harness/ref_stages.py and harness/ref_meta.py.
+# harness/ref_stages.py and harness/meta_configs.py.
 _BASE = {
     "fineweb": {"favor_precision": True, "deduplicate": True},
     "balanced": {},
@@ -19,18 +19,23 @@ _BASE = {
     "fast": {FAST: True},
     "notables": {"include_tables": False},
 }
+_FOCUS = {"precision": {"favor_precision": True}, "balanced": {}, "recall": {"favor_recall": True}, "fast": {FAST: True}}
 _OUTPUTS = {
-    "fineweb_md": {"favor_precision": True, "deduplicate": True, "output_format": "markdown"},
-    "balanced_md": {"output_format": "markdown"},
-    "balanced_meta": {"with_metadata": True, "url": True},
-    "balanced_json": {"output_format": "json", "with_metadata": True},
-    "precision_json": {"favor_precision": True, "output_format": "json", "with_metadata": True, "url": True},
-    "json_text": {"output_format": "json"},
+    "md": {"output_format": "markdown"},
+    "meta": {"with_metadata": True, "url": True},
+    "json": {"output_format": "json", "with_metadata": True, "url": True, "record_id": "r1"},
+    "jsontext": {"output_format": "json", "record_id": "r1"},
 }
+# deduplicate=True on the precision and recall configs without metadata (with metadata it stays on Python)
+_GRID = {
+    f"{f}_{o}": {**fv, **ov, "deduplicate": f in ("precision", "recall") and not ov.get("with_metadata")}
+    for f, fv in _FOCUS.items() for o, ov in _OUTPUTS.items()
+}
+_GRID["balanced_mdmeta"] = {"output_format": "markdown", "with_metadata": True, "url": True}
 CONFIGS = {
-    **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_OUTPUTS}.items()},
+    **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_GRID}.items()},
     **{f"{k}_comments": {**v, "include_comments": True}
-       for k, v in {**_BASE, "precision": {"favor_precision": True}}.items()},
+       for k, v in {**_BASE, "precision": {"favor_precision": True}, **_GRID}.items()},
 }
 
 

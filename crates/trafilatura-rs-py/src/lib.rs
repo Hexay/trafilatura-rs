@@ -1,6 +1,7 @@
 //! `trafilatura_rs._core`: extraction entry points per reproduced trafilatura version. Python-level argument checking,
 //! engine selection, fallback and the trafilatura monkeypatch live in python/trafilatura_rs/.
 mod dates;
+mod extra;
 mod hooks;
 mod memo;
 
@@ -11,6 +12,7 @@ use pyo3::exceptions::{
     PyValueError,
 };
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use std::sync::{LazyLock, Mutex};
 use trafilatura_rs::dom::{Ctx, Error, Result};
 use trafilatura_rs::htmldate::{find_date, DateParams};
@@ -117,12 +119,12 @@ fn request<'a>(url: Option<&'a str>, record_id: Option<&'a str>, max_date: Optio
 }
 
 /// `trafilatura.extract` of trafilatura `engine` (trafilatura's defaults) with the process-wide dedup state.
-/// `max_date` is today's local date as htmldate's `set_date_params` formats it (needed with metadata). Raises
-/// `Unsupported` where only Python trafilatura can answer.
+/// `max_date` is today's local date as htmldate's `set_date_params` formats it (needed with metadata); `extra`
+/// sets the remaining options (see extra.rs). Raises `Unsupported` where only Python trafilatura can answer.
 #[pyfunction]
 #[pyo3(signature = (html, engine, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
     no_fallback=false, include_comments=true, output_format="txt", with_metadata=false, url=None, record_id=None,
-    max_date=None))]
+    max_date=None, extra=None))]
 #[allow(clippy::too_many_arguments)]
 fn extract(
     py: Python<'_>,
@@ -139,8 +141,9 @@ fn extract(
     url: Option<&str>,
     record_id: Option<&str>,
     max_date: Option<&str>,
+    extra: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<Option<String>> {
-    let (engine, opts) = options(
+    let (engine, mut opts) = options(
         engine,
         favor_precision,
         favor_recall,
@@ -151,6 +154,9 @@ fn extract(
         output_format,
         with_metadata,
     )?;
+    if let Some(extra) = extra {
+        extra::apply(&mut opts, extra)?;
+    }
     let req = request(url, record_id, max_date);
     py.detach(|| {
         if deduplicate {

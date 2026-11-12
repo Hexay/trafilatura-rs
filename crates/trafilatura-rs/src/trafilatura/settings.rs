@@ -34,6 +34,15 @@ pub struct Options {
     pub min_duplcheck_size: usize,
     pub max_repetitions: usize,
     pub max_tree_size: Option<usize>,
+    pub only_with_metadata: bool,
+    pub url_blacklist: Vec<String>,
+    /// Already lowercased with Python's `str.lower()`.
+    pub author_blacklist: Vec<String>,
+    /// `prune_xpath`, applied to the loaded tree before extraction.
+    pub prune_xpath: Vec<String>,
+    /// htmldate's `original_date` and `extensive_search` (`date_params`).
+    pub original_date: bool,
+    pub extensive_date_search: bool,
 }
 
 impl Default for Options {
@@ -57,6 +66,12 @@ impl Default for Options {
             min_duplcheck_size: 100,
             max_repetitions: 2,
             max_tree_size: None,
+            only_with_metadata: false,
+            url_blacklist: Vec::new(),
+            author_blacklist: Vec::new(),
+            prune_xpath: Vec::new(),
+            original_date: true,
+            extensive_date_search: true,
         }
     }
 }

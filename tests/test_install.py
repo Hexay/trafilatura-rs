@@ -77,10 +77,13 @@ def test_supports():
     assert trafilatura_rs.supports(favor_precision=True, deduplicate=True)
     assert not trafilatura_rs.supports(output_format="xml")
     assert not trafilatura_rs.supports(include_comments=False, output_format="xml")
-    assert not trafilatura_rs.supports(include_comments=False, favor_precision=True, favor_recall=True)
+    # Extractor: recall takes precedence, the call is favor_recall=True
+    assert trafilatura_rs.supports(include_comments=False, favor_precision=True, favor_recall=True)
     assert not trafilatura_rs.supports(include_comments=False, with_metadata=True, deduplicate=True)
-    assert not trafilatura_rs.supports(include_comments=False, date_extraction_params={"original_date": False})
+    assert not trafilatura_rs.supports(with_metadata=True, date_extraction_params={"original_date": False})
+    assert trafilatura_rs.supports(date_extraction_params={"original_date": False})  # ignored without metadata
     assert trafilatura_rs.supports(include_comments=False, output_format="markdown", favor_precision=True)
+    assert trafilatura_rs.supports(output_format="json", with_metadata=True, favor_recall=True)
     assert trafilatura_rs.supports(include_comments=False, output_format="json", with_metadata=True,
                                    url="http://a.b/")
     assert trafilatura_rs.supports(include_comments=False, url="http://a.b/")
@@ -88,8 +91,8 @@ def test_supports():
 
 def test_markdown_without_formatting():
     kwargs = dict(include_comments=False, output_format="markdown", include_formatting=False)
-    assert trafilatura_rs._api._rust_kwargs(kwargs, "1.11.0") is not None
-    assert trafilatura_rs._api._rust_kwargs(kwargs, "2.3.1") is None
+    assert trafilatura_rs._api._rust_kwargs(kwargs, "1.11.0")[0]["output_format"] == "markdown"  # 1.11 forces it on
+    assert trafilatura_rs._api._rust_kwargs(kwargs, "2.3.1")[0]["output_format"] == "txt"
 
 
 @pytest.mark.parametrize("kwargs", [dict(output_format="markdown"), dict(output_format="json"),
@@ -108,11 +111,13 @@ def test_metadata_date_params():
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 
-@pytest.mark.parametrize("kwargs", [dict(favor_precision=True, favor_recall=True), dict(with_metadata=True),
-                                    dict(output_format="json"), dict(include_comments=False, output_format="xml"),
+@pytest.mark.parametrize("kwargs", [dict(target_language="en"), dict(include_links=True),
+                                    dict(output_format="markdown", include_tables=False),
+                                    dict(include_comments=False, output_format="xml"),
                                     dict(include_comments=False, with_metadata=True, deduplicate=True),
-                                    dict(include_comments=False, with_metadata=True, favor_recall=True)])
+                                    dict(output_format="markdown", with_metadata=True, favor_recall=True)])
 def test_uncovered_calls_fall_back_to_python(kwargs):
+    assert not trafilatura_rs.supports(**kwargs)
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 

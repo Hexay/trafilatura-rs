@@ -1,12 +1,14 @@
 //! metadata.py `extract_metadata` and the JSON-LD, sitename and clean-up steps around it.
 use super::core::Request;
 use super::document::Document;
+use super::filters::check_authors;
 use super::json_metadata::{extract_json, extract_json_parse_error, normalize_json};
 use super::meta_regexes::{JSON_MINIFY, META_URL};
 use super::metadata_fields::{
     examine_title_element, extract_author, extract_catstags, extract_image, extract_license, extract_title, extract_url,
 };
 use super::metadata_meta::examine_meta;
+use super::settings::Options;
 use super::text::line_processing;
 use super::xml_unescape::unescape;
 use crate::dom::{Ctx, Error, Node, Result};
@@ -75,8 +77,25 @@ fn as_value(s: Option<String>) -> Value {
     s.map_or(Value::None, Value::Str)
 }
 
-/// `extract_metadata(tree, url, date_params)` with an empty author blacklist.
-pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request) -> Result<Document> {
+/// `check_authors` on a non-empty author when there is a blacklist.
+pub(crate) fn blacklist_author(author: &mut Value, blacklist: &[String]) -> Result<()> {
+    if let Some(a) = author.as_str().filter(|a| !a.is_empty() && !blacklist.is_empty()) {
+        *author = as_value(check_authors(a, blacklist)?);
+    }
+    Ok(())
+}
+
+/// `DateParams` from the options' `date_params` flags.
+pub(crate) fn date_params(opts: &Options, max_date: &str) -> DateParams {
+    DateParams {
+        original_date: opts.original_date,
+        extensive_search: opts.extensive_date_search,
+        max_date: max_date.to_owned(),
+    }
+}
+
+/// `extract_metadata(tree, url, date_params, author_blacklist)`.
+pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request, opts: &Options) -> Result<Document> {
     let hooks = req.hooks;
     let max_date = req.max_date.ok_or_else(|| Error::Unsupported("max_date not given".into()))?;
     let mut metadata = examine_meta(tree, hooks)?;
@@ -90,9 +109,11 @@ pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request) -> Result<Document
     if metadata.title.is_none() {
         metadata.title = as_value(extract_title(tree)?);
     }
+    blacklist_author(&mut metadata.author, &opts.author_blacklist)?;
     if metadata.author.is_none() {
         metadata.author = as_value(extract_author(ctx, tree)?);
     }
+    blacklist_author(&mut metadata.author, &opts.author_blacklist)?;
     if metadata.url.is_none() {
         metadata.url = as_value(extract_url(tree, req.url, hooks)?);
     }
@@ -102,8 +123,7 @@ pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request) -> Result<Document
     if metadata.image.is_none() {
         metadata.image = as_value(extract_image(tree)?);
     }
-    let params = DateParams { original_date: true, extensive_search: true, max_date: max_date.to_owned() };
-    metadata.date = as_value(find_date(ctx, tree, metadata.url.as_str(), &params, hooks)?);
+    metadata.date = as_value(find_date(ctx, tree, metadata.url.as_str(), &date_params(opts, max_date), hooks)?);
     if metadata.sitename.is_none() {
         metadata.sitename = extract_sitename(tree)?;
     }

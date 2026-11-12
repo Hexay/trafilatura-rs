@@ -1,48 +1,41 @@
+import importlib
 import inspect
-import re
 import sys
 import warnings
-from datetime import datetime
 
 from . import _versions
 from ._core import Extractor as _RustExtractor
 from ._core import Unsupported
 from ._core import extract as _rust_extract
+from ._options import core_kwargs
 
-# (favor_precision, favor_recall, include_tables, fast, include_comments) combinations with full-corpus parity for
-# plain-text output without metadata, for every REPRODUCES pair: each option set below, with and without comments.
+# (favor_precision, favor_recall, include_tables, fast) option sets with full-corpus parity, for every REPRODUCES pair.
 # fast is no_fallback in trafilatura 1.11.
-VERIFIED = {
-    (*options, include_comments)
-    for options in (
-        (True, False, True, False),   # favor_precision (datatrove/FineWeb, also with deduplicate=True)
-        (False, False, True, False),  # defaults
-        (False, True, True, False),   # favor_recall
-        (False, False, True, True),   # fast / no_fallback
-        (False, False, False, False),  # include_tables=False
-    )
-    for include_comments in (True, False)
-}
+_PRECISION, _BALANCED, _RECALL, _FAST = (True, False, True, False), (False, False, True, False), \
+    (False, True, True, False), (False, False, True, True)
+_NO_TABLES = (False, False, False, False)
 
-# The combinations verified per (output_format, with_metadata), for trafilatura 1.11.0 and 2.3.1 alike.
+
+def _with_comments(*option_sets):
+    """Each option set with and without include_comments (trafilatura's default: True)."""
+    return frozenset((*options, comments) for options in option_sets for comments in (True, False))
+
+
+# (favor_precision, favor_recall, include_tables, fast, include_comments) for plain text without metadata.
+VERIFIED = _with_comments(_PRECISION, _BALANCED, _RECALL, _FAST, _NO_TABLES)
+_FOCUS_GRID = _with_comments(_PRECISION, _BALANCED, _RECALL, _FAST)
+
+# The combinations verified per (output_format, with_metadata), for trafilatura 1.11.0 and 2.3.1 alike. txt with
+# include_formatting=True is markdown, and markdown with formatting off is txt (both versions only test formatting).
 VERIFIED_OUTPUTS = {
     ("txt", False): VERIFIED,
-    ("markdown", False): {(True, False, True, False, False), (False, False, True, False, False)},
-    ("txt", True): {(False, False, True, False, False)},
-    ("json", True): {(True, False, True, False, False), (False, False, True, False, False)},
-    ("json", False): {(False, False, True, False, False)},
+    ("markdown", False): _FOCUS_GRID,
+    ("txt", True): _FOCUS_GRID,
+    ("json", True): _FOCUS_GRID,
+    ("json", False): _FOCUS_GRID,
+    ("markdown", True): _with_comments(_BALANCED),
 }
 _VERIFIED_BY_ENGINE = {"1.11.0": VERIFIED_OUTPUTS, "2.3.1": VERIFIED_OUTPUTS}
-
-_BOOL_KWARGS = {"favor_precision", "favor_recall", "include_tables", "deduplicate", "include_comments",
-                "with_metadata"}
-_FORMATS = {"txt", "markdown", "json"}
-# Arguments that may be passed as long as they hold one of these values.
-_NEUTRAL = {"target_language": (None,), "include_images": (False,), "include_formatting": (False, None),
-            "include_links": (False,), "only_with_metadata": (False,), "max_tree_size": (None,),
-            "url_blacklist": (None,), "author_blacklist": (None,), "settingsfile": (None,), "prune_xpath": (None,),
-            "tei_validation": (False,), "config": (None,), "options": (None,)}
-_ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
 
 
 def verified_outputs(engine=None):
@@ -50,81 +43,53 @@ def verified_outputs(engine=None):
     return _VERIFIED_BY_ENGINE[engine or _versions.engine()]
 
 
-def _neutral(key, value):
-    return any(value is v or value == v for v in _NEUTRAL.get(key, ()))
-
-
-def _max_date(params):
-    """htmldate's max_date for these date_extraction_params, or None when the port does not cover them."""
-    if not params:
-        # set_date_params(): today's local date, as trafilatura computes it for every call
-        return datetime.now().strftime("%Y-%m-%d")
-    if not isinstance(params, dict) or set(params) - {"original_date", "extensive_search", "max_date", "url"}:
-        return None
-    if params.get("original_date") is not True or params.get("extensive_search") is not True:
-        return None
-    max_date = params.get("max_date")
-    return max_date if isinstance(max_date, str) and _ISO_DAY.fullmatch(max_date) else None
-
-
-def _core_kwargs(kwargs, engine):
-    """The `_core.extract` keyword arguments for these extract() options under trafilatura `engine`, whether verified
-    or not, or None when the port has no code path for them."""
-    if engine == "1.11.0" and "fast" in kwargs:  # not a 1.11 parameter (its **kwargs ignores it)
-        return None
-    rust = {"engine": engine, "no_fallback": False}
-    for key, value in kwargs.items():
-        if key == "deduplicate" and not (value is None or isinstance(value, int)):  # 2.x: a scoped LRUCache
-            return None
-        if key in ("fast", "no_fallback"):
-            rust["no_fallback"] = rust["no_fallback"] or bool(value)
-        elif key in _BOOL_KWARGS:
-            rust[key] = bool(value)
-        elif key == "output_format":
-            if value not in _FORMATS:
-                return None
-            rust[key] = value
-        elif key in ("url", "record_id"):
-            if value is not None and not isinstance(value, str):
-                return None
-            rust[key] = value
-        elif key == "date_extraction_params":
-            continue
-        elif not _neutral(key, value):
-            return None
-    # 2.x honors an explicit formatting=False for markdown; 1.11 forces formatting on
-    if engine != "1.11.0" and rust.get("output_format") == "markdown" and kwargs.get("include_formatting") is False:
-        return None
-    if rust.get("with_metadata"):
-        rust["max_date"] = _max_date(kwargs.get("date_extraction_params"))
-        if rust["max_date"] is None:
-            return None
-    elif kwargs.get("date_extraction_params") is not None:
-        return None
-    return rust
-
-
-def _rust_kwargs(kwargs, engine):
-    """The `_core.extract` keyword arguments for these extract() options under trafilatura `engine`, or None when the
-    call must run in Python."""
-    rust = _core_kwargs(kwargs, engine)
-    if rust is None:
-        return None
-    output = (rust.get("output_format", "txt"), rust.get("with_metadata", False))
-    combo = (rust.get("favor_precision", False), rust.get("favor_recall", False),
-             rust.get("include_tables", True), rust["no_fallback"], rust.get("include_comments", True))
+def _rust_kwargs(kwargs, engine, verified=True):
+    """(`_core.extract` keywords, max_file_size) for these extract() options under trafilatura `engine`, or None when
+    the call must run in Python (or, with `verified`, isn't in VERIFIED_OUTPUTS)."""
+    planned = core_kwargs(kwargs, engine)
+    if planned is None or not verified:
+        return planned
+    rust = planned[0]
+    output = (rust["output_format"], rust["with_metadata"])
+    combo = (rust["favor_precision"], rust["favor_recall"], rust["include_tables"], rust["no_fallback"],
+             rust["include_comments"])
     if combo not in _VERIFIED_BY_ENGINE[engine].get(output, ()):
         return None
     # fromisoformat (htmldate) has the full ISO grammar from 3.11; a document that falls back to Python would update
     # Python's dedup cache instead of ours
-    if output[1] and (sys.version_info < (3, 11) or rust.get("deduplicate")):
+    if output[1] and (sys.version_info < (3, 11) or rust["deduplicate"]):
         return None
-    return rust
+    return planned
+
+
+def _decode_file():
+    try:
+        return importlib.import_module("trafilatura.utils").decode_file
+    except ImportError:
+        return None
+
+
+def _plan(filecontent, kwargs, engine, verified=True):
+    """(html str, `_core.extract` keywords) for `extract(filecontent, **kwargs)`, or None. bytes are decoded by the
+    installed trafilatura's own `decode_file`, as its `load_html` does before parsing."""
+    planned = _rust_kwargs(kwargs, engine, verified)
+    if planned is None:
+        return None
+    rust, max_file_size = planned
+    if isinstance(filecontent, str):
+        return filecontent, rust
+    decode = _decode_file() if isinstance(filecontent, bytes) else None
+    if decode is None:
+        return None
+    try:
+        return (decode(filecontent) if engine == "1.11.0" else decode(filecontent, max_file_size)), rust
+    except Exception:  # noqa: BLE001 - Python raises it again
+        return None
 
 
 def supports(**kwargs):
-    """True when `extract(html, **kwargs)` on a str runs in Rust (given a REPRODUCES pair installed, if any).
-    With metadata, a rare document can still need Python (see `extract`)."""
+    """True when `extract(html, **kwargs)` on a str runs in Rust (given a REPRODUCES pair installed, if any); bytes
+    also need trafilatura installed. With metadata, a rare document can still need Python (see `extract`)."""
     return _rust_kwargs(kwargs, _versions.engine()) is not None
 
 
@@ -138,11 +103,11 @@ def extract(filecontent, *args, **kwargs):
     """Drop-in for `trafilatura.extract` of the installed trafilatura (2.3.1 when none is installed): Rust for covered
     calls, Python trafilatura for the rest.
 
-    Without trafilatura installed, only covered calls work (others raise NotImplementedError). With trafilatura
-    installed at versions other than `REPRODUCES` (and `REPRODUCES_METADATA` for metadata calls), those calls run
-    Python trafilatura, so results never change. A covered call whose document needs a path the port leaves to
-    Python (see docs/metadata-formats-scope.md) also runs Python trafilatura. Metadata extraction calls back into
-    Python for courlan, dateutil and dateparser, so it needs trafilatura installed.
+    Without trafilatura installed, only covered calls on str input work (others raise NotImplementedError). With
+    trafilatura installed at versions other than `REPRODUCES` (and `REPRODUCES_METADATA` for metadata calls), those
+    calls run Python trafilatura, so results never change. A covered call whose document needs a path the port
+    leaves to Python (see docs/metadata-formats-scope.md) also runs Python trafilatura. Metadata extraction calls
+    back into Python for courlan, dateutil and dateparser, so it needs trafilatura installed.
     """
     python = _python_extract()
     if args:
@@ -153,15 +118,15 @@ def extract(filecontent, *args, **kwargs):
         bound.pop("filecontent")
         kwargs = {**bound, **extra}
     engine = _versions.engine()
-    rust = _rust_kwargs(kwargs, engine) if isinstance(filecontent, str) else None
-    if rust is not None and rust.get("with_metadata") and python is None:
-        rust = None
-    if rust is not None and (python is None or not _versions.mismatched_versions(rust.get("with_metadata", False))):
+    plan = _plan(filecontent, kwargs, engine)
+    if plan is not None and plan[1]["with_metadata"] and python is None:
+        plan = None
+    if plan is not None and (python is None or not _versions.mismatched_versions(plan[1]["with_metadata"])):
         if engine != "1.11.0" and kwargs.get("no_fallback"):
             warnings.warn('"no_fallback" will be removed, use "fast" instead', DeprecationWarning, stacklevel=2)
         try:
-            return _rust_extract(filecontent, **rust)
-        except Unsupported:
+            return _rust_extract(plan[0], **plan[1])
+        except (Unsupported, UnicodeEncodeError):  # lone surrogates: lxml's parser takes them, Rust strings can't
             if python is None:
                 raise
     if python is None:

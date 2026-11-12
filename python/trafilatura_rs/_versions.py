@@ -3,7 +3,9 @@ import os
 from importlib.metadata import PackageNotFoundError, version
 
 # The (trafilatura, lxml) pairs whose output trafilatura_rs reproduces; Python trafilatura's output depends on both.
-REPRODUCES = frozenset({("1.11.0", "6.1.3"), ("2.3.1", "6.1.3")})
+# Other lxml releases join after the check in CONTRIBUTING.md (Parity).
+_LXML = ("6.1.3",)
+REPRODUCES = frozenset((trafilatura, lxml) for trafilatura in ("1.11.0", "2.3.1") for lxml in _LXML)
 # The trafilatura version reproduced when trafilatura isn't installed.
 DEFAULT_TRAFILATURA = "2.3.1"
 # With metadata, also the ported htmldate, the version both trafilatura 1.11.0 and 2.3.1 resolve (courlan, dateparser

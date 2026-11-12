@@ -25,7 +25,7 @@ job() {
     *) echo "unknown job $1" >&2; return 2 ;;
   esac
   [ -s "$D/$out" ] && return 0
-  "${cmd[@]}" "$D/docs.jsonl" "$D/$out.tmp" ${cfg:+"$cfg"} 2> "$D/$out.err" && mv "$D/$out.tmp" "$D/$out" \
+  "${cmd[@]}" "$D/${CORPUS:-docs.jsonl}" "$D/$out.tmp" ${cfg:+"$cfg"} 2> "$D/$out.err" && mv "$D/$out.tmp" "$D/$out" \
     && echo "done $out" || echo "FAILED $out (see $D/$out.err)"
   [ -s "$D/$out.err" ] || rm -f "$D/$out.err"
 }

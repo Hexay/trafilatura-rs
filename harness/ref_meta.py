@@ -1,31 +1,20 @@
-"""Parity for the markdown / metadata / json configs: the installed Python trafilatura (1.11 in .venv, 2.3.1 in
-.venv-t23) vs the Rust core reproducing it (through the extension module, so htmldate's dateutil/dateparser leaves run
-as callbacks into Python).
-  ref_meta.py ref  docs.jsonl out.jsonl <cfg>    trafilatura.extract(html, include_comments=False, **CONFIGS[cfg])
-  ref_meta.py rust docs.jsonl out.jsonl <cfg>    trafilatura_rs._core.extract with the same options, no fallback
+"""Parity for the markdown / metadata / json configs and the option extras (harness/meta_configs.py): the installed
+Python trafilatura (1.11 in .venv, 2.3.1 in .venv-t23) vs the Rust core reproducing it (through the extension module,
+so htmldate's dateutil/dateparser leaves run as callbacks into Python).
+  ref_meta.py ref  docs.jsonl out.jsonl <cfg>    trafilatura.extract(input, **kwargs_for(cfg, doc))
+  ref_meta.py rust docs.jsonl out.jsonl <cfg>    the same call's Rust plan (trafilatura_rs._api), no fallback
   ref_meta.py show docs.jsonl <i> <cfg>          print both outputs of one doc
-Wall-clock inputs are pinned in both modes: htmldate's max_date via date_extraction_params and dateutil's
-default for missing fields (see docs/metadata-formats-scope.md)."""
+  ref_meta.py list                               config names
+`bytes` configs need a docs file with raw payloads (harness/export_raw.py). Wall-clock inputs are pinned in both
+modes: htmldate's max_date via date_extraction_params and dateutil's default for missing fields (see
+docs/metadata-formats-scope.md)."""
+import base64
 import json
 import sys
 from datetime import datetime
 from functools import partial
 
-# max_date as set_date_params() would produce it on this day.
-PINNED_DAY = "2026-06-30"
-DATE_PARAMS = {"original_date": True, "extensive_search": True, "max_date": PINNED_DAY}
-
-# extract() keyword sets (include_comments=False always); "url" True passes the record's URL. Mirrored in
-# tests/parity.py.
-CONFIGS = {
-    "fineweb_md": {"favor_precision": True, "deduplicate": True, "output_format": "markdown"},
-    "balanced_md": {"output_format": "markdown"},
-    "balanced_meta": {"with_metadata": True, "url": True},
-    "balanced_json": {"output_format": "json", "with_metadata": True},
-    "precision_json": {"favor_precision": True, "output_format": "json", "with_metadata": True, "url": True},
-    "json_text": {"output_format": "json"},
-    "url_text": {"url": True},
-}
+from meta_configs import CONFIGS, PINNED_DAY, kwargs_for
 
 
 def pin_wall_clock():
@@ -34,27 +23,19 @@ def pin_wall_clock():
     ex.dateutil_parse = partial(ex.dateutil_parse, default=datetime.fromisoformat(PINNED_DAY))
 
 
-def kwargs_for(cfg, doc):
-    kw = dict(CONFIGS[cfg])
-    kw["url"] = doc["url"] if kw.pop("url", False) else None
-    if kw.get("with_metadata"):
-        kw["date_extraction_params"] = dict(DATE_PARAMS)
-    return kw
-
-
 def python_extract():
     from trafilatura import extract
 
-    return lambda html, kw: extract(html, include_comments=False, **kw)
+    return extract
 
 
 def rust_extract():
     import trafilatura_rs
 
-    def run(html, kw):
-        rust = trafilatura_rs._api._core_kwargs(dict(kw, include_comments=False), trafilatura_rs.engine())
-        assert rust is not None, f"no Rust code path: {kw}"
-        return trafilatura_rs._core.extract(html, **rust)
+    def run(html, **kw):
+        plan = trafilatura_rs._api._plan(html, kw, trafilatura_rs.engine(), verified=False)
+        assert plan is not None, f"no Rust code path: {kw}"
+        return trafilatura_rs._core.extract(plan[0], **plan[1])
 
     return run
 
@@ -62,18 +43,26 @@ def rust_extract():
 def docs(path):
     with open(path, encoding="utf-8") as f:
         for line in f:
-            yield json.loads(line)
+            d = json.loads(line)
+            if "raw_b64" in d:
+                d["raw"] = base64.b64decode(d.pop("raw_b64"))
+            yield d
 
 
 def output(extract, doc, cfg):
+    html, kw = kwargs_for(cfg, doc)
     try:
-        return extract(doc["html"], kwargs_for(cfg, doc))
+        return extract(html, **kw)
     except Exception as e:  # noqa: BLE001 - the exception type is part of the compared output
         return f"EXC:{type(e).__name__}"
 
 
 def main():
-    mode, path = sys.argv[1:3]
+    mode = sys.argv[1]
+    if mode == "list":
+        print(" ".join(CONFIGS))
+        return
+    path = sys.argv[2]
     pin_wall_clock()
     if mode == "show":
         i, cfg = int(sys.argv[3]), sys.argv[4]

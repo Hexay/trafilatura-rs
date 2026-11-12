@@ -3,7 +3,8 @@ use super::baseline::baseline;
 use super::deduplication::{content_fingerprint, duplicate_test, Lru};
 use super::document::Document;
 use super::external::compare_extraction;
-use super::htmlprocessing::{prune_unwanted_nodes, tree_cleaning, Env};
+use super::filters;
+use super::htmlprocessing::{prune_node, prune_unwanted_nodes, tree_cleaning, Env};
 use super::htmlprocessing_convert::convert_tags;
 use super::main_extractor_comments::extract_comments;
 use super::main_extractor_extract::extract_content;
@@ -89,8 +90,12 @@ fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &m
 
 fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| value_error("empty HTML tree"))?;
-    // url_blacklist is empty, so no blacklisted-URL check.
-    let mut document = if opts.with_metadata { extract_metadata(ctx, tree, req)? } else { Document::default() };
+    let mut document = Document::default();
+    if opts.with_metadata {
+        document = extract_metadata(ctx, tree, req, opts)?;
+        filters::check_metadata(&document, opts)?;
+    }
+    filters::prune_xpath(tree, opts, |node| prune_node(ctx, node))?;
     let tree_backup = tree.deep_copy(ctx);
     let cleaned = tree_cleaning(ctx, tree, opts)?;
     let cleaned_backup = cleaned.deep_copy(ctx);

@@ -6,6 +6,7 @@ pub mod core;
 pub mod deduplication;
 pub mod document;
 pub mod external;
+pub mod filters;
 pub mod htmlprocessing;
 pub mod htmlprocessing_convert;
 pub mod json_metadata;
