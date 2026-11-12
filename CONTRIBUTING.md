@@ -47,9 +47,10 @@ TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast
 tools/parity.sh meta:balanced_json   # markdown/metadata/json and option configs (harness/meta_configs.py), via the
                                      # extension and trafilatura_rs's own argument translation
 tools/parity.sh meta2:balanced_json  # same against 2.3.1 (.venv-t23; build with V=23 tools/dev.sh py)
-tools/parity.sh funcs:bare_balanced,metadata   # the other drop-ins (bare_extraction, baseline, html2txt,
-                                     # extract_metadata, htmldate.find_date) vs Python in one process, with CPU time
-                                     # per side (funcs2: 2.3.1); configs: harness/ref_funcs.py list
+tools/parity.sh funcs:bare_balanced  # the other drop-ins (bare_extraction, baseline, html2txt, extract_metadata,
+                                     # htmldate.find_date), with CPU time per side (funcs2: 2.3.1; references:
+                                     # make_reference.sh funcs:<cfg>); configs: harness/ref_funcs.py list. Speedups
+                                     # need PROFILE=release tools/dev.sh py
 harness/ref_meta.py list             # every meta config: the focus x output x comments grid, then option extras
 harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc
 harness/export_raw.py docs.jsonl <warc> docs_raw.jsonl         # raw HTTP payloads for the bytes configs; reference

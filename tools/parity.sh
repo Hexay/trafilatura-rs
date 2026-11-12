@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Rust outputs vs the tools/make_reference.sh references (build first: tools/dev.sh build). Usage:
 #   [LIMIT=N] [PAR=2] [FAILING=1] tools/parity.sh [job ...]
-#       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | justext | readability
-#       (meta/meta2: through the extension, tools/dev.sh py / V=23 tools/dev.sh py); default: every job but meta.
+#       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | funcs:<cfg>
+#             | funcs2:<cfg> | justext | readability
+#       (meta/funcs: through the extension, tools/dev.sh py / V=23 tools/dev.sh py; funcs cfgs: harness/ref_funcs.py
+#       list); default: every job but meta and funcs.
 #       Each job takes a free light.lock slot for itself (don't wrap this script in flock); PAR=2 runs two jobs at
 #       a time. LIMIT compares only the first N docs. FAILING=1 reruns only the docs the job's last full run got wrong.
 #   tools/parity.sh show[2] <i> <stage> [cfg]   diff one doc's stage output (reference vs Rust)
@@ -40,6 +42,10 @@ run() {
       local tag=
       [ "$mode" = meta2 ] && py=$PY23 tag=23
       ref=$D/ref${tag}_meta_$cfg.jsonl rust=rust${tag}_meta_$cfg.jsonl cmp=final ;;
+    funcs | funcs2)
+      local tag=
+      [ "$mode" = funcs2 ] && py=$PY23 tag=23
+      ref=$D/ref${tag}_funcs_$cfg.jsonl rust=rust${tag}_funcs_$cfg.jsonl ;;
     justext | readability) ref=$D/ref_$mode.jsonl rust=rust_$mode.jsonl ;;
     *) echo "unknown job $1" >&2; return 2 ;;
   esac
@@ -58,6 +64,7 @@ run() {
     meta | meta2)
       "$py" "$ROOT/harness/ref_meta.py" rust "$docs" "$rust" "$cfg"
       echo "fallbacks: $(grep -c '"EXC:Unsupported"' "$rust" || true)" ;;
+    funcs | funcs2) "$py" "$ROOT/harness/ref_funcs.py" rust "$docs" "$rust" "$cfg" ;;
     *) "$BIN/${mode}_parity" run "$docs" "$rust" ;;
   esac
   [ ! -f "$ref.stamp" ] || [ "$(cat "$ref.stamp")" = "$("$py" "$ROOT/harness/ref_stamp.py")" ] \
@@ -66,6 +73,8 @@ run() {
   [ -n "${FAILING:-}" ] && keep=$rust.bad  # a subset run must not shrink the full run's failing list
   if [ -n "${cmp:-}" ]; then
     "$py" "$ROOT/harness/compare.py" "$cmp" "$ref" "$rust" "$keep"
+  elif [[ $mode == funcs* ]]; then
+    "$py" "$ROOT/harness/ref_funcs.py" compare "$ref" "$rust" "$keep"
   else
     "$PY" "$ROOT/harness/compare_$mode.py" "$ref" "$rust"
   fi
