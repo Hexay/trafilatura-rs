@@ -20,20 +20,27 @@ Needs Rust, cmake, uv and perf. The corpus and references live outside the repo 
 
 ```bash
 tools/dev.sh setup     # .venv (py3.13: trafilatura 1.11, datatrove, rs-trafilatura) + .venv-t23 (trafilatura 2.3.1)
-tools/dev.sh build     # cargo build --release (harness bins)
-tools/dev.sh py        # maturin develop --release into .venv
-tools/dev.sh test      # cargo test
+tools/dev.sh build     # cargo build of the harness bins, profile iter
+tools/dev.sh py        # maturin develop into .venv, profile iter
+tools/dev.sh test      # cargo test, profile iter
 python -m pytest tests # parity vs trafilatura on tests/fixtures
 tools/build_wheel.sh   # abi3 wheel in target/wheels (PGO=1 for profile-guided, via tools/pgo.sh)
 ```
+
+`tools/dev.sh` builds with `PROFILE` (default `iter`: no LTO, 16 codegen units, incremental for the workspace crates,
+so an edit rebuilds in seconds; same output). Benches and wheels need `release` (fat LTO): `tools/bench.sh` installs
+it itself, `PROFILE=release tools/dev.sh build` gives `target/release/harness`. Leave `CARGO_INCREMENTAL` alone:
+`dev.sh` unsets it for `iter` so dependencies stay sccache-cached.
 
 ## Parity
 
 ```bash
 tools/make_reference.sh   # exports docs.jsonl (first 10,666 URLFilter-passing HTML records of a CC WARC) and all
-                          # Python references; REF_JOBS parallel, skips existing files (~50 CPU-min)
+                          # Python references; REF_JOBS (2) parallel, skips current ones (~50 CPU-min)
 tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall_comments
                           # (configs: tools/env.sh; `<cfg>_comments` runs include_comments=True)
+PAR=2 tools/parity.sh     # two jobs at a time, each in a free light.lock slot (don't wrap it in flock)
+FAILING=1 tools/parity.sh final:balanced   # only the docs the job's last full run got wrong
 LIMIT=500 tools/parity.sh final:fineweb
 tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.3.1)
 TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
@@ -60,6 +67,18 @@ strings skip the shortcut.
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`
 counts documents the core declined (`Unsupported`), which the Python API reruns in Python.
 
+References are shared in `$TRAFILATURA_RS_DATA`; Rust outputs go to `$TRAFILATURA_RS_OUT` (default
+`$TRAFILATURA_RS_DATA/out/<worktree dir>`), so worktrees running parity at once don't overwrite each other's and need
+no private data dir. Each job also leaves `<output>.bad`, its mismatching doc ids, which `FAILING=1` reruns; for the
+`fineweb*` configs (`deduplicate=True`) a subset run lacks the earlier docs' dedup history, so confirm a fix with a
+full run. Each reference has a `<ref>.stamp` with the Python and package versions that made it
+(`harness/ref_stamp.py`): `make_reference.sh` keeps a reference whose stamp matches the venv, reports `STALE` (redo
+with `FORCE=1`) otherwise, and `parity.sh` warns when comparing against one made with other versions.
+
+On the shared box, `parity.sh`, `make_reference.sh` and `bench.sh` take one of the two light.lock slots per job
+(`in_light_slot`, tools/env.sh) and release it in between. Never wrap a loop of jobs, or these scripts, in `flock`:
+a slot held across a loop blocks every other worktree for its whole length. Builds still go under heavy.lock.
+
 Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTPUTS` only with full-corpus parity.
 `python/trafilatura_rs/_options.py` turns extract() arguments into the `Extractor` each version would build, then
 into `_core.extract` keywords; a new option goes there, gets a `meta_configs.py` entry and a `tests/` case.
@@ -76,9 +95,13 @@ and `rs_trafilatura.extract(...)`. Each engine runs in a fresh process, on the s
 thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min over rounds) and `perf stat`
 user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
 trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead, and
-`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura.
+`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura. It installs the
+release build first. `REUSE_BASELINE=1` reruns only trafilatura-rs and takes the other engines' runs from
+`$TRAFILATURA_RS_DATA/bench-cache` (keyed by arguments, corpus, bench scripts and package versions); instruction counts
+stay comparable, CPU times then come from different load.
 
-The Rust side alone: `target/release/harness bench[2] docs.jsonl [n] [cfg]` (cfg as in parity, default fineweb;
+The Rust side alone: `target/release/harness bench[2] docs.jsonl [n] [cfg]` (`PROFILE=release tools/dev.sh build`;
+cfg as in parity, default fineweb;
 `balanced_comments` is the default `extract(html)`), under `perf stat -e instructions:u`. To profile, build with
 frame pointers and full debug info, then `perf record -g` that binary:
 
