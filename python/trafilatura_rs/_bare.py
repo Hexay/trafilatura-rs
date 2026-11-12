@@ -59,10 +59,13 @@ def _tree(spec, xml):
     from lxml.etree import Element, tostring
 
     tag, *rest = spec
-    root = Element(tag)
-    _fill(root, *rest)
+    try:  # lxml rejects some names libxml2's HTML parser accepts
+        root = Element(tag)
+        _fill(root, *rest)
+    except ValueError as e:
+        raise _core.Unsupported(f"lxml can't rebuild the tree: {e}") from e
     if tostring(root, encoding="unicode") != xml:
-        raise ValueError("rebuilt tree differs from the Rust tree")
+        raise _core.Unsupported("rebuilt tree differs from the Rust tree")
     return root
 
 
