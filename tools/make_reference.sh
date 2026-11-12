@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Python reference outputs in $D (untimed), REF_JOBS at a time. Usage:
-#   [SLOTS=1] [FORCE=1] tools/make_reference.sh [job ...]
+#   [FORCE=1] tools/make_reference.sh [job ...]
 #       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | justext | readability
 #       (meta configs: harness/ref_meta.py CONFIGS; meta2: trafilatura 2.3.1). Default: every job but meta.
 # Each reference gets a <ref>.stamp of the Python package versions that produced it (harness/ref_stamp.py). An
 # existing reference is kept when its stamp matches the venv (or it has none: it is adopted); on a mismatch the job
-# stops unless FORCE=1. SLOTS=1 runs each job holding a free light.lock slot (two at a time; don't wrap it in flock).
+# stops unless FORCE=1. Each job takes a free light.lock slot for itself, REF_JOBS (2) at a time; don't wrap this
+# script in flock.
 # docs.jsonl is exported first if missing (WARC=path overrides the source WARC).
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
@@ -43,9 +44,5 @@ export ROOT D PY PY23 CORPUS FORCE
 
 jobs=("$@")
 [ ${#jobs[@]} -gt 0 ] || mapfile -t jobs < <(all_jobs)
-if [ -n "${SLOTS:-}" ]; then
-  printf '%s\n' "${jobs[@]}" | xargs -P "${REF_JOBS:-2}" -n 1 bash -c 'in_light_slot job "$1"' _
-else
-  printf '%s\n' "${jobs[@]}" | xargs -P "${REF_JOBS:-4}" -n 1 bash -c 'job "$1"' _
-fi
+printf '%s\n' "${jobs[@]}" | xargs -P "${REF_JOBS:-2}" -n 1 bash -c 'in_light_slot job "$1"' _
 echo REFDONE

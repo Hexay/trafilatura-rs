@@ -3,8 +3,8 @@
 #   [LIMIT=N] [PAR=2] [FAILING=1] tools/parity.sh [job ...]
 #       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | justext | readability
 #       (meta/meta2: through the extension, tools/dev.sh py / V=23 tools/dev.sh py); default: every job but meta.
-#       LIMIT compares only the first N docs. PAR=2 runs jobs two at a time, each holding a free light.lock slot
-#       (don't wrap it in flock). FAILING=1 reruns only the docs the job's last full run got wrong.
+#       Each job takes a free light.lock slot for itself (don't wrap this script in flock); PAR=2 runs two jobs at
+#       a time. LIMIT compares only the first N docs. FAILING=1 reruns only the docs the job's last full run got wrong.
 #   tools/parity.sh show[2] <i> <stage> [cfg]   diff one doc's stage output (reference vs Rust)
 # TRAFILATURA_RS_VERIFY_XPATH=1 cross-checks every fast-path XPath against libxml2 while running.
 # Rust outputs go to $OUT (tools/env.sh, per worktree); each job's mismatching doc ids to $OUT/<out>.bad.
@@ -81,6 +81,6 @@ if [ "${PAR:-1}" -gt 1 ]; then
   printf '%s\n' "${jobs[@]}" | xargs -P "$PAR" -n 1 bash -c 'set -euo pipefail; log=$(mktemp)
     trap "cat \$log; rm -f \$log" EXIT; in_light_slot run "$1" > "$log" 2>&1' _
 else
-  for j in "${jobs[@]}"; do run "$j"; done
+  for j in "${jobs[@]}"; do in_light_slot run "$j"; done
 fi
 echo PARITYDONE

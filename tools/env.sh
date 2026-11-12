@@ -23,14 +23,16 @@ all_jobs() {
   for c in "${CONFIGS[@]}" "${COMMENT_CONFIGS[@]}"; do printf '%s\n' "final:$c" "final2:$c"; done
 }
 
-# in_light_slot cmd...: run cmd holding whichever light.lock.{0,1} frees first (callers must not hold one).
+# in_light_slot cmd...: run one job holding whichever light.lock.{0,1} frees first; nested calls run directly.
+# Take it per job, never around a loop of jobs: a held slot blocks every other worktree.
 in_light_slot() {
   local s fd rc
+  [ -n "${LIGHT_SLOT_HELD:-}" ] && { "$@"; return; }
   while :; do
     for s in 0 1; do
       exec {fd}>"$D/light.lock.$s"
       if flock -w 2 "$fd"; then
-        "$@"
+        LIGHT_SLOT_HELD=1 "$@"
         rc=$?
         exec {fd}>&-
         return $rc

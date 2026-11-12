@@ -36,7 +36,7 @@ it itself, `PROFILE=release tools/dev.sh build` gives `target/release/harness`. 
 
 ```bash
 tools/make_reference.sh   # exports docs.jsonl (first 10,666 URLFilter-passing HTML records of a CC WARC) and all
-                          # Python references; REF_JOBS parallel, skips current ones (~50 CPU-min)
+                          # Python references; REF_JOBS (2) parallel, skips current ones (~50 CPU-min)
 tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fineweb final2:recall_comments
                           # (configs: tools/env.sh; `<cfg>_comments` runs include_comments=True)
 PAR=2 tools/parity.sh     # two jobs at a time, each in a free light.lock slot (don't wrap it in flock)
@@ -74,7 +74,10 @@ no private data dir. Each job also leaves `<output>.bad`, its mismatching doc id
 full run. Each reference has a `<ref>.stamp` with the Python and package versions that made it
 (`harness/ref_stamp.py`): `make_reference.sh` keeps a reference whose stamp matches the venv, reports `STALE` (redo
 with `FORCE=1`) otherwise, and `parity.sh` warns when comparing against one made with other versions.
-`make_reference.sh` with `SLOTS=1` runs each job in a free light.lock slot.
+
+On the shared box, `parity.sh`, `make_reference.sh` and `bench.sh` take one of the two light.lock slots per job
+(`in_light_slot`, tools/env.sh) and release it in between. Never wrap a loop of jobs, or these scripts, in `flock`:
+a slot held across a loop blocks every other worktree for its whole length. Builds still go under heavy.lock.
 
 Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTPUTS` only with full-corpus parity.
 `python/trafilatura_rs/_options.py` turns extract() arguments into the `Extractor` each version would build, then

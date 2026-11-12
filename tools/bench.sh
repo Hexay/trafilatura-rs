@@ -8,7 +8,8 @@
 # BENCH_CFG=<cfg> benches a harness/meta_configs.py config instead, without rs-trafilatura (BENCH_DOCS=<file>: another
 # corpus file, e.g. docs_raw.jsonl for the bytes configs).
 # V=23 benches trafilatura 2.3.1 (wheel in .venv-t23, no rs-trafilatura).
-# Installs a release build of the extension first (PROFILE=release tools/dev.sh py; a no-op when current).
+# Installs a release build of the extension first (PROFILE=release tools/dev.sh py; a no-op when current; take
+# heavy.lock around that build yourself if it isn't current). Each engine run takes a light.lock slot for itself.
 # REUSE_BASELINE=1 reruns only trafilatura_rs and reuses the other engines' runs from $D/bench-cache, keyed by the
 # arguments, corpus, bench scripts and package versions: instructions stay comparable, CPU times come from another
 # moment's load. Output: $OUT/bench[23][_default|_<cfg>]/ (tools/env.sh), report on stdout.
@@ -37,7 +38,7 @@ for r in $(seq "${ROUNDS:-2}"); do
       cp "$C/$f".* "$B/"
       continue
     fi
-    perf stat -e instructions:u -x, -o "$B/$f.perf" \
+    in_light_slot perf stat -e instructions:u -x, -o "$B/$f.perf" \
       "$py" "$ROOT/harness/bench_extract.py" "$e" "$docs" "$B/$f.jsonl" $N 2> "$B/$f.err"
     if [[ $e != trafilatura_rs ]]; then
       mkdir -p "$C" && cp "$B/$f".* "$C/"
