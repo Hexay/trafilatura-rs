@@ -58,6 +58,8 @@ jobs:
       - name: Install wheel with ${{ matrix.extra }} extra
         run: |
           wheel=$(ls dist/*.whl)
-          python -m pip install "${wheel}[${{ matrix.extra }}]" "lxml==${{ matrix.lxml }}"
+          python -m pip install "${wheel}[${{ matrix.extra }}]"
+          # htmldate 1.11.0 declares lxml>=6.1.3; force the older lxml to check the text path under it
+          python -m pip install --no-deps "lxml==${{ matrix.lxml }}"
           python -m pip list | grep -iE "^(trafilatura|lxml|justext) "
       - run: python -m pytest -q tests

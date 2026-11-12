@@ -22,7 +22,8 @@ pip install "trafilatura-rs[trafilatura2]"   # trafilatura 2.3.1
 
 trafilatura-rs reproduces whichever of the two is installed (2.3.1 when neither is). The extras install the versions
 it is verified against (`[trafilatura]`: trafilatura 1.11.0, lxml 6.0.0–6.1.3, htmldate 1.11.0;
-`[trafilatura2]`: trafilatura 2.3.1, lxml 6.0.0–6.1.3), so you can fall back to and compare with the original. Wheels
+`[trafilatura2]`: trafilatura 2.3.1, lxml 6.0.0–6.1.3; htmldate 1.11.0 itself requires lxml 6.1.3, and with an
+older htmldate metadata calls stay on Python), so you can fall back to and compare with the original. Wheels
 are built for Linux (glibc and musl, x86_64 and aarch64), macOS and Windows (x64 and arm64), Python 3.10+, with
 libxml2 statically linked.
 
