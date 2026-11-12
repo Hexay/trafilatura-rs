@@ -148,6 +148,14 @@ def test_install_swaps_every_function():
     assert trafilatura.bare_extraction is _REF["bare_extraction"] and htmldate.find_date is _REF["find_date"]
 
 
+def test_autoinstall_on_htmldate_import():
+    from test_install import _python
+
+    code = ("import sys, trafilatura_rs._autoinstall; import htmldate, trafilatura_rs; "
+            "print(htmldate.find_date is trafilatura_rs.find_date, 'trafilatura' in sys.modules)")
+    assert _python(code) == "True True"
+
+
 def test_bare_extraction_deprecations_point_at_the_caller():
     if V1:
         pytest.skip("2.x deprecations")
