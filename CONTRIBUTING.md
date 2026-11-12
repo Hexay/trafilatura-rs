@@ -65,8 +65,9 @@ Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTP
 into `_core.extract` keywords; a new option goes there, gets a `meta_configs.py` entry and a `tests/` case.
 
 A new lxml release joins `_versions.REPRODUCES` after its Python output equals 6.1.3's on the full corpus: install it
-with `uv pip install --target <dir> lxml==X`, rerun the `final:balanced_comments`, `final:fineweb` and
-`meta:balanced_json` references (and the 2.3.1 ones) with `PYTHONPATH=<dir>`, and compare them with the 6.1.3 files.
+with `uv pip install --target <dir> lxml==X`, rerun the `final:balanced_comments`, `final:fineweb`,
+`meta:balanced_md_comments` and `meta:balanced_json` references (and the 2.3.1 ones) with `PYTHONPATH=<dir>`, and
+compare them with the 6.1.3 files. Rust output does not depend on lxml, so no Rust run is needed.
 
 ## Benchmark
 
