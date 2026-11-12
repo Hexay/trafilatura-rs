@@ -16,15 +16,41 @@ pub fn check_metadata(doc: &Document, opts: &Options) -> Result<()> {
     Ok(())
 }
 
-/// `str.lower()`, where Rust's mapping is known to agree: Final_Sigma and cased letters outside long-stable blocks
-/// (case pairs keep being added after Unicode 15.1, Python 3.13's) are left to Python.
+/// `str.lower()`, where Rust's mapping is known to agree: cased letters outside long-stable blocks (case pairs keep
+/// being added after Unicode 15.1, Python 3.13's) are left to Python. Both apply the same Final_Sigma rule to `Σ`, so
+/// it is ported only where its context's Cased/Case_Ignorable properties cannot differ between Unicode versions.
 fn py_lower(s: &str) -> Result<String> {
     let old_block = |c: u32| c < 0x1c80 || (0x1e00..0x2000).contains(&c) || (0xff21..0xff3b).contains(&c);
-    let stable = |c: char| c != '\u{3a3}' && (old_block(c as u32) || c.to_lowercase().eq(std::iter::once(c)));
-    if s.chars().all(stable) {
+    let stable = |c: char| old_block(c as u32) || c.to_lowercase().eq(std::iter::once(c));
+    let sigmas_known = s
+        .match_indices('\u{3a3}')
+        .all(|(i, _)| sigma_side(s[..i].chars().rev()).is_some() && sigma_side(s[i + 2..].chars()).is_some());
+    if s.chars().all(stable) && sigmas_known {
         Ok(s.to_lowercase())
     } else {
         Err(Error::Unsupported("str.lower() outside the stable range".into()))
+    }
+}
+
+/// Final_Sigma's scan away from a `Σ`: skip Case_Ignorable, then whether a Cased letter follows. None when a character
+/// on the way is not plainly one or the other.
+fn sigma_side(mut chars: impl Iterator<Item = char>) -> Option<bool> {
+    let cased_letter = |c: char| {
+        let c32 = c as u32;
+        let block = c.is_ascii()
+            || (0xc0..0x250).contains(&c32)
+            || (0x386..0x530).contains(&c32)
+            || (0x1f00..0x2000).contains(&c32);
+        block && c.is_alphabetic() && (c.is_lowercase() || c.is_uppercase())
+    };
+    loop {
+        match chars.next() {
+            None => return Some(false),
+            Some('\'' | '.' | ':' | '^' | '`') => continue,
+            Some(c) if cased_letter(c) => return Some(true),
+            Some(c) if c.is_ascii() || c.is_whitespace() => return Some(false),
+            Some(_) => return None,
+        }
     }
 }
 
@@ -58,14 +84,23 @@ pub fn prune_xpath(tree: Node, opts: &Options, mut remove: impl FnMut(Node) -> R
 
 #[cfg(test)]
 mod tests {
-    use super::check_authors;
+    use super::{check_authors, py_lower};
 
     #[test]
     fn check_authors_matches_python() {
-        let bl = ["admin".to_owned(), "մեսսի".to_owned()];
+        let bl = ["admin".to_owned(), "մեսսի".to_owned(), "οδος".to_owned()];
         assert_eq!(check_authors(" Admin ;Jane Doe; ", &bl).unwrap().as_deref(), Some("Jane Doe"));
         assert_eq!(check_authors("ADMIN", &bl).unwrap(), None);
         assert_eq!(check_authors("Ավելացրեց; Մեսսի", &bl).unwrap().as_deref(), Some("Ավելացրեց"));
-        assert!(check_authors("ΟΔΟΣ", &bl).is_err());
+        assert_eq!(check_authors("ΟΔΟΣ; ΑΝΔΡΕΑΣ", &bl).unwrap().as_deref(), Some("ΑΝΔΡΕΑΣ"));
+    }
+
+    #[test]
+    fn final_sigma_matches_python() {
+        let cases = [("ΑΝΕΣΤΗ ΑΛΕΞΑΝΔΡΑ", "ανεστη αλεξανδρα"), ("Σ", "σ"), ("ΑΣ.Β", "ασ.β"), ("ΑΣ ΚΑΙ", "ας και")];
+        for (s, lower) in cases {
+            assert_eq!(py_lower(s).unwrap(), lower);
+        }
+        assert!(py_lower("ΑΣ\u{301}").is_err());
     }
 }

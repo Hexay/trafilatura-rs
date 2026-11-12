@@ -183,6 +183,16 @@ The same calls against trafilatura 2.3.1 (`V=23 BENCH_CFG=<cfg> tools/bench.sh 3
 | `with_metadata=True, url=...` | 41.07 ms | 16.14 ms | 2.5x | 2.5x |
 | `output_format="json", with_metadata=True` | 36.82 ms | 13.22 ms | 2.8x | 2.5x |
 
+With comments (trafilatura's default), and the command line's call (`extract(bytes, options=Extractor())`), first
+3,000 pages:
+
+| Call | trafilatura 1.11 | trafilatura-rs | Speedup (CPU) | trafilatura 2.3.1 | trafilatura-rs | Speedup (CPU) |
+|---|---:|---:|---:|---:|---:|---:|
+| `output_format="markdown"` | 9.65 ms | 1.14 ms | 8.5x | 21.08 ms | 1.64 ms | 12.9x |
+| `with_metadata=True, url=...` | 30.69 ms | 11.75 ms | 2.6x | 37.92 ms | 10.90 ms | 3.5x |
+| `output_format="json", with_metadata=True, url=..., record_id=...` | 26.01 ms | 8.72 ms | 3.0x | 39.11 ms | 10.19 ms | 3.8x |
+| command line, bytes input | 16.26 ms | 1.98 ms | 8.2x | 20.51 ms | 2.16 ms | 9.5x |
+
 Mean CPU time per page. With metadata, about half of the remaining time is dateparser, which htmldate calls for
 unusual date strings and which trafilatura-rs calls back into rather than ports (see
 [docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)).

@@ -128,7 +128,8 @@ Single documents inside a covered call (`Unsupported` raised by the core, then r
 occur on the 10,666-page corpus:
 
 - `str.title()` on a string containing `Σ` (Final_Sigma context rule not ported); with an `author_blacklist`,
-  `str.lower()` on an author with `Σ` or with cased letters outside long-stable Unicode blocks.
+  `str.lower()` on an author with cased letters outside long-stable Unicode blocks, or with a `Σ` whose nearest
+  neighbor (past `'.:^` and backtick) is not ASCII, whitespace or a Latin, Greek or Cyrillic letter.
 - A `prune_xpath` expression that errors or selects anything but non-root elements (strings, attributes, numbers),
   or uses `re:` (unbound for a bare `XPath(expr)` in lxml).
 - A str with lone surrogates (lxml's parser takes them; Rust strings cannot).
