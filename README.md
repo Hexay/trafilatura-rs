@@ -20,10 +20,11 @@ pip install "trafilatura-rs[trafilatura]"    # trafilatura 1.11.0
 pip install "trafilatura-rs[trafilatura2]"   # trafilatura 2.3.1
 ```
 
-trafilatura-rs reproduces whichever of the two is installed (2.3.1 when neither is). The extras install the exact
-versions it is verified against (`[trafilatura]`: trafilatura 1.11.0, lxml 6.1.3, htmldate 1.11.0;
-`[trafilatura2]`: trafilatura 2.3.1, lxml 6.1.3), so you can fall back to and compare with the original. Wheels are
-built for Linux, macOS and Windows, Python 3.10+, with libxml2 statically linked.
+trafilatura-rs reproduces whichever of the two is installed (2.3.1 when neither is). The extras install the versions
+it is verified against (`[trafilatura]`: trafilatura 1.11.0, lxml 6.0.0–6.1.3, htmldate 1.11.0;
+`[trafilatura2]`: trafilatura 2.3.1, lxml 6.0.0–6.1.3), so you can fall back to and compare with the original. Wheels
+are built for Linux (glibc and musl, x86_64 and aarch64), macOS and Windows (x64 and arm64), Python 3.10+, with
+libxml2 statically linked.
 
 ## Quickstart
 
@@ -55,8 +56,10 @@ JSON and metadata output are covered too (see below).
 
 ## What's supported
 
-`extract()` with string input, in the configurations below (`trafilatura_rs.verified_outputs()`). Other arguments,
-bytes input and other output formats run Python trafilatura.
+`extract()` on str or bytes, in the configurations below (`trafilatura_rs.verified_outputs()`). Other arguments and
+output formats run Python trafilatura. bytes are decoded by the installed trafilatura's own `decode_file` (as its
+`load_html` does), then extracted in Rust; that includes the trafilatura command line, which passes file contents
+as bytes with `options=Extractor(...)`.
 
 Plain text, identical pages out of 10,666, with comments (`include_comments=True`, trafilatura's default) and
 without:
@@ -72,27 +75,39 @@ without:
 
 With 2.3.1, `deduplicate` given an `LRUCache` runs Python trafilatura.
 
-Markdown, JSON and metadata, identical pages out of 10,666, with `include_comments=False`:
+Markdown, JSON and metadata: every output below with each of default, `favor_precision=True`, `favor_recall=True`
+and fast (`no_fallback`/`fast`), with and without comments, gives identical pages, 10,666 out of 10,666, on both
+1.11.0 and 2.3.1:
 
-| Configuration | Arguments | 1.11.0 | 2.3.1 |
-|---|---|---|---|
-| Markdown | `output_format="markdown"` | 10,666 | 10,666 |
-| Markdown, datatrove / FineWeb | `output_format="markdown", favor_precision=True, deduplicate=True` | 10,666 | 10,666 |
-| Text with metadata | `with_metadata=True` | 10,666 | 10,666 |
-| JSON | `output_format="json"` | 10,666 | 10,666 |
-| JSON with metadata | `output_format="json", with_metadata=True` | 10,666 | 10,666 |
-| JSON with metadata, precision | `output_format="json", with_metadata=True, favor_precision=True` | 10,666 | 10,666 |
+| Output | Arguments |
+|---|---|
+| Markdown | `output_format="markdown"` (or `include_formatting=True` with txt) |
+| Text with metadata | `with_metadata=True` |
+| JSON | `output_format="json"` |
+| JSON with metadata | `output_format="json", with_metadata=True` |
+| Markdown with metadata | `output_format="markdown", with_metadata=True` (default focus only) |
 
-`url` and `record_id` can be passed with any of them. `deduplicate=True` is verified with the precision
+`url` and `record_id` can be passed with any of them. `deduplicate=True` is verified with the precision and recall
 configurations. Like trafilatura, it keeps a process-global cache, so output depends on document order exactly as in
 Python; `trafilatura_rs.reset_caches()` clears it.
+
+These options combine with any configuration above, each verified on the full corpus for both versions:
+
+- `options=Extractor(...)`, `config=` / `settingsfile=` (settings.cfg sizes, `MAX_TREE_SIZE` in 2.3.1,
+  `EXTENSIVE_DATE_SEARCH`), `max_tree_size=` (1.11)
+- `url_blacklist`, `author_blacklist`, `only_with_metadata`, `prune_xpath` (expressions selecting elements; anything
+  else runs Python)
+- `date_extraction_params` with `original_date`, `extensive_search`, `max_date` (and `outputformat="%Y-%m-%d"`)
+- bytes input
+
+A call with `favor_precision=True, favor_recall=True` is the recall call (trafilatura gives recall precedence).
 
 ### Metadata
 
 ```python
-trafilatura.extract(html, include_comments=False, with_metadata=True, url=url)        # Rust: text with a --- header
-trafilatura.extract(html, include_comments=False, output_format="json", with_metadata=True)  # Rust
-trafilatura.extract(html, include_comments=False, with_metadata=True, deduplicate=True)      # Python
+trafilatura.extract(html, with_metadata=True, url=url)                  # Rust: text with a --- header
+trafilatura.extract(html, output_format="json", with_metadata=True)    # Rust
+trafilatura.extract(html, with_metadata=True, deduplicate=True)        # Python
 ```
 
 Title, author, date, sitename, categories, tags, license and the JSON-LD parsing run in Rust, including a port of
@@ -102,7 +117,7 @@ version. Metadata calls therefore need trafilatura installed and Python 3.11+. T
 (`REPRODUCES_METADATA`); with another version they stay on Python.
 
 As in trafilatura, the date search is bounded by today's date (`max_date`). `date_extraction_params` is supported
-when it only sets `max_date`. `with_metadata=True` with `deduplicate=True` stays on Python, because a document that
+when it sets `max_date` and optionally `original_date` / `extensive_search`. `with_metadata=True` with `deduplicate=True` stays on Python, because a document that
 needs Python would update the wrong deduplication cache. Rare documents the port leaves to Python (listed in
 [docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)) are rerun there automatically. None occur in the
 10,666-page corpus.
@@ -113,6 +128,9 @@ Each configuration is checked page by page against trafilatura 1.11.0 and 2.3.1 
 comparing final output and per-stage tree hashes. The jusText and readability fallbacks are checked separately.
 Exactness holds because the parser is the same: trafilatura-rs vendors and statically links libxml2 2.14.6, the
 version lxml 6.1.3 bundles, with the same parsing options (see [PATCHES.md](crates/libxml2-sys/PATCHES.md)).
+trafilatura's output under every other lxml 6.0.x/6.1.x release (libxml2 2.14.4 to 2.14.6) is identical to its
+output under 6.1.3 on the full corpus (default, FineWeb and JSON-with-metadata calls, both versions); lxml 5.x
+differs on about 2% of pages and runs Python.
 What changed between the two versions: [docs/trafilatura-2x-diff.md](docs/trafilatura-2x-diff.md) and
 [docs/trafilatura-23-diff.md](docs/trafilatura-23-diff.md).
 

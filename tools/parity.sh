@@ -9,7 +9,7 @@
 set -euo pipefail
 . "$(dirname "$0")/env.sh"
 BIN=$(dirname "$H")
-DOCS=$D/docs.jsonl
+DOCS=$D/${CORPUS:-docs.jsonl}  # CORPUS=docs_raw.jsonl for the bytes meta configs
 if [[ ${1:-} == show* ]]; then
   ref=$ROOT/harness/ref_stages.py py=$PY
   [ "$1" = show2 ] && ref=$ROOT/harness/ref2_stages.py py=$PY23

@@ -37,9 +37,13 @@ tools/parity.sh           # every job; or e.g. tools/parity.sh stages final:fine
 LIMIT=500 tools/parity.sh final:fineweb
 tools/parity.sh show 123 txt                                  # diff one doc's stage (show2 for 2.3.1)
 TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast-path XPaths against libxml2
-tools/parity.sh meta:balanced_json   # markdown/metadata/json configs (harness/ref_meta.py), via the extension
+tools/parity.sh meta:balanced_json   # markdown/metadata/json and option configs (harness/meta_configs.py), via the
+                                     # extension and trafilatura_rs's own argument translation
 tools/parity.sh meta2:balanced_json  # same against 2.3.1 (.venv-t23; build with V=23 tools/dev.sh py)
+harness/ref_meta.py list             # every meta config: the focus x output x comments grid, then option extras
 harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc
+harness/export_raw.py docs.jsonl <warc> docs_raw.jsonl         # raw HTTP payloads for the bytes configs; reference
+                                     # and check those with CORPUS=docs_raw.jsonl (meta:bytes_default, meta:cli_bytes)
 harness/gen_meta23.sh                # regenerate 2.3.1 metadata regexes, XPaths and Unicode tables
 harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_date alone, with and without url
 harness/diff_dates.py collect docs.jsonl strings.jsonl balanced_json   # log the corpus' date strings, then
@@ -57,6 +61,12 @@ callbacks run as they do for users. Both sides pin the wall clock (see docs/meta
 counts documents the core declined (`Unsupported`), which the Python API reruns in Python.
 
 Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTPUTS` only with full-corpus parity.
+`python/trafilatura_rs/_options.py` turns extract() arguments into the `Extractor` each version would build, then
+into `_core.extract` keywords; a new option goes there, gets a `meta_configs.py` entry and a `tests/` case.
+
+A new lxml release joins `_versions.REPRODUCES` after its Python output equals 6.1.3's on the full corpus: install it
+with `uv pip install --target <dir> lxml==X`, rerun the `final:balanced_comments`, `final:fineweb` and
+`meta:balanced_json` references (and the 2.3.1 ones) with `PYTHONPATH=<dir>`, and compare them with the 6.1.3 files.
 
 ## Benchmark
 
@@ -79,6 +89,6 @@ CFLAGS=-fno-omit-frame-pointer CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="
 ## Releasing
 
 Bump `version` in `pyproject.toml`, merge to `main`, then `git tag vX.Y.Z && git push origin vX.Y.Z`.
-`.github/workflows/release.yml` builds abi3 wheels (Linux x86_64/aarch64, macOS x86_64/arm64, Windows x64) and an
-sdist, smoke-tests each against trafilatura, checks the tag matches the version, and publishes to PyPI by trusted
+`.github/workflows/release.yml` builds abi3 wheels (Linux manylinux and musllinux x86_64/aarch64, macOS
+x86_64/arm64, Windows x64/arm64) and an sdist, smoke-tests each against trafilatura, checks the tag matches the version, and publishes to PyPI by trusted
 publishing (environment `pypi`).
