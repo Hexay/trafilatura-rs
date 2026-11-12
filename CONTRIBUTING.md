@@ -44,10 +44,13 @@ harness/gen_meta23.sh                # regenerate 2.3.1 metadata regexes, XPaths
 harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_date alone, with and without url
 harness/diff_dates.py collect docs.jsonl strings.jsonl balanced_json   # log the corpus' date strings, then
 harness/diff_dates.py check strings.jsonl                     # native date shortcuts vs dateutil/dateparser
+harness/diff_dates.py memo strings.jsonl                      # _external_date memo: call order, time of day
 ```
 
 After a dateparser, python-dateutil or htmldate bump, regenerate `crates/trafilatura-rs/src/dates/dateparser/tables.txt`
-(`harness/gen_dateparser_tables.py`), rerun `diff_dates.py` and update `REPRODUCES_DATES`.
+(`harness/gen_dateparser_tables.py`), rerun `diff_dates.py` and update `REPRODUCES_DATES`. After a `regex` or Python
+(Unicode) bump, regenerate `chars.txt` (`harness/gen_dateparser_chars.py`) and `tables.txt`; until then non-ASCII
+strings skip the shortcut.
 
 `meta:`/`meta2:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`

@@ -2,6 +2,7 @@
 //! engine selection, fallback and the trafilatura monkeypatch live in python/trafilatura_rs/.
 mod dates;
 mod hooks;
+mod memo;
 
 use hooks::PyHooks;
 use pyo3::create_exception;

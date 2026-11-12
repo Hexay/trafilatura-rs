@@ -7,6 +7,7 @@ use trafilatura_rs::dates::{self, dateutil};
 use trafilatura_rs::py::datetime::DateTime;
 
 static ENABLED: OnceLock<bool> = OnceLock::new();
+static UNICODE: OnceLock<bool> = OnceLock::new();
 static LOCAL_TZNAMES: OnceLock<Vec<String>> = OnceLock::new();
 
 pub(crate) fn enabled(py: Python<'_>) -> bool {
@@ -14,6 +15,23 @@ pub(crate) fn enabled(py: Python<'_>) -> bool {
         let check = || py.import("trafilatura_rs._versions")?.call_method0("native_dates")?.extract();
         check().unwrap_or(false)
     })
+}
+
+/// Whether the running `unicodedata` and `regex` are the ones the non-ASCII dateparser shortcut was generated for.
+fn unicode(py: Python<'_>) -> bool {
+    *UNICODE.get_or_init(|| {
+        let check = || -> PyResult<bool> {
+            let unidata: String = py.import("unicodedata")?.getattr("unidata_version")?.extract()?;
+            let regex: String = py.import("regex")?.getattr("__version__")?.extract()?;
+            Ok((unidata.as_str(), regex.as_str()) == dates::unicode_versions())
+        };
+        check().unwrap_or(false)
+    })
+}
+
+/// `_external_date(s) if has_date_cue(s, ...) else None` is certainly None.
+pub(crate) fn external_date_is_none(py: Python<'_>, s: &str, min_year: i32, max_year: i32) -> bool {
+    enabled(py) && dates::external_date_is_none(s, min_year, max_year, unicode(py))
 }
 
 /// `time.tzname` when a name there makes dateutil use tzlocal with a nonzero offset; empty for a fixed UTC zone.
@@ -85,6 +103,6 @@ pub(crate) fn _native_dateutil<'py>(
 
 /// Differential tests: (`has_date_cue`, whether `_external_date` is provably None) natively.
 #[pyfunction]
-pub(crate) fn _native_external_date(s: &str, min_year: i32, max_year: i32) -> (Option<bool>, bool) {
-    (dates::has_date_cue(s, min_year, max_year), dates::external_date_is_none(s, min_year, max_year))
+pub(crate) fn _native_external_date(py: Python<'_>, s: &str, min_year: i32, max_year: i32) -> (Option<bool>, bool) {
+    (dates::has_date_cue(s, min_year, max_year), dates::external_date_is_none(s, min_year, max_year, unicode(py)))
 }

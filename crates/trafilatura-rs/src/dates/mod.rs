@@ -38,7 +38,14 @@ pub fn has_date_cue(s: &str, min_year: i32, max_year: i32) -> Option<bool> {
     Some(false)
 }
 
-/// Whether `_external_date(s) if has_date_cue(s, ...) else None` (htmldate.extractors) is certainly None.
-pub fn external_date_is_none(s: &str, min_year: i32, max_year: i32) -> bool {
-    has_date_cue(s, min_year, max_year) == Some(false) || dateparser::no_locale_applies(s)
+/// Whether `_external_date(s) if has_date_cue(s, ...) else None` (htmldate.extractors) is certainly None. Non-ASCII
+/// strings are tried only with `unicode` (see `unicode_versions`).
+pub fn external_date_is_none(s: &str, min_year: i32, max_year: i32, unicode: bool) -> bool {
+    has_date_cue(s, min_year, max_year) == Some(false) || dateparser::no_locale_applies(s, unicode)
+}
+
+/// (`unicodedata.unidata_version`, `regex.__version__`) the non-ASCII shortcut was generated for: dateparser reads
+/// strings through both, so it holds only where they are installed.
+pub fn unicode_versions() -> (&'static str, &'static str) {
+    dateparser::versions()
 }
