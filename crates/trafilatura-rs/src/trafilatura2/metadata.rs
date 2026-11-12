@@ -4,7 +4,7 @@ use super::meta_regexes::JSON_MINIFY;
 use super::metadata_fields::{extract_author, extract_catstags, extract_license, extract_title, extract_url};
 use super::metadata_meta::examine_meta;
 use crate::dom::{Ctx, Error, Node, Result};
-use crate::htmldate::{find_date, DateParams};
+use crate::htmldate::find_date;
 use crate::py::case::title;
 use crate::py::json::{loads_with, LoadError};
 use crate::py::pyre::group;
@@ -12,8 +12,9 @@ use crate::py::value::Value;
 use crate::trafilatura::core::Request;
 use crate::trafilatura::document::Document;
 use crate::trafilatura::meta_regexes::META_URL;
-use crate::trafilatura::metadata::clean_and_trim;
+use crate::trafilatura::metadata::{blacklist_author, clean_and_trim, date_params};
 use crate::trafilatura::metadata_fields::examine_title_element;
+use crate::trafilatura::settings::Options;
 
 /// `extract_meta_json`: may fail half-way with fields already set, like Python.
 fn extract_meta_json(tree: Node, metadata: &mut Document) -> Result<()> {
@@ -55,8 +56,8 @@ fn as_value(s: Option<String>) -> Value {
     s.map_or(Value::None, Value::Str)
 }
 
-/// `extract_metadata(tree, url, date_params)` with an empty author blacklist.
-pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request) -> Result<Document> {
+/// `extract_metadata(tree, url, date_params, author_blacklist)`.
+pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request, opts: &Options) -> Result<Document> {
     let hooks = req.hooks;
     let max_date = req.max_date.ok_or_else(|| Error::Unsupported("max_date not given".into()))?;
     let mut metadata = examine_meta(tree, hooks)?;
@@ -70,17 +71,18 @@ pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request) -> Result<Document
     if !metadata.title.truthy() {
         metadata.title = as_value(extract_title(ctx, tree)?);
     }
+    blacklist_author(&mut metadata.author, &opts.author_blacklist)?;
     if !metadata.author.truthy() {
         metadata.author = as_value(extract_author(ctx, tree)?);
     }
+    blacklist_author(&mut metadata.author, &opts.author_blacklist)?;
     if !metadata.url.truthy() {
         metadata.url = as_value(extract_url(tree, req.url, hooks)?);
     }
     if let Some(url) = metadata.url.as_str().filter(|u| !u.is_empty()) {
         metadata.hostname = as_value(hooks.extract_domain(url)?);
     }
-    let params = DateParams { original_date: true, extensive_search: true, max_date: max_date.to_owned() };
-    metadata.date = as_value(find_date(ctx, tree, metadata.url.as_str(), &params, hooks)?);
+    metadata.date = as_value(find_date(ctx, tree, metadata.url.as_str(), &date_params(opts, max_date), hooks)?);
     if !metadata.sitename.truthy() {
         metadata.sitename = extract_sitename(tree)?;
     }

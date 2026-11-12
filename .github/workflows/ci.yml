@@ -25,22 +25,30 @@ jobs:
       - run: cargo test --workspace
 
   python:
-    name: pytest (parity vs trafilatura ${{ matrix.trafilatura }} + lxml 6.1.3)
+    name: pytest (Python ${{ matrix.python }}, parity vs trafilatura ${{ matrix.trafilatura }} + lxml ${{ matrix.lxml }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        python: ["3.13", "3.14"]
+        trafilatura: ["1.11.0", "2.3.1"]
+        lxml: ["6.1.3"]
         include:
           - trafilatura: "1.11.0"
             extra: test
           - trafilatura: "2.3.1"
             extra: test2
+          # the oldest lxml REPRODUCES accepts (bundles libxml2 2.14.4)
+          - python: "3.13"
+            trafilatura: "2.3.1"
+            extra: test2
+            lxml: "6.0.0"
     steps:
       - uses: actions/checkout@v7
       # The parity corpus and its references were produced on Python 3.13 (tools/dev.sh setup).
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python }}
       - run: rustup toolchain install stable --profile minimal && rustup default stable
       - uses: Swatinem/rust-cache@v2
       - name: Build wheel
@@ -50,6 +58,6 @@ jobs:
       - name: Install wheel with ${{ matrix.extra }} extra
         run: |
           wheel=$(ls dist/*.whl)
-          python -m pip install "${wheel}[${{ matrix.extra }}]"
+          python -m pip install "${wheel}[${{ matrix.extra }}]" "lxml==${{ matrix.lxml }}"
           python -m pip list | grep -iE "^(trafilatura|lxml|justext) "
       - run: python -m pytest -q tests

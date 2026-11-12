@@ -1,5 +1,5 @@
 //! trafilatura 2.3.1 core.py: `trafilatura_sequence`, `bare_extraction` and `extract` for txt, markdown and json
-//! output (no language checks or blacklists).
+//! output (no language checks).
 use super::baseline::{baseline, html2txt_len};
 use super::deduplication::content_fingerprint;
 use super::external::{compare_extraction, justext_rescue};
@@ -12,6 +12,7 @@ use super::metadata::extract_metadata;
 use super::output::determine_returnstring;
 use super::settings::{Focus, Options};
 use super::utils::load_html;
+use super::xml::delete_element;
 use super::xpaths::{RAW_TREE_PRUNE_XPATH, REMOVE_COMMENTS_AND_LISTS_XPATH, REMOVE_COMMENTS_XPATH};
 use crate::dom::{Ctx, Error, Node, Result};
 use crate::py;
@@ -19,6 +20,7 @@ use crate::py::value::Value;
 pub use crate::trafilatura::core::Request;
 use crate::trafilatura::deduplication::{duplicate_test, Lru};
 use crate::trafilatura::document::Document;
+use crate::trafilatura::filters;
 use crate::trafilatura::htmlprocessing::Env;
 use crate::trafilatura::main_extractor_extract::body_text;
 use crate::trafilatura::settings::Format;
@@ -66,8 +68,12 @@ pub fn extract(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Resu
 /// `bare_extraction` up to the TypeError/ValueError catch.
 fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| Error::Value("empty HTML tree".into()))?;
-    // url_blacklist is empty and only_with_metadata off: no checks on the metadata
-    let mut document = if opts.with_metadata { extract_metadata(ctx, tree, req)? } else { Document::default() };
+    let mut document = Document::default();
+    if opts.with_metadata {
+        document = extract_metadata(ctx, tree, req, opts)?;
+        filters::check_metadata(&document, opts)?;
+    }
+    filters::prune_xpath(tree, opts, |node| delete_element(ctx, node, true))?;
     let mut env = Env { ctx, opts, lru };
     let ((postbody, temp_text), (commentsbody, temp_comments)) = trafilatura_sequence(&mut env, tree)?;
     if let Some(max) = opts.max_tree_size {

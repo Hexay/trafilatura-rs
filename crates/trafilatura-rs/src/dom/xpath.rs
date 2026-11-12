@@ -167,6 +167,28 @@ impl Node {
         self.lib_strings(expr, &e)
     }
 
+    /// `XPath(expr)(el)` for a caller's expression, when it yields only elements that have a parent element; None
+    /// on errors and anything else. lxml binds no `re:` prefix for a bare `XPath(expr)`, so those are None too.
+    pub fn xpath_user_elements(self, expr: &str) -> Option<Vec<Node>> {
+        if expr.contains("re:") {
+            return None;
+        }
+        let e = entry(expr).ok()?;
+        unsafe {
+            let ctxt = ffi::xmlXPathNewContext(self.doc());
+            assert!(!ctxt.is_null(), "out of memory");
+            (*ctxt).node = self.raw();
+            let obj = ffi::xmlXPathCompiledEval(e.comp.0, ctxt);
+            ffi::xmlXPathFreeContext(ctxt);
+            if obj.is_null() {
+                return None;
+            }
+            let out = child_elements(obj);
+            ffi::xmlXPathFreeObject(obj);
+            out
+        }
+    }
+
     fn lib_strings(self, expr: &str, e: &Entry) -> Result<Vec<String>> {
         Ok(match self.eval(expr, e.comp.0)? {
             XValue::Nodes(items) => items
@@ -179,6 +201,26 @@ impl Node {
             _ => Vec::new(),
         })
     }
+}
+
+unsafe fn child_elements(obj: *mut ffi::xmlXPathObject) -> Option<Vec<Node>> {
+    if (*obj).type_ != ffi::xmlXPathObjectType_XPATH_NODESET {
+        return None;
+    }
+    let set = (*obj).nodesetval;
+    let mut nodes = Vec::new();
+    if !set.is_null() {
+        for i in 0..(*set).nodeNr as usize {
+            let n = *(*set).nodeTab.add(i);
+            if !raw::is_element(n) {
+                return None;
+            }
+            let node = Node::from_raw(n)?;
+            node.parent()?;
+            nodes.push(node);
+        }
+    }
+    Some(nodes)
 }
 
 unsafe fn unwrap(obj: *mut ffi::xmlXPathObject) -> XValue {

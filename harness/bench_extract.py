@@ -7,8 +7,8 @@ usage: bench_extract.py {none|trafilatura|trafilatura_rs|rs} docs.jsonl out.json
   none         no extraction (load/loop baseline for instruction counts)
 CALL=default switches every engine to its default call: trafilatura.extract(html) (include_comments=True, no dedup)
 and rs_trafilatura.extract(html).main_content.
-With BENCH_CFG=<cfg> (a harness/ref_meta.py config), trafilatura and trafilatura_rs call extract() with that
-config's arguments instead of datatrove's (rs is not comparable there).
+With BENCH_CFG=<cfg> (a harness/meta_configs.py config), trafilatura and trafilatura_rs call extract() with that
+config's arguments instead of datatrove's (rs is not comparable there); bytes configs need BENCH_DOCS=docs_raw.jsonl.
 out.jsonl: {"i", "ns", "out"} per doc; summary on stdout (bench_report.py aggregates runs)."""
 import importlib.metadata  # noqa: F401  datatrove 0.10 uses it without importing it
 import json
@@ -21,14 +21,20 @@ DEFAULT_CALL = os.environ.get("CALL", "datatrove") == "default"
 
 
 def config_extractor(engine, cfg):
-    from ref_meta import kwargs_for, pin_wall_clock
+    from meta_configs import kwargs_for
+    from ref_meta import pin_wall_clock
 
     pin_wall_clock()
     if engine == "trafilatura_rs":
         from trafilatura_rs import extract
     else:
         from trafilatura import extract
-    return lambda doc: extract(doc["html"], include_comments=False, **kwargs_for(cfg, doc))
+
+    def run(doc):
+        html, kwargs = kwargs_for(cfg, doc)
+        return extract(html, **kwargs)
+
+    return run
 
 
 def extractor(engine):
@@ -68,8 +74,9 @@ def extractor(engine):
 def main():
     engine, path, out_path = sys.argv[1:4]
     n = int(sys.argv[4]) if len(sys.argv) > 4 else None
-    with open(path, encoding="utf-8") as f:
-        docs = [json.loads(line) for _, line in zip(range(n or 10**9), f)]
+    from ref_meta import docs as read_docs
+
+    docs = [d for _, d in zip(range(n or 10**9), read_docs(path))]
     extract = extractor(engine)
     clock = time.process_time_ns
     rows = []

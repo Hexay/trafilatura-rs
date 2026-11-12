@@ -111,15 +111,7 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
     let backup = with_backup.then(|| (tree.text_content_len(), tree.deep_copy(ctx)));
     for expression in nodelist {
         for subtree in tree.xpath_nodes(expression)? {
-            if let Some(tail) = subtree.tail() {
-                if let Some(prev) = subtree.prev().or_else(|| subtree.parent()) {
-                    prev.set_tail(Some(&format!("{} {}", prev.tail().unwrap_or_default(), tail)))?;
-                }
-            }
-            subtree
-                .parent()
-                .ok_or_else(|| attribute_error("'NoneType' object has no attribute 'remove'"))?
-                .remove(ctx, subtree)?;
+            prune_node(ctx, subtree)?;
         }
     }
     if let Some((old_len, backup)) = backup {
@@ -127,6 +119,16 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
         return Ok(if new_len as f64 > old_len as f64 / 7.0 { tree } else { backup });
     }
     Ok(tree)
+}
+
+/// `prune_unwanted_nodes`' removal: the tail goes to the previous sibling's tail, else to the parent's tail.
+pub fn prune_node(ctx: &Ctx, subtree: Node) -> Result<()> {
+    if let Some(tail) = subtree.tail() {
+        if let Some(prev) = subtree.prev().or_else(|| subtree.parent()) {
+            prev.set_tail(Some(&format!("{} {}", prev.tail().unwrap_or_default(), tail)))?;
+        }
+    }
+    subtree.parent().ok_or_else(|| attribute_error("'NoneType' object has no attribute 'remove'"))?.remove(ctx, subtree)
 }
 
 /// `collect_link_info`: (lengths, count, short elements). Callers only use the text list's size, so each link's
