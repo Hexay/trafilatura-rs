@@ -1,6 +1,6 @@
 //! The Python-side leaves of metadata extraction (trafilatura_rs::hooks), called back into the running interpreter.
 //! Functions are looked up at call time in the modules that use them, so test-time patches apply.
-use crate::dates;
+use crate::{dates, memo};
 use pyo3::exceptions::{PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -79,7 +79,7 @@ impl Hooks for PyHooks {
 
     fn external_date(&self, s: &str, min_year: i32, max_year: i32) -> Result<Option<DateTime>> {
         call(|py| {
-            if dates::enabled(py) && trafilatura_rs::dates::external_date_is_none(s, min_year, max_year) {
+            if dates::external_date_is_none(py, s, min_year, max_year) {
                 return Ok(None);
             }
             let datetime = func(py, "datetime", "datetime")?;
@@ -87,7 +87,11 @@ impl Hooks for PyHooks {
             if !func(py, "htmldate.extractors", "has_date_cue")?.call1((s, lo, hi))?.is_truthy()? {
                 return Ok(None);
             }
-            to_datetime(&func(py, "htmldate.extractors", "_external_date")?.call1((s,))?)
+            let external = func(py, "htmldate.extractors", "_external_date")?;
+            if dates::enabled(py) {
+                return memo::external_date(py, &external, s);
+            }
+            to_datetime(&external.call1((s,))?)
         })
     }
 

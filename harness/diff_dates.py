@@ -2,6 +2,7 @@
   diff_dates.py collect <docs.jsonl> <strings.jsonl> <cfg>...   log every string the corpus feeds into htmldate's
                                                                  dateutil_parse / has_date_cue (/ _external_date)
   diff_dates.py check <strings.jsonl>                            compare every decided native result with Python
+  diff_dates.py memo <strings.jsonl>                             check the _external_date memo's assumptions
 Every string is tried with both dateutil defaults (pinned day, today) and as a dateparser input; exit 1 on a
 mismatch."""
 import json
@@ -88,18 +89,70 @@ def check(path):
         stats["has_date_cue", "defer" if cue is None else "native"] += 1
         if cue is not None and cue != (expected := ex.has_date_cue(s, datetime(lo, 1, 1), datetime(hi, 1, 1))):
             bad.append(("has_date_cue", s, cue, expected))
-        stats["external_date", "native None" if none else "defer"] += 1
-        if none and (expected := py_external(s, lo, hi)) is not None:
+        expected = py_external(s, lo, hi)
+        script = "ascii" if s.isascii() else "non-ascii"
+        stats["external_date", f"{'native None' if none else 'defer'} {script} (Python {expected is None})"] += 1
+        if none and expected is not None:
             bad.append(("external_date", (s, lo, hi), None, expected))
     for (name, kind), n in sorted(stats.items()):
-        print(f"{name:16} {kind:12} {n}")
+        print(f"{name:16} {kind:36} {n}")
     for b in bad[:50]:
         print("MISMATCH", *map(repr, b))
     print(f"{len(bad)} mismatches")
     return 1 if bad else 0
 
 
+def memo_stable(result, today):
+    """crates/trafilatura-rs-py/src/memo.rs: whether a result computed on local day `today` is kept."""
+    if result is None:
+        return True
+    day = result.toordinal()
+    return abs(day - today) > 3 and all(abs(day + c - today) > 3 for c in (36524, 36525))
+
+
+def memo(path):
+    """The memo's assumptions: within a local day a kept `_external_date` result does not depend on the time of
+    day, and results do not depend on call order."""
+    from datetime import date, time, timedelta
+
+    import dateparser.date as dpd
+    import dateparser.parser as dpp
+    import htmldate.extractors as ex
+
+    today = date.today()
+    days = [today, today + timedelta(1), date(2026, 12, 31), date(2027, 1, 1), date(2068, 12, 31), date(2069, 1, 1)]
+    # two-digit years flip a century on the day they name
+    flips = {f"{d.day} {d:%b} {d.year % 100:02} {t}" for d in days for t in ("00:01", "12:00", "23:59")}
+    rows = [json.loads(line) for line in open(path, encoding="utf-8")]
+    strings = {r["s"] for r in rows} | flips
+    cued = sorted(s for s in strings if ex.has_date_cue(s, datetime(1900, 1, 1), datetime(2100, 1, 1)))
+    first = [ex._external_date(s) for s in cued]
+    if [ex._external_date(s) for s in reversed(cued)][::-1] != first:
+        print("MISMATCH call order")
+        return 1
+    bad, kept, clocked = 0, 0, set()
+    for day in days:
+        results = []
+        for t in (time(0, 5), time(12), time(23, 55)):
+            instant = datetime.combine(day, t)
+            dpp._now = dpd._now = lambda settings, tz=None, i=instant: i.astimezone(tz).replace(tzinfo=None) if tz else i
+            results.append([ex._external_date(s) for s in cued])
+        for i, s in enumerate(cued):
+            got = [r[i] for r in results]
+            clocked |= {s} if len(set(got)) > 1 else set()
+            for r in got:
+                if memo_stable(r, day.toordinal()):
+                    kept += 1
+                    if any(g != r for g in got):
+                        bad += 1
+                        print("MISMATCH", day, repr(s), got)
+    print(f"{len(cued)} strings, {kept} kept results over {len(days)} days x 3 times, "
+          f"{len(clocked)} strings vary within a day: {sorted(clocked)[:10]}")
+    print(f"{bad} mismatches")
+    return 1 if bad else 0
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "collect":
         sys.exit(collect(sys.argv[2], sys.argv[3], sys.argv[4:]))
-    sys.exit(check(sys.argv[2]))
+    sys.exit(memo(sys.argv[2]) if sys.argv[1] == "memo" else check(sys.argv[2]))

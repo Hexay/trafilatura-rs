@@ -42,6 +42,19 @@ fn dateutil_defers() {
 fn external_date() {
     assert_eq!(has_date_cue("Posted by admin in news", 1995, 2026), Some(false));
     assert_eq!(has_date_cue("Mar 2021", 1995, 2026), Some(true));
-    assert!(external_date_is_none("12 xyzzy 2021", 1995, 2026));
-    assert!(!external_date_is_none("Mar 2021", 1995, 2026));
+    assert!(external_date_is_none("12 xyzzy 2021", 1995, 2026, false));
+    assert!(!external_date_is_none("Mar 2021", 1995, 2026, true));
+}
+
+#[test]
+fn external_date_unicode() {
+    for s in ["お問い合わせ ｜ プライバシーポリシー © 2015 1", "Αρχική σελίδα 2019", "Главная страница 2018"]
+    {
+        assert!(external_date_is_none(s, 1995, 2026, true), "{s}");
+        assert!(!external_date_is_none(s, 1995, 2026, false), "{s}");
+    }
+    for s in ["2015年3月4日", "4 марта 2018", "12 Μαρτίου 2019", "2019년 3월 4일", "mars 2021 utc+01:00 xyzzy"]
+    {
+        assert!(!external_date_is_none(s, 1995, 2026, true), "{s}");
+    }
 }
