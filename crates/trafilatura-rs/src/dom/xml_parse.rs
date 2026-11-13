@@ -36,14 +36,20 @@ impl Ctx {
                 c"UTF-8".as_ptr(),
                 OPTIONS,
             );
-            let well_formed = (*ctxt).wellFormed != 0;
+            // lxml's _handleParseResult: errors such as an undeclared namespace prefix leave wellFormed set
+            let err = &(*ctxt).lastError;
+            let well_formed = (*ctxt).wellFormed != 0 && err.level < ffi::xmlErrorLevel_XML_ERR_ERROR;
+            let message = (!err.message.is_null()).then(|| {
+                let msg = std::ffi::CStr::from_ptr(err.message).to_string_lossy();
+                format!("{}, line {}, column {}", msg.trim_end(), err.line, err.int2)
+            });
             if !(*ctxt).myDoc.is_null() && (*ctxt).myDoc != doc {
                 ffi::xmlFreeDoc((*ctxt).myDoc);
             }
             (*ctxt).myDoc = ptr::null_mut();
             ffi::xmlFreeParserCtxt(ctxt);
             if doc.is_null() || !well_formed {
-                return Err(Error::Syntax("XMLSyntaxError".into()));
+                return Err(Error::Runtime(format!("XMLSyntaxError: {}", message.unwrap_or_default())));
             }
             self.adopt_doc(doc);
             intern_names(self.dict, doc);

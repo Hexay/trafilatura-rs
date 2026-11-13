@@ -76,10 +76,22 @@ pub(crate) fn to_py_err(e: Error) -> PyErr {
                 "IndexError" => PyIndexError::new_err(msg),
                 "KeyError" => PyKeyError::new_err(msg),
                 "AssertionError" => PyAssertionError::new_err(msg),
+                "XMLSyntaxError" => xml_syntax_error(msg),
                 _ => PyRuntimeError::new_err(m),
             }
         }
     }
+}
+
+/// lxml.etree.XMLSyntaxError(message, code, line, column), or Unsupported (rerun in Python) without lxml.
+fn xml_syntax_error(msg: String) -> PyErr {
+    Python::attach(|py| {
+        let class = py.import("lxml.etree").and_then(|m| m.getattr("XMLSyntaxError"));
+        match class.and_then(|c| c.call1((msg.as_str(), 1, 0, 0))) {
+            Ok(exc) => PyErr::from_value(exc),
+            Err(_) => Unsupported::new_err(format!("XMLSyntaxError: {msg}")),
+        }
+    })
 }
 
 fn format(output_format: &str) -> PyResult<Format> {

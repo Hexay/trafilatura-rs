@@ -93,9 +93,7 @@ fn build_xml_output(ctx: &Ctx, doc: &Document, body: Node) -> Result<Node> {
 pub fn serialize_xml(ctx: &Ctx, output: Node) -> Result<String> {
     let output = sanitize_tree(output)?;
     // an XMLSyntaxError escapes extract(): Python raises it
-    let reparsed = ctx
-        .parse_xml_noblanks(&output.tostring(Method::Xml, true))
-        .map_err(|_| Error::Unsupported("XMLSyntaxError in control_xml_output".into()))?;
+    let reparsed = ctx.parse_xml_noblanks(&output.tostring(Method::Xml, true))?;
     Ok(py::strip(&reparsed.tostring_pretty()).to_owned())
 }
 
