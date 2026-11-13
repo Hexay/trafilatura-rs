@@ -34,7 +34,7 @@ _GRID = {
 _META = {"with_metadata": True, "url": True}
 # verified with the default focus only
 _BALANCED_OUTPUTS = {"mdmeta": {"output_format": "markdown", **_META}}
-for _fmt in ("xml",):
+for _fmt in ("xml", "html", "csv"):
     _BALANCED_OUTPUTS[_fmt] = {"output_format": _fmt, "record_id": "r1"}
     _BALANCED_OUTPUTS[f"{_fmt}meta"] = {"output_format": _fmt, "record_id": "r1", **_META}
 _GRID.update({f"balanced_{o}": ov for o, ov in _BALANCED_OUTPUTS.items()})
@@ -46,8 +46,9 @@ _FEATURE_OUTPUTS = {
 _FEATURES = {
     f"{name}_{o}": {**fkw, **ov}
     for name, fkw, outputs in (
-        ("links", {"include_links": True}, ("txt", "nourl", "md", "meta", "json")),
-        ("images", {"include_images": True}, ("txt", "nourl", "md", "json")),
+        ("links", {"include_links": True}, _FEATURE_OUTPUTS),
+        ("images", {"include_images": True}, _FEATURE_OUTPUTS),
+        ("linksimages", {"include_links": True, "include_images": True}, ("txt", "json")),
     )
     for o, ov in ((o, _FEATURE_OUTPUTS[o]) for o in outputs)
 }

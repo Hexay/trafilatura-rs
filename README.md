@@ -93,11 +93,11 @@ With the default focus, with and without comments, these also give identical pag
 | Output | Arguments |
 |---|---|
 | XML | `output_format="xml"`, with or without `with_metadata=True` |
-| Links | `include_links=True` with txt (with and without metadata), markdown, and JSON with metadata |
-| Images | `include_images=True` with txt, markdown, and JSON with metadata |
-
-`output_format="html"` and `"csv"`, and the other link/image combinations, are implemented but still run Python
-until their full-corpus parity is in.
+| HTML | `output_format="html"`, with or without `with_metadata=True` |
+| CSV | `output_format="csv"`, with or without `with_metadata=True` |
+| Links | `include_links=True` with txt, markdown, JSON and XML, each with and without metadata |
+| Images | `include_images=True`, the same outputs |
+| Links and images | both, with txt and with JSON with metadata |
 
 Relative link targets and image sources are resolved like courlan and `urllib.parse` do, natively for the common
 URL shapes (identical under Python 3.12 to 3.14 on the corpus' million links) and through Python for the rest.
@@ -263,6 +263,21 @@ With comments (trafilatura's default), and the command line's call (`extract(byt
 Mean CPU time per page. With metadata, about half of the remaining time is dateparser, which htmldate calls for
 unusual date strings and which trafilatura-rs calls back into rather than ports (see
 [docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)).
+
+Other output formats, links and images (first 3,000 pages, `include_comments=False`, mean CPU time per page,
+`[V=23] BENCH_CFG=<cfg> tools/bench.sh 3000`):
+
+| Call | trafilatura 1.11 | trafilatura-rs | Speedup (CPU) | trafilatura 2.3.1 | trafilatura-rs | Speedup (CPU) |
+|---|---:|---:|---:|---:|---:|---:|
+| `output_format="xml"` | 12.64 ms | 1.21 ms | 10.4x | 15.57 ms | 1.80 ms | 8.7x |
+| `output_format="xml", with_metadata=True` | 26.01 ms | 8.86 ms | 2.9x | 29.60 ms | 7.36 ms | 4.0x |
+| `output_format="html"` | 13.73 ms | 1.38 ms | 9.9x | 14.39 ms | 1.57 ms | 9.2x |
+| `output_format="csv"` | 11.52 ms | 1.11 ms | 10.4x | 13.12 ms | 1.57 ms | 8.4x |
+| `include_links=True` | 11.66 ms | 1.62 ms | 7.2x | 19.36 ms | 2.63 ms | 7.4x |
+| `include_links=True, output_format="xml"` | 12.26 ms | 1.25 ms | 9.8x | 14.63 ms | 1.73 ms | 8.4x |
+| `include_links=True, output_format="json", with_metadata=True` | 24.77 ms | 8.69 ms | 2.9x | 36.29 ms | 8.58 ms | 4.2x |
+| `include_images=True, output_format="markdown"` | 12.31 ms | 1.36 ms | 9.0x | 15.17 ms | 2.01 ms | 7.6x |
+| `include_links=True, include_images=True` | 9.22 ms | 1.15 ms | 8.0x | 15.52 ms | 2.05 ms | 7.6x |
 
 ## Contributing
 

@@ -130,6 +130,15 @@ impl Node {
     fn add_sibling(self, other: Node, as_next: bool) -> Result<()> {
         unsafe {
             let (e, n) = (self.raw(), other.raw());
+            let parent = (*e).parent;
+            if !parent.is_null() && (*parent).type_ != ffi::xmlElementType_XML_ELEMENT_NODE {
+                if !matches!((*n).type_, ffi::xmlElementType_XML_PI_NODE | ffi::xmlElementType_XML_COMMENT_NODE) {
+                    return Err(Error::Type(
+                        "Only processing instructions and comments can be siblings of the root element".into(),
+                    ));
+                }
+                return Err(Error::Unsupported("PI/comment sibling of the root element".into()));
+            }
             if raw::is_ancestor_or_same(n, e) {
                 if e == n {
                     return Ok(());

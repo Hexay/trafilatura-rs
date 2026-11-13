@@ -34,15 +34,17 @@ VERIFIED_OUTPUTS = {
     ("json", True): _FOCUS_GRID,
     ("json", False): _FOCUS_GRID,
     ("markdown", True): _with_comments(_BALANCED),
-    ("xml", False): _with_comments(_BALANCED),
-    ("xml", True): _with_comments(_BALANCED),
+    **{(fmt, meta): _with_comments(_BALANCED) for fmt in ("xml", "html", "csv") for meta in (False, True)},
 }
 _VERIFIED_BY_ENGINE = {"1.11.0": VERIFIED_OUTPUTS, "2.3.1": VERIFIED_OUTPUTS}
-_FEATURE_OUTPUTS = {out: _with_comments(_BALANCED) for out in (("txt", False), ("markdown", False), ("json", True))}
+_FEATURE_OUTPUTS = {(fmt, meta): _with_comments(_BALANCED) for fmt in ("txt", "markdown", "json", "xml")
+                    for meta in (False, True)}
 # VERIFIED_OUTPUTS' counterpart for calls with include_links and/or include_images, per set of those enabled.
 VERIFIED_FEATURES = {
-    frozenset({"include_links"}): {**_FEATURE_OUTPUTS, ("txt", True): _with_comments(_BALANCED)},
+    frozenset({"include_links"}): _FEATURE_OUTPUTS,
     frozenset({"include_images"}): _FEATURE_OUTPUTS,
+    frozenset({"include_links", "include_images"}): {out: _with_comments(_BALANCED) for out in (("txt", False),
+                                                                                                  ("json", True))},
 }
 _FEATURE_KEYS = {"links": "include_links", "images": "include_images"}
 
