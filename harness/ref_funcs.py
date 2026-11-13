@@ -7,12 +7,16 @@
   ref_funcs.py list                                  config names
 Results compare by value; lxml trees by etree.tostring (their element classes are reported apart). Exceptions compare
 as "EXC:<type>"; a Rust `Unsupported` (the drop-in reruns Python) counts as a fallback, not a mismatch. Rust CPU
-time depends on the extension's build profile: speedups need `PROFILE=release tools/dev.sh py`."""
+time depends on the extension's build profile: speedups need `PROFILE=release tools/dev.sh py`.
+The calls keep their default, wall-clock `max_date`; dateutil's default for missing fields is pinned (as in
+ref_meta.py), and a `filedate` equal to the run's day is recorded as "<today>", so a reference stays valid on later days."""
 import json
 import sys
 import time
+from datetime import date
 
 import trafilatura_rs
+from ref_meta import pin_wall_clock
 from lxml import etree
 from trafilatura_rs import _bare, _core, _funcs
 
@@ -80,15 +84,20 @@ RUST = {
 }
 
 
+def _slots(d, classes):
+    today = date.today().isoformat()
+    return {k: {"str": "<today>"} if k == "filedate" and v == today else canon(v, classes) for k, v in d.items()}
+
+
 def canon(x, classes):
     """A JSON-able form of a result; trees by tostring, their element classes appended to `classes`."""
     if isinstance(x, etree._Element):
         classes.append(sorted({type(e).__name__ for e in x.iter()}))
         return {"tree": etree.tostring(x, encoding="unicode")}
     if hasattr(x, "__slots__") and hasattr(x, "as_dict"):
-        return {"Document": {k: canon(v, classes) for k, v in x.as_dict().items()}}
+        return {"Document": _slots(x.as_dict(), classes)}
     if isinstance(x, dict):
-        return {"dict": {k: canon(v, classes) for k, v in x.items()}}
+        return {"dict": _slots(x, classes)}
     if isinstance(x, (list, tuple)):
         return {type(x).__name__: [canon(v, classes) for v in x]}
     return {type(x).__name__: x}
@@ -145,10 +154,12 @@ def main():
     if mode == "list":
         print(" ".join(CONFIGS))
     elif mode in ("ref", "rust"):
+        pin_wall_clock()
         write(sys.argv[3], sys.argv[4], mode)
     elif mode == "compare":
         compare(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else None)
     elif mode == "show":
+        pin_wall_clock()
         path, i, cfg = sys.argv[2], int(sys.argv[3]), sys.argv[4]
         doc = next(d for d in docs(path) if d["i"] == i)
         name, kw = CONFIGS[cfg][0], kwargs_for(cfg, doc)
