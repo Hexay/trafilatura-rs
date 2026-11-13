@@ -3,7 +3,7 @@
 use super::htmlprocessing::{handle_textnode, process_node, truthy, Env};
 pub use super::main_extractor_lists::handle_lists;
 use super::main_extractor_table::handle_table;
-use super::text::text_chars_test;
+use super::text::{is_image_file, text_chars_test};
 use crate::dom::{Error, Node, Result};
 use std::collections::HashSet;
 
@@ -221,8 +221,32 @@ pub fn handle_textelem(env: &mut Env, element: Node, potential_tags: &PotentialT
         }
         _ if FORMATTING.contains(&tag) => handle_formatting(env, element),
         "table" if potential_tags.contains("table") => handle_table(env, element, potential_tags),
-        // TODO: handle_image (only reachable with images=True).
-        "graphic" if potential_tags.contains("graphic") => unimplemented!("handle_image"),
+        "graphic" if potential_tags.contains("graphic") => handle_image(env, element),
         _ => handle_other_elements(env, element, potential_tags),
     }
+}
+
+/// `handle_image`.
+fn handle_image(env: &Env, element: Node) -> Result<Option<Node>> {
+    let src =
+        ["data-src", "src"].iter().filter_map(|a| element.get(a)).find(|s| is_image_file(Some(s))).or_else(|| {
+            element
+                .attrs()
+                .into_iter()
+                .find(|(k, v)| k.starts_with("data-src") && is_image_file(Some(v)))
+                .map(|kv| kv.1)
+        });
+    let Some(src) = src else { return Ok(None) };
+    let processed = env.ctx.element(element.tag())?;
+    let src = match src.strip_prefix("//") {
+        Some(rest) => format!("http://{rest}"),
+        None => src,
+    };
+    processed.set("src", Some(&src))?;
+    for attr in ["alt", "title"] {
+        if let Some(v) = element.get(attr) {
+            processed.set(attr, Some(&v))?;
+        }
+    }
+    Ok(Some(processed))
 }

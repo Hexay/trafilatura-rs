@@ -5,8 +5,10 @@ import importlib
 import re
 from datetime import datetime
 
-_FORMATS = {"txt", "markdown", "json"}
-_BARE_FORMATS = _FORMATS | {"python"}
+_FORMATS = {"txt", "markdown", "json", "xml", "html", "csv"}
+_BARE_FORMATS = {"txt", "markdown", "json", "python"}
+# formats whose formatting flag the port doesn't take (json ignores it in 2.x but not in 1.11)
+_PLAIN_FORMATS = {"json", "xml", "html", "csv"}
 # extract() parameters bare_extraction doesn't take (it takes `as_dict` instead)
 _NOT_BARE = {"record_id", "tei_validation", "settingsfile"}
 _ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}", re.ASCII)
@@ -145,21 +147,25 @@ def _metadata(spec, rust, extra):
 def _translate(spec, formats):
     """`_core.extract` keywords for an Extractor's attributes, or None."""
     fmt, focus, dedup, url = spec["format"], spec["focus"], spec["dedup"], spec["url"]
-    if fmt not in formats or focus not in _FOCUS or spec["links"] or spec["images"] or spec["lang"]:
+    if fmt not in formats or focus not in _FOCUS or spec["lang"]:
         return None
-    if fmt == "json" and spec["formatting"]:
+    if formats is _BARE_FORMATS and (spec["links"] or spec["images"]):
+        return None  # bare_extraction with links/images is not verified
+    if fmt in _PLAIN_FORMATS and spec["formatting"]:
         return None
     if not (dedup is None or isinstance(dedup, int)) or not (url is None or isinstance(url, str)):
         return None  # 2.x: deduplicate as a scoped LRUCache
     rust = {
         # txt and markdown differ only by `formatting` in both versions
-        "output_format": fmt if fmt == "json" else "markdown" if spec["formatting"] else "txt",
+        "output_format": fmt if fmt in _PLAIN_FORMATS else "markdown" if spec["formatting"] else "txt",
         "favor_precision": focus == "precision", "favor_recall": focus == "recall",
         "include_tables": bool(spec["tables"]), "no_fallback": bool(spec["fast"]),
         "include_comments": bool(spec["comments"]), "deduplicate": bool(dedup),
         "with_metadata": bool(spec["with_metadata"]), "url": url,
     }
-    extra = {}
+    if any(not (spec[key] is None or type(spec[key]) is bool) for key in ("links", "images")):
+        return None  # trafilatura tests both `is True` and truthiness
+    extra = {key: True for key in ("links", "images") if spec[key]}
     for key, default in _SIZES.items():
         value = spec[key]
         if value is not None and (type(value) is not int or value < 0):

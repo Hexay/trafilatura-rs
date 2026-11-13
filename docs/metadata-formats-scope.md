@@ -112,8 +112,8 @@ but never verified for 1.11; verified by the new `*_md` parity configs.
 
 Whole calls, decided by `trafilatura_rs.supports()`:
 
-- `include_links`, `include_images`, `xml`/`xmltei`/`csv`/`html` formats, `target_language`, json with
-  `include_formatting=True`, input other than str/bytes (lxml trees, responses).
+- The `xmltei` format, `target_language`, json/xml/html/csv with `include_formatting=True`, `include_links` /
+  `include_images` given anything but a bool, input other than str/bytes (lxml trees, responses).
 - `date_extraction_params` with keys beyond `original_date`, `extensive_search`, `max_date` (`"YYYY-MM-DD"`, required)
   and `url`, or a custom `outputformat` / `min_date`.
 - Blacklists other than a set/frozenset/list/tuple of str; `prune_xpath` other than str or a list/tuple of str.
@@ -122,7 +122,7 @@ Whole calls, decided by `trafilatura_rs.supports()`:
   Python's dedup cache instead of Rust's, changing later results.
 - Metadata on Python < 3.11 (`fromisoformat` grammar), and metadata without trafilatura installed (the callbacks
   need it).
-- Configuration × output combinations not in `VERIFIED_OUTPUTS`.
+- Configuration × output combinations not in `VERIFIED_OUTPUTS` (`VERIFIED_FEATURES` with links/images).
 
 Single documents inside a covered call (`Unsupported` raised by the core, then rerun in Python). None of these
 occur on the 10,666-page corpus:
@@ -133,6 +133,12 @@ occur on the 10,666-page corpus:
 - A `prune_xpath` expression that errors or selects anything but non-root elements (strings, attributes, numbers),
   or uses `re:` (unbound for a bare `XPath(expr)` in lxml).
 - A str with lone surrogates (lxml's parser takes them; Rust strings cannot).
+- xml output whose serialized tree lxml's re-parse rejects, or csv output containing NUL.
+
+URL resolution for links and images (`py/urllib.rs`) is native only where `urllib.parse` agrees across Python
+3.12–3.14 (it changed `urljoin` in 3.14: params, empty `?`/`#`, base fragments); other URLs, bracketed or
+non-ASCII hosts and control characters go to courlan / `urllib.parse` in Python. `harness/diff_urls.py` checks the
+native subset against each interpreter.
 - 2.3.1: a truthy non-str sitename (Python raises AttributeError from `lstrip`).
 - `\N{...}` escapes or lone surrogates produced by `normalize_authors`' `unicode_escape` decode.
 - JSON-LD nested deeper than 900 levels (Python's RecursionError limit) or with lone `\uD800`-style surrogates.

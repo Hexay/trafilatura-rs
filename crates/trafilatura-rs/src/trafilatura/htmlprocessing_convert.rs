@@ -1,6 +1,8 @@
 //! htmlprocessing.py `convert_tags` and the `convert_*` family (HTML markup to trafilatura's XML vocabulary).
+use super::links::{fix_relative_urls, get_base_url};
 use super::settings::Options;
 use crate::dom::{Ctx, Error, Node, Result};
+use crate::hooks::Hooks;
 
 pub(crate) const REND_TAGS: &[&str] = &["em", "i", "b", "strong", "u", "kbd", "samp", "tt", "var", "sub", "sup"];
 pub(crate) const REND_VALUES: &[&str] = &["#i", "#i", "#b", "#b", "#u", "#t", "#t", "#t", "#t", "#sub", "#sup"];
@@ -77,6 +79,19 @@ pub(crate) fn convert_details(elem: Node) -> Result<()> {
     Ok(())
 }
 
+/// `convert_link` (2.x; inline in 1.11): a `ref` keeping only `target`, resolved by `resolve` against a non-empty
+/// `base_url`.
+pub(crate) fn convert_link(elem: Node, base_url: &str, resolve: impl Fn(&str, &str) -> Result<String>) -> Result<()> {
+    elem.set_tag("ref")?;
+    let target = elem.get("href");
+    elem.clear_attrs();
+    if let Some(target) = target.filter(|t| !t.is_empty()) {
+        let target = if base_url.is_empty() { target } else { resolve(base_url, &target)? };
+        elem.set("target", Some(&target))?;
+    }
+    Ok(())
+}
+
 fn convert(elem: Node) -> Result<()> {
     match elem.tag() {
         "dl" | "ol" | "ul" => convert_lists(elem),
@@ -92,8 +107,8 @@ fn convert(elem: Node) -> Result<()> {
     }
 }
 
-/// `convert_tags` (url=None).
-pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
+/// `convert_tags`; `hooks` resolve the links `url` leaves to Python.
+pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options, hooks: &dyn Hooks, url: Option<&str>) -> Result<Node> {
     if !opts.links {
         let mut expr = String::from(".//div//a|.//ul//a");
         if opts.tables {
@@ -104,8 +119,13 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         }
         tree.strip_tags(ctx, &["a"]);
     } else {
-        // TODO: include_links (href → target, relative URL fixing) is outside the ported configuration.
-        unimplemented!("convert_tags with links=True");
+        let base_url = match url.filter(|u| !u.is_empty()) {
+            Some(u) => get_base_url(hooks, u)?,
+            None => String::new(),
+        };
+        for elem in tree.iter(&["a", "ref"]) {
+            convert_link(elem, &base_url, |base, target| fix_relative_urls(hooks, base, target))?;
+        }
     }
     if opts.formatting {
         for elem in tree.iter(REND_TAGS) {

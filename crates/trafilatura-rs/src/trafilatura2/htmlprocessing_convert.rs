@@ -2,10 +2,13 @@
 use super::settings::Options;
 use super::xml::delete_element;
 use crate::dom::{Ctx, Error, Node, Result};
+use crate::hooks::Hooks;
+use crate::py;
 use crate::trafilatura::htmlprocessing::truthy;
 use crate::trafilatura::htmlprocessing_convert::{
-    convert_details, convert_headings, convert_lists, CONVERSION_TAGS, REND_TAGS, REND_VALUES,
+    convert_details, convert_headings, convert_link, convert_lists, CONVERSION_TAGS, REND_TAGS, REND_VALUES,
 };
+use crate::trafilatura::links::{fix_relative_urls, get_base_url};
 
 const CODE_INDICATORS: &[&str] = &["{", "(\"", "('", "\n    "];
 
@@ -45,8 +48,16 @@ fn convert(elem: Node) -> Result<()> {
     }
 }
 
-/// `convert_tags` (url=None).
-pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
+/// `safe_base_url` / `safe_relative_url`: "" where courlan raises ValueError.
+fn safe(r: Result<String>) -> Result<String> {
+    match r {
+        Err(Error::Value(_)) => Ok(String::new()),
+        r => r,
+    }
+}
+
+/// `convert_tags`; `hooks` resolve the links `url` leaves to Python.
+pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options, hooks: &dyn Hooks, url: Option<&str>) -> Result<Node> {
     if !opts.links {
         let mut expr = String::from(".//*[self::div or self::li or self::p]//a");
         if opts.tables {
@@ -57,8 +68,16 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         }
         tree.strip_tags(ctx, &["a"]);
     } else {
-        // TODO: include_links (href → target, relative URL fixing) is outside the ported configuration.
-        unimplemented!("convert_tags with links=True");
+        let base_url = match url.filter(|u| !u.is_empty()) {
+            Some(u) => safe(get_base_url(hooks, u))?,
+            None => String::new(),
+        };
+        for elem in tree.iter(&["a", "ref"]) {
+            convert_link(elem, &base_url, |base, target| {
+                let fixed = safe(fix_relative_urls(hooks, base, target))?;
+                Ok(if fixed.is_empty() { target.to_owned() } else { fixed })
+            })?;
+        }
     }
     for elem in tree.xpath_nodes(r#".//strong[contains(@class, "schema-faq-question")]"#)? {
         elem.clear_attrs();
@@ -86,8 +105,26 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         convert(elem)?;
     }
     if opts.images {
-        // TODO: include_images (img → graphic, moving graphics out of links) is outside the ported configuration.
-        unimplemented!("convert_tags with images=True");
+        for elem in tree.iter(&["img"]) {
+            elem.set_tag("graphic")?;
+        }
+        if opts.links {
+            move_graphics_out_of_links(ctx, tree)?;
+        }
     }
     Ok(tree)
+}
+
+/// Each `ref`'s images become its following siblings; a ref left without text is deleted.
+fn move_graphics_out_of_links(ctx: &Ctx, tree: Node) -> Result<()> {
+    for link in tree.iter(&["ref"]).collect::<Vec<_>>() {
+        let graphics: Vec<Node> = link.iter(&["graphic"]).collect();
+        for &graphic in graphics.iter().rev() {
+            link.addnext(graphic)?;
+        }
+        if !graphics.is_empty() && py::strip(&link.text_content()).is_empty() {
+            delete_element(ctx, link, true)?;
+        }
+    }
+    Ok(())
 }

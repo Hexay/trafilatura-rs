@@ -60,6 +60,8 @@ harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_da
 harness/diff_dates.py collect docs.jsonl strings.jsonl balanced_json   # log the corpus' date strings, then
 harness/diff_dates.py check strings.jsonl                     # native date shortcuts vs dateutil/dateparser
 harness/diff_dates.py memo strings.jsonl                      # _external_date memo: call order, time of day
+harness/diff_urls.py collect docs.jsonl pairs.jsonl           # the corpus' link/image URLs, then per Python:
+target/iter/harness urls pairs.jsonl native.jsonl && python3.X harness/diff_urls.py check pairs.jsonl native.jsonl
 ```
 
 After a dateparser, python-dateutil or htmldate bump, regenerate `crates/trafilatura-rs/src/dates/dateparser/tables.txt`

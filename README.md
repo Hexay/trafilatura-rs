@@ -88,6 +88,20 @@ and fast (`no_fallback`/`fast`), with and without comments, gives identical page
 | JSON with metadata | `output_format="json", with_metadata=True` |
 | Markdown with metadata | `output_format="markdown", with_metadata=True` (default focus only) |
 
+With the default focus, with and without comments, these also give identical pages on both versions:
+
+| Output | Arguments |
+|---|---|
+| XML | `output_format="xml"`, with or without `with_metadata=True` |
+| Links | `include_links=True` with txt (with and without metadata), markdown, and JSON with metadata |
+| Images | `include_images=True` with txt, markdown, and JSON with metadata |
+
+`output_format="html"` and `"csv"`, and the other link/image combinations, are implemented but still run Python
+until their full-corpus parity is in.
+
+Relative link targets and image sources are resolved like courlan and `urllib.parse` do, natively for the common
+URL shapes (identical under Python 3.12 to 3.14 on the corpus' million links) and through Python for the rest.
+
 `url` and `record_id` can be passed with any of them. `deduplicate=True` is verified with the precision and recall
 configurations. Like trafilatura, it keeps a process-global cache, so output depends on document order exactly as in
 Python; `trafilatura_rs.reset_caches()` clears it.

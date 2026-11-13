@@ -18,6 +18,8 @@ _OUTPUTS = {
     "meta": {"with_metadata": True, "url": True},
     "json": {"output_format": "json", "with_metadata": True, "url": True, "record_id": True},
     "jsontext": {"output_format": "json", "record_id": True},
+    "xml": {"output_format": "xml", "record_id": True},
+    "xmlmeta": {"output_format": "xml", "with_metadata": True, "url": True, "record_id": True},
 }
 # The first configs, kept under their names (and reference files).
 _LEGACY = {
@@ -69,9 +71,36 @@ def _grid():
     mdmeta = {"output_format": "markdown", "with_metadata": True, "url": True}
     yield "balanced_mdmeta", {**mdmeta, "include_comments": False}
     yield "balanced_mdmeta_comments", {**mdmeta, "include_comments": True}
+    for fmt in ("html", "csv"):
+        for name, meta in ((fmt, {}), (f"{fmt}meta", {"with_metadata": True, "url": True})):
+            kw = {"output_format": fmt, "record_id": True, **meta}
+            yield f"balanced_{name}", {**kw, "include_comments": False}
+            yield f"balanced_{name}_comments", {**kw, "include_comments": True}
 
 
-CONFIGS = {**dict(_grid()), **{k: {**v, "include_comments": False} for k, v in _LEGACY.items()},
+_FEATURES = {"links": {"include_links": True}, "images": {"include_images": True},
+             "linksimages": {"include_links": True, "include_images": True}}
+# every output with the page URL (links resolve relative targets against it); "nourl": plain text without it
+_FEATURE_OUTPUTS = {
+    "txt": {}, "nourl": {"url": False}, "md": _OUTPUTS["md"], "meta": _OUTPUTS["meta"],
+    "mdmeta": {"output_format": "markdown", "with_metadata": True}, "json": _OUTPUTS["json"],
+    "jsontext": _OUTPUTS["jsontext"], "xml": _OUTPUTS["xml"], "xmlmeta": _OUTPUTS["xmlmeta"],
+}
+
+
+def _feature_grid():
+    """`<feature>_<out>[_comments]`: balanced focus, every output; `<feature>_<focus>_<out>`: the other focuses."""
+    combos = [("balanced", out) for out in _FEATURE_OUTPUTS] + \
+             [(f, out) for f in ("precision", "recall", "fast") for out in ("txt", "json")]
+    for feature, fekw in _FEATURES.items():
+        for focus, out in combos:
+            kw = {"url": True, **fekw, **_FOCUS[focus], **_FEATURE_OUTPUTS[out]}
+            name = f"{feature}_{out}" if focus == "balanced" else f"{feature}_{focus}_{out}"
+            yield name, {**kw, "include_comments": False}
+            yield f"{name}_comments", {**kw, "include_comments": True}
+
+
+CONFIGS = {**dict(_grid()), **dict(_feature_grid()), **{k: {**v, "include_comments": False} for k, v in _LEGACY.items()},
            **{k: {"include_comments": False, **v} for k, v in _EXTRAS.items()}}
 
 

@@ -38,7 +38,7 @@ pub fn run_stages(html: &str, cfg: &str) -> Vec<(&'static str, String)> {
         let is_forum = forum_thread_page(tree);
         out.push((stage, if is_forum { "True" } else { "False" }.to_owned()));
         stage = "prune_raw";
-        let mut env = Env { ctx: &ctx, opts: &opts, lru: &mut lru };
+        let mut env = Env { ctx: &ctx, opts: &opts, lru: &mut lru, urls: Default::default() };
         let tree = prune_raw_tree(&env, tree, is_forum)?;
         out.push((stage, ser(Some(tree))));
         stage = "clean";

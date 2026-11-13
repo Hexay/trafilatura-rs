@@ -1,8 +1,9 @@
 //! `etree.tostring(el, encoding=str|'utf-8', method=...)` for elements (serializer.pxi `_tostring` with no XML
-//! declaration, no complete-document output, no pretty printing).
+//! declaration, no complete-document output).
 use super::raw;
 use super::Node;
 use libxml2_sys as ffi;
+use std::os::raw::c_int;
 use std::ptr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,8 +17,13 @@ impl Node {
     pub fn tostring(self, method: Method, with_tail: bool) -> String {
         match method {
             Method::Text => self.text_to_string(with_tail),
-            _ => unsafe { self.dump(method == Method::Html, with_tail) },
+            _ => unsafe { self.dump(method == Method::Html, with_tail, false) },
         }
+    }
+
+    /// `etree.tostring(el, pretty_print=True, encoding=str)` (XML method, with tail).
+    pub fn tostring_pretty(self) -> String {
+        unsafe { self.dump(false, true, true) }
     }
 
     /// `_textToString`.
@@ -41,7 +47,8 @@ impl Node {
     }
 
     /// `_writeNodeToBuffer` + `_writeTail`.
-    unsafe fn dump(self, html: bool, with_tail: bool) -> String {
+    unsafe fn dump(self, html: bool, with_tail: bool, pretty: bool) -> String {
+        let format = c_int::from(pretty);
         let n = self.raw();
         let out = ffi::xmlAllocOutputBuffer(ptr::null_mut());
         assert!(!out.is_null(), "out of memory");
@@ -58,9 +65,9 @@ impl Node {
             n
         };
         if html {
-            ffi::htmlNodeDumpFormatOutput(out, doc, target, ptr::null(), 0);
+            ffi::htmlNodeDumpFormatOutput(out, doc, target, ptr::null(), format);
         } else {
-            ffi::xmlNodeDumpOutput(out, doc, target, 0, 0, ptr::null());
+            ffi::xmlNodeDumpOutput(out, doc, target, 0, format, ptr::null());
         }
         if shallow {
             (*target).children = ptr::null_mut();
@@ -73,12 +80,15 @@ impl Node {
                 && matches!((*t).type_, ffi::xmlElementType_XML_TEXT_NODE | ffi::xmlElementType_XML_CDATA_SECTION_NODE)
             {
                 if html {
-                    ffi::htmlNodeDumpFormatOutput(out, (*t).doc, t, ptr::null(), 0);
+                    ffi::htmlNodeDumpFormatOutput(out, (*t).doc, t, ptr::null(), format);
                 } else {
-                    ffi::xmlNodeDumpOutput(out, (*t).doc, t, 0, 0, ptr::null());
+                    ffi::xmlNodeDumpOutput(out, (*t).doc, t, 0, format, ptr::null());
                 }
                 t = (*t).next;
             }
+        }
+        if pretty {
+            ffi::xmlOutputBufferWrite(out, 1, c"\n".as_ptr());
         }
         ffi::xmlOutputBufferFlush(out);
         let buf = if (*out).conv.is_null() { (*out).buffer } else { (*out).conv };

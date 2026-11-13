@@ -13,6 +13,9 @@ pub enum Format {
     Txt,
     Markdown,
     Json,
+    Xml,
+    Html,
+    Csv,
 }
 
 #[derive(Clone, Debug)]

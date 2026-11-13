@@ -205,7 +205,7 @@ pub fn handle_paragraphs(env: &mut Env, element: Node, potential_tags: &Potentia
             newsub.set_text(pc.text().as_deref())?;
             newsub.set_tail(pc.tail().as_deref())?;
             if pc.tag() == "graphic" {
-                if let Some(image) = handle_image(env.ctx, pc)? {
+                if let Some(image) = handle_image(env.ctx, &env.urls, pc)? {
                     newsub = image;
                 }
             }
@@ -241,7 +241,7 @@ pub fn handle_textelem(env: &mut Env, element: Node, potential_tags: &PotentialT
         }
         _ if INLINE_CONSUMING.contains(&tag) => handle_formatting(env, element),
         "table" if potential_tags.contains("table") => handle_table(env, element, potential_tags),
-        "graphic" if potential_tags.contains("graphic") => handle_image(env.ctx, element),
+        "graphic" if potential_tags.contains("graphic") => handle_image(env.ctx, &env.urls, element),
         _ => handle_other_elements(env, element, potential_tags),
     }
 }

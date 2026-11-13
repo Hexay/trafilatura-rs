@@ -45,7 +45,7 @@ pub fn process_nested_elements(env: &mut Env, child: Node, new_child_elem: Node)
             let processed = handle_paragraphs(env, subelem, &quote_tags)?;
             append_block(new_child_elem, processed, subelem)?;
         } else if tag == "graphic" {
-            let processed = handle_image(env.ctx, subelem)?;
+            let processed = handle_image(env.ctx, &env.urls, subelem)?;
             append_block(new_child_elem, processed, subelem)?;
         } else if INLINE_CARRIED.contains(&tag) {
             define_newelem(Some(subelem), new_child_elem, true)?;
