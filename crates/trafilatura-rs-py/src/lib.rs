@@ -284,6 +284,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bare::bare_extraction, m)?)?;
     m.add_function(wrap_pyfunction!(dates::_native_dateutil, m)?)?;
     m.add_function(wrap_pyfunction!(dates::_native_external_date, m)?)?;
+    m.add_function(wrap_pyfunction!(dates::_native_dateparser, m)?)?;
     m.add_class::<Extractor>()?;
     m.add("Unsupported", m.py().get_type::<Unsupported>())?;
     Ok(())

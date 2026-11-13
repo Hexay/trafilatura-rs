@@ -9,6 +9,7 @@ CALL=default switches every engine to its default call: trafilatura.extract(html
 and rs_trafilatura.extract(html).main_content.
 With BENCH_CFG=<cfg> (a harness/meta_configs.py config), trafilatura and trafilatura_rs call extract() with that
 config's arguments instead of datatrove's (rs is not comparable there); bytes configs need BENCH_DOCS=docs_raw.jsonl.
+BENCH_PY_DATEPARSER=1 keeps htmldate's dateparser calls in Python there (the native port off, for before/after).
 out.jsonl: {"i", "ns", "out"} per doc; summary on stdout (bench_report.py aggregates runs)."""
 import importlib.metadata  # noqa: F401  datatrove 0.10 uses it without importing it
 import json
@@ -25,6 +26,11 @@ def config_extractor(engine, cfg):
     from ref_meta import pin_wall_clock
 
     pin_wall_clock()
+    if os.environ.get("BENCH_PY_DATEPARSER"):
+        import htmldate.extractors as ex
+
+        # not the stock function: trafilatura_rs runs dateparser in Python (still memoized), as before the port
+        ex._external_date = (lambda f: lambda s: f(s))(ex._external_date)
     if engine == "trafilatura_rs":
         from trafilatura_rs import extract
     else:

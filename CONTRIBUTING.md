@@ -60,14 +60,16 @@ harness/ref_htmldate.py ref|rust [docs.jsonl]                 # htmldate find_da
 harness/diff_dates.py collect docs.jsonl strings.jsonl balanced_json   # log the corpus' date strings, then
 harness/diff_dates.py check strings.jsonl                     # native date shortcuts vs dateutil/dateparser
 harness/diff_dates.py memo strings.jsonl                      # _external_date memo: call order, time of day
+FUZZ=20000 PAR=2 harness/diff_dates.py dateparser strings*.jsonl  # native dateparser port vs Python (+ fuzz)
 harness/diff_urls.py collect docs.jsonl pairs.jsonl           # the corpus' link/image URLs, then per Python:
 target/iter/harness urls pairs.jsonl native.jsonl && python3.X harness/diff_urls.py check pairs.jsonl native.jsonl
 ```
 
 After a dateparser, python-dateutil or htmldate bump, regenerate `crates/trafilatura-rs/src/dates/dateparser/tables.txt`
-(`harness/gen_dateparser_tables.py`), rerun `diff_dates.py` and update `REPRODUCES_DATES`. After a `regex` or Python
-(Unicode) bump, regenerate `chars.txt` (`harness/gen_dateparser_chars.py`) and `tables.txt`; until then non-ASCII
-strings skip the shortcut.
+(`harness/gen_dateparser_tables.py`) and `locales.txt` (`harness/gen_dateparser_locales.py > locales.txt`), rerun
+`diff_dates.py` (check and dateparser) and update `REPRODUCES_DATES`. After a `regex` or Python (Unicode) bump,
+regenerate `chars.txt` (`harness/gen_dateparser_chars.py`), `unicode.txt` (`harness/gen_dateparser_unicode.py`),
+`tables.txt` and `locales.txt`; until then non-ASCII strings skip the proof and every string skips the port.
 
 `meta:`/`meta2:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`

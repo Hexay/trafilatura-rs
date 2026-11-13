@@ -44,6 +44,12 @@ pub fn external_date_is_none(s: &str, min_year: i32, max_year: i32, unicode: boo
     has_date_cue(s, min_year, max_year) == Some(false) || dateparser::no_locale_applies(s, unicode)
 }
 
+/// htmldate's `_external_date(s)` (dateparser's `get_date_data(s)["date_obj"]`) on the local date `today` (an
+/// ordinal); None when unknown. Only for the `unicode_versions()` installed, and a local timezone tzlocal finds.
+pub fn external_date(s: &str, today: i64) -> Option<Option<crate::py::datetime::DateTime>> {
+    dateparser::data_consistent().then(|| dateparser::date_obj(s, today)).flatten()
+}
+
 /// (`unicodedata.unidata_version`, `regex.__version__`) the non-ASCII shortcut was generated for: dateparser reads
 /// strings through both, so it holds only where they are installed.
 pub fn unicode_versions() -> (&'static str, &'static str) {

@@ -67,7 +67,20 @@ everything else to Python:
   ja/zh/ko/he rewrites that may splice words or copy arbitrary letters apply only to strings with their letters;
   for those the locale is ruled out only by a letter it never uses. Any character the table cannot classify
   defers. Non-ASCII strings are tried only when the running `unicodedata` and `regex` versions are the ones the
-  table was generated with. Strings some locale accepts always run dateparser.
+  table was generated with.
+- `_external_date` (dateparser), the rest: a port of `get_date_data` for htmldate's parser
+  (`crates/trafilatura-rs/src/dates/dateparser/date.rs` and siblings): `sanitize_date`, the candidate locales in
+  loader order with their applicability checks (the proof above rules most out first), translation with alternative
+  meanings, part-of-day rewriting, timezone stripping and the absolute-time `_parser`, all locales included. Locale
+  data and every `regex` pattern involved are generated from the installed dateparser
+  (`harness/gen_dateparser_locales.py`, patterns re-emitted for fancy-regex by `harness/dp_regex.py`); character
+  properties come from the installed `unicodedata` and `regex` (`harness/gen_dateparser_unicode.py`). A string the
+  port is not sure about runs Python: a Roman numeral year of 3+ letters, a calendar quarter, `г.` or `, в`, a
+  character whose NFKD or class is not tabulated, a space only `str.strip` or `\s` knows, a two-digit year within two
+  days of today (the century flip depends on the time zone), and the like. `now` matters only through that flip,
+  so results are naive wall times exactly as Python's. It runs only for htmldate's own `_external_date` and parser
+  settings (`python/trafilatura_rs/_dates.py`), with a local zone tzlocal can find, and the `unicodedata`/`regex`
+  versions the data was generated with.
 - A per-process memo of `_external_date` results (`crates/trafilatura-rs-py/src/memo.rs`). With htmldate's parser
   a result depends on the string and, through two-digit years only, on the wall clock; entries live for one local
   day, results within 3 days of a century flip are not kept, and replacing `_external_date` or the parser object
@@ -77,7 +90,8 @@ everything else to Python:
 They are on only for the dateparser and python-dateutil versions in `REPRODUCES_DATES` (`_versions.py`); at any
 other version the callbacks run in full, so the output still follows what is installed. `TRAFILATURA_RS_NATIVE_DATES=0`
 turns them off. `harness/diff_dates.py check` compares every date string the corpus produces against Python;
-`diff_dates.py memo` checks the memo's assumptions (call order, time of day) on them.
+`diff_dates.py dateparser` compares the port on them and on generated strings (`harness/dp_fuzz.py`); `diff_dates.py
+memo` checks the memo's assumptions (call order, time of day) on them.
 
 ## courlan (called, not ported)
 

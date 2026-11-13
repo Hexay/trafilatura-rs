@@ -88,6 +88,9 @@ impl Hooks for PyHooks {
                 return Ok(None);
             }
             let external = func(py, "htmldate.extractors", "_external_date")?;
+            if let Some(native) = dates::external_date(py, &external, s)? {
+                return Ok(native);
+            }
             if dates::enabled(py) {
                 return memo::external_date(py, &external, s);
             }

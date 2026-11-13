@@ -126,10 +126,11 @@ trafilatura.extract(html, with_metadata=True, deduplicate=True)        # Python
 ```
 
 Title, author, date, sitename, categories, tags, license and the JSON-LD parsing run in Rust, including a port of
-htmldate 1.11's `find_date` (the htmldate both trafilatura versions resolve). A few leaves run in Python: courlan's URL helpers, and the dateutil and dateparser
-calls htmldate makes for unusual date strings. Those calls cost little and keep results exact for any installed
-version. Metadata calls therefore need trafilatura installed and Python 3.11+. They also need htmldate 1.11.0
-(`REPRODUCES_METADATA`); with another version they stay on Python.
+htmldate 1.11's `find_date` (the htmldate both trafilatura versions resolve). A few leaves run in Python: courlan's
+URL helpers, and the dateutil and dateparser calls htmldate makes for unusual date strings, which native ports answer
+except for rare cases (for the dateparser and python-dateutil versions in `REPRODUCES_DATES`; at other versions they
+run in Python, so results stay exact). Metadata calls therefore need trafilatura installed and Python 3.11+. They
+also need htmldate 1.11.0 (`REPRODUCES_METADATA`); with another version they stay on Python.
 
 As in trafilatura, the date search is bounded by today's date (`max_date`). `date_extraction_params` is supported
 when it sets `max_date` and optionally `original_date` / `extensive_search`. `with_metadata=True` with `deduplicate=True` stays on Python, because a document that
@@ -239,8 +240,8 @@ Markdown, metadata and JSON (first 3,000 pages, `include_comments=False`, `BENCH
 | Call | trafilatura 1.11 | trafilatura-rs | Speedup (CPU) | Speedup (instructions) |
 |---|---:|---:|---:|---:|
 | `output_format="markdown"` | 8.36 ms | 1.58 ms | 5.3x | 6.5x |
-| `with_metadata=True, url=...` | 18.07 ms | 9.53 ms | 1.9x | 2.3x |
-| `output_format="json", with_metadata=True` | 21.02 ms | 9.09 ms | 2.3x | 2.6x |
+| `with_metadata=True, url=...` | 18.45 ms | 6.77 ms | 2.7x | 3.0x |
+| `output_format="json", with_metadata=True` | 23.41 ms | 6.74 ms | 3.5x | 3.4x |
 
 The same calls against trafilatura 2.3.1 (`V=23 BENCH_CFG=<cfg> tools/bench.sh 3000`):
 
@@ -248,7 +249,7 @@ The same calls against trafilatura 2.3.1 (`V=23 BENCH_CFG=<cfg> tools/bench.sh 3
 |---|---:|---:|---:|---:|
 | `output_format="markdown"` | 18.70 ms | 3.88 ms | 4.8x | 4.4x |
 | `with_metadata=True, url=...` | 41.07 ms | 16.14 ms | 2.5x | 2.5x |
-| `output_format="json", with_metadata=True` | 36.82 ms | 13.22 ms | 2.8x | 2.5x |
+| `output_format="json", with_metadata=True` | 27.08 ms | 6.50 ms | 4.2x | 3.6x |
 
 With comments (trafilatura's default), and the command line's call (`extract(bytes, options=Extractor())`), first
 3,000 pages:
@@ -260,9 +261,9 @@ With comments (trafilatura's default), and the command line's call (`extract(byt
 | `output_format="json", with_metadata=True, url=..., record_id=...` | 26.01 ms | 8.72 ms | 3.0x | 39.11 ms | 10.19 ms | 3.8x |
 | command line, bytes input | 16.26 ms | 1.98 ms | 8.2x | 20.51 ms | 2.16 ms | 9.5x |
 
-Mean CPU time per page. With metadata, about half of the remaining time is dateparser, which htmldate calls for
-unusual date strings and which trafilatura-rs calls back into rather than ports (see
-[docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)).
+Mean CPU time per page. The dateparser calls htmldate makes for unusual date strings run natively except for rare
+strings (see [docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)); with them in Python
+(`BENCH_PY_DATEPARSER=1`), the JSON call takes 7.77 ms (1.11) and 7.19 ms (2.3.1).
 
 Other output formats, links and images (first 3,000 pages, `include_comments=False`, mean CPU time per page,
 `[V=23] BENCH_CFG=<cfg> tools/bench.sh 3000`):
