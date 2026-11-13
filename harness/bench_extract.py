@@ -82,7 +82,8 @@ def main():
     n = int(sys.argv[4]) if len(sys.argv) > 4 else None
     from ref_meta import docs as read_docs
 
-    docs = [d for _, d in zip(range(n or 10**9), read_docs(path))]
+    # streamed, not loaded up front: the corpus is ~1.4 GB, and only extract() is inside the timer
+    docs = (d for _, d in zip(range(n or 10**9), read_docs(path)))
     extract = extractor(engine)
     clock = time.process_time_ns
     rows = []

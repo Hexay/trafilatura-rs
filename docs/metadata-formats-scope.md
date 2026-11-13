@@ -36,7 +36,7 @@ unchanged. Its regexes, XPaths and `str.isalpha`/punctuation tables come from `h
   boundary), dynamic typing in `process_parent` (`in` on str is substring, `TypeError`/`AttributeError` caught by a
   broad `except` that keeps partial mutations), `repr(list)`, `str.title/isupper/lower`, Python `re` (Unicode
   `\w`/`\d`/`\s`/`\b`, `re.I` equivalences such as `ı`/`İ`, lookbehinds, `$` before a final newline).
-- Regexes are translated from the live `re` objects by `harness/gen_meta_regexes.py` (sre parse tree → fancy-regex,
+- Regexes are translated from the live `re` objects by `harness/gen_py_regexes.py` (sre parse tree → fancy-regex,
   every class and case-folded literal expanded by testing all code points with Python's own `re`).
 
 ## htmldate 1.11.0 (largest piece)
@@ -119,8 +119,8 @@ pinned.
 ## Markdown
 
 `formatting=True` changes extraction (`hi`/`del` kept by `convert_tags`, `handle_formatting`) and `xmltotxt`
-(headings, emphasis, code fences, `␤` paragraph markers before `sanitize`). Already ported for 2.x-style code paths
-but never verified for 1.11; verified by the new `*_md` parity configs.
+(headings, emphasis, code fences, `␤` paragraph markers before `sanitize`). Verified for both versions by the `*_md`
+parity configs.
 
 ## Not covered (stays on Python)
 
@@ -148,13 +148,13 @@ occur on the 10,666-page corpus:
   or uses `re:` (unbound for a bare `XPath(expr)` in lxml).
 - A str with lone surrogates (lxml's parser takes them; Rust strings cannot).
 - xml output whose serialized tree lxml's re-parse rejects, or csv output containing NUL.
-
-URL resolution for links and images (`py/urllib.rs`) is native only where `urllib.parse` agrees across Python
-3.12–3.14 (it changed `urljoin` in 3.14: params, empty `?`/`#`, base fragments); other URLs, bracketed or
-non-ASCII hosts and control characters go to courlan / `urllib.parse` in Python. `harness/diff_urls.py` checks the
-native subset against each interpreter.
 - 2.3.1: a truthy non-str sitename (Python raises AttributeError from `lstrip`).
 - `\N{...}` escapes or lone surrogates produced by `normalize_authors`' `unicode_escape` decode.
 - JSON-LD nested deeper than 900 levels (Python's RecursionError limit) or with lone `\uD800`-style surrogates.
 - Python exceptions that `extract()` lets escape (odd JSON-LD sitename types, `';'.join` over non-str
   categories, an x-default `<link>` without `href`): the fallback raises the identical exception.
+
+URL resolution for links and images (`py/urllib.rs`) is native only where `urllib.parse` agrees across Python
+3.12–3.14 (it changed `urljoin` in 3.14: params, empty `?`/`#`, base fragments); other URLs, bracketed or
+non-ASCII hosts and control characters go to courlan / `urllib.parse` in Python. `harness/diff_urls.py` checks the
+native subset against each interpreter.
