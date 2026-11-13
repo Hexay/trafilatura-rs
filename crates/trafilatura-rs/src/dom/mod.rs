@@ -21,6 +21,7 @@ mod raw;
 mod serialize;
 mod slots;
 mod tree;
+mod xml_parse;
 mod xpath;
 
 pub use error::{Error, Result};

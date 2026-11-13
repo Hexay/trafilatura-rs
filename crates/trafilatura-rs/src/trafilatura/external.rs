@@ -5,6 +5,7 @@ use super::settings::{Focus, Options};
 use super::text::trim;
 use super::xpaths::{OVERALL_DISCARD_XPATH, PAYWALL_DISCARD_XPATH, REMOVE_COMMENTS_XPATH};
 use crate::dom::{Ctx, Error, Method, Node, Result};
+use crate::hooks::NoHooks;
 use crate::justext::{custom_justext, Stoplist};
 use crate::py;
 use crate::readability::try_readability;
@@ -58,7 +59,7 @@ fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Extraction> {
         cleaned.strip_tags(ctx, &["a"]);
     }
     cleaned.strip_tags(ctx, &["span"]);
-    let cleaned = convert_tags(ctx, cleaned, opts)?;
+    let cleaned = convert_tags(ctx, cleaned, opts, &NoHooks, None)?;
     for el in cleaned.iter(&["td", "th", "tr"]) {
         match el.tag() {
             "tr" => el.set_tag("row")?,

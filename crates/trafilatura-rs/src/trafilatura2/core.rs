@@ -22,6 +22,7 @@ use crate::trafilatura::deduplication::{duplicate_test, Lru};
 use crate::trafilatura::document::Document;
 use crate::trafilatura::filters;
 use crate::trafilatura::htmlprocessing::Env;
+use crate::trafilatura::links::Urls;
 use crate::trafilatura::main_extractor_extract::body_text;
 use crate::trafilatura::settings::Format;
 
@@ -57,7 +58,7 @@ pub fn extract(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Resu
         other => other?,
     };
     // txt formats only output the id and fingerprint in their metadata header
-    if opts.format == Format::Json || opts.with_metadata {
+    if !matches!(opts.format, Format::Txt | Format::Markdown) || opts.with_metadata {
         document.id = req.record_id.map_or(Value::None, Value::str);
         let content = format!("{} {}", document.title.to_py_str(), document.raw_text.to_py_str());
         document.fingerprint = Value::Str(content_fingerprint(&content));
@@ -74,7 +75,10 @@ pub fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru
         filters::check_metadata(&document, opts)?;
     }
     filters::prune_xpath(tree, opts, |node| delete_element(ctx, node, true))?;
-    let mut env = Env { ctx, opts, lru };
+    let doc_url = document.url.as_str().map(str::to_owned);
+    let urls =
+        Urls { hooks: req.hooks, page: req.url, convert: req.url.filter(|u| !u.is_empty()).or(doc_url.as_deref()) };
+    let mut env = Env { ctx, opts, lru, urls };
     let ((postbody, temp_text), (commentsbody, temp_comments)) = trafilatura_sequence(&mut env, tree)?;
     if let Some(max) = opts.max_tree_size {
         if postbody.len() > max {
@@ -116,7 +120,7 @@ pub fn prune_raw_tree(env: &Env, tree: Node, is_forum: bool) -> Result<Node> {
 pub fn prepare_tree(env: &Env, tree: Node) -> Result<(Node, Node)> {
     let cleaned = tree_cleaning(env.ctx, tree.deep_copy(env.ctx), env.opts)?;
     let backup = cleaned.deep_copy(env.ctx);
-    Ok((convert_tags(env.ctx, cleaned, env.opts)?, backup))
+    Ok((convert_tags(env.ctx, cleaned, env.opts, env.urls.hooks, env.urls.convert)?, backup))
 }
 
 /// `_extract_and_compare`: cascade stages 1-2.
@@ -141,7 +145,7 @@ pub fn trafilatura_sequence(env: &mut Env, tree: Node) -> Result<(Extraction, Ex
         if !c_text.is_empty() && is_forum {
             // thread forum: the "comments" are the posts, routed into the body (salvaged below if dropped)
             forum_posts = Some(c_body);
-            cleaned = convert_tags(ctx, backup.deep_copy(ctx), opts)?;
+            cleaned = convert_tags(ctx, backup.deep_copy(ctx), opts, env.urls.hooks, env.urls.convert)?;
         } else {
             comments = (c_body, c_text);
         }
@@ -199,10 +203,11 @@ pub fn escalation_tree(env: &Env, tree: Node, is_forum: bool, captured: bool) ->
 pub fn escalate(env: &mut Env, esc_tree: Node, len_text: usize) -> Result<Option<Extraction>> {
     let (ctx, opts) = (env.ctx, env.opts);
     let r_opts = Options { focus: Focus::Recall, ..opts.clone() };
-    let mut r_env = Env { ctx, opts: &r_opts, lru: &mut *env.lru };
+    let mut r_env = Env { ctx, opts: &r_opts, lru: &mut *env.lru, urls: env.urls };
     // Python catches any Exception from either candidate.
-    let retry = prepare_tree(&r_env, esc_tree).and_then(|(c, b)| extract_and_compare(&mut r_env, c, b, esc_tree)).ok();
-    let jt = if opts.fast { None } else { justext_rescue(ctx, esc_tree.deep_copy(ctx)).ok() };
+    let retry =
+        caught(prepare_tree(&r_env, esc_tree).and_then(|(c, b)| extract_and_compare(&mut r_env, c, b, esc_tree)))?;
+    let jt = if opts.fast { None } else { caught(justext_rescue(ctx, esc_tree.deep_copy(ctx)))? };
     let r_len = retry.as_ref().map_or(0, |r| py::len(&r.1));
     let j_len = jt.as_ref().map_or(0, |j| py::len(&j.1));
     if j_len > r_len && j_len as f64 > ESCALATION_JUSTEXT_RATIO * len_text as f64 {
@@ -212,6 +217,14 @@ pub fn escalate(env: &mut Env, esc_tree: Node, len_text: usize) -> Result<Option
         return Ok(retry);
     }
     Ok(None)
+}
+
+/// `try: ... except Exception`; Unsupported is the port's, not Python's, so it still escapes.
+fn caught<T>(r: Result<T>) -> Result<Option<T>> {
+    match r {
+        Err(e @ Error::Unsupported(_)) => Err(e),
+        r => Ok(r.ok()),
+    }
 }
 
 /// Thread-forum salvage: append the captured posts missing from the body.

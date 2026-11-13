@@ -1,5 +1,6 @@
 //! trafilatura/htmlprocessing.py: tree cleaning, pruning, link density and text-node processing.
 use super::deduplication::{duplicate_test, Lru};
+use super::links::Urls;
 use super::settings::{Focus, Options};
 use super::text::{textfilter, trim};
 use super::xml::delete_element;
@@ -10,6 +11,7 @@ pub struct Env<'a> {
     pub ctx: &'a Ctx,
     pub opts: &'a Options,
     pub lru: &'a mut Lru,
+    pub urls: Urls<'a>,
 }
 
 pub(crate) fn truthy(s: &Option<String>) -> bool {

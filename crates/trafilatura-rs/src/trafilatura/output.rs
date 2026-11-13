@@ -1,9 +1,12 @@
 //! core.py `determine_returnstring` and xml.py `build_json_output` for txt, markdown and json.
+use super::csv_output::csv_output;
 use super::document::Document;
+use super::html_output::html_output;
 use super::settings::{Format, Options};
 use super::text::normalize_unicode;
 use super::xml::xmltotxt;
-use crate::dom::{Error, Node, Result};
+use super::xml_output::xml_output;
+use crate::dom::{Ctx, Error, Node, Result};
 use crate::py;
 use crate::py::value::{dump_str, Value};
 
@@ -62,9 +65,15 @@ fn build_json_output(doc: &Document, with_metadata: bool) -> Result<String> {
 }
 
 /// `determine_returnstring`: the output string, NFC-normalized.
-pub fn determine_returnstring(doc: &Document, opts: &Options) -> Result<String> {
+pub fn determine_returnstring(ctx: &Ctx, doc: &Document, opts: &Options) -> Result<String> {
     let out = match opts.format {
         Format::Json => build_json_output(doc, opts.with_metadata)?,
+        Format::Xml => xml_output(ctx, doc)?,
+        Format::Html => html_output(ctx, doc, opts.with_metadata, false)?,
+        Format::Csv => {
+            let comments = doc.commentsbody.map(|c| xmltotxt(c, opts.formatting)).transpose()?;
+            csv_output(doc, &body_text(doc.body, opts.formatting)?, &comments.unwrap_or_default())?
+        }
         Format::Txt | Format::Markdown => {
             let mut out = String::new();
             if opts.with_metadata {

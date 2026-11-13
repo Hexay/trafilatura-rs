@@ -31,12 +31,36 @@ _GRID = {
     f"{f}_{o}": {**fv, **ov, "deduplicate": f in ("precision", "recall") and not ov.get("with_metadata")}
     for f, fv in _FOCUS.items() for o, ov in _OUTPUTS.items()
 }
-_GRID["balanced_mdmeta"] = {"output_format": "markdown", "with_metadata": True, "url": True}
-CONFIGS = {
-    **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_GRID}.items()},
-    **{f"{k}_comments": {**v, "include_comments": True}
-       for k, v in {**_BASE, "precision": {"favor_precision": True}, **_GRID}.items()},
+_META = {"with_metadata": True, "url": True}
+# verified with the default focus only
+_BALANCED_OUTPUTS = {"mdmeta": {"output_format": "markdown", **_META}}
+for _fmt in ("xml",):
+    _BALANCED_OUTPUTS[_fmt] = {"output_format": _fmt, "record_id": "r1"}
+    _BALANCED_OUTPUTS[f"{_fmt}meta"] = {"output_format": _fmt, "record_id": "r1", **_META}
+_GRID.update({f"balanced_{o}": ov for o, ov in _BALANCED_OUTPUTS.items()})
+# include_links / include_images (verified_outputs(features=...)), default focus
+_FEATURE_OUTPUTS = {
+    "txt": {"url": True}, "nourl": {}, "md": {"output_format": "markdown", "url": True}, **_OUTPUTS,
+    **{o: _BALANCED_OUTPUTS[o] for o in ("mdmeta", "xml", "xmlmeta")},
 }
+_FEATURES = {
+    f"{name}_{o}": {**fkw, **ov}
+    for name, fkw, outputs in (
+        ("links", {"include_links": True}, ("txt", "nourl", "md", "meta", "json")),
+        ("images", {"include_images": True}, ("txt", "nourl", "md", "json")),
+    )
+    for o, ov in ((o, _FEATURE_OUTPUTS[o]) for o in outputs)
+}
+CONFIGS = {
+    **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_GRID, **_FEATURES}.items()},
+    **{f"{k}_comments": {**v, "include_comments": True}
+       for k, v in {**_BASE, "precision": {"favor_precision": True}, **_GRID, **_FEATURES}.items()},
+}
+
+
+def features(kwargs):
+    """The include_links / include_images options a config turns on."""
+    return tuple(k for k in ("include_links", "include_images") if kwargs.get(k))
 
 
 def pages():

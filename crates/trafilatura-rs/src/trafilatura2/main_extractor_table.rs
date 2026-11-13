@@ -9,6 +9,7 @@ use super::xml::separates_inline;
 use crate::dom::{Ctx, Node, Result};
 use crate::py::int::decimal_value;
 use crate::trafilatura::htmlprocessing::Env;
+use crate::trafilatura::links::{join, Urls};
 use crate::trafilatura::text::text_chars_test;
 use std::collections::{HashMap, HashSet};
 
@@ -206,12 +207,14 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
     Ok((!newtable.is_empty()).then_some(newtable))
 }
 
-/// `handle_image` (options.url is None in the ported configuration).
-pub fn handle_image(ctx: &Ctx, element: Node) -> Result<Option<Node>> {
+/// `handle_image`, relative sources joined to `options.url` (`urls.page`).
+pub fn handle_image(ctx: &Ctx, urls: &Urls, element: Node) -> Result<Option<Node>> {
     let Some(link) = image_src(element) else { return Ok(None) };
-    let link = match link.strip_prefix("//") {
-        Some(rest) if !link.starts_with("http") => format!("http://{rest}"),
-        _ => link,
+    let link = match (urls.page, link.strip_prefix("//")) {
+        _ if link.starts_with("http") => link,
+        (Some(page), _) => join(urls.hooks, page, &link)?,
+        (None, Some(rest)) => format!("http://{rest}"),
+        (None, None) => link,
     };
     let processed = ctx.element(element.tag())?;
     processed.set("src", Some(&link))?;

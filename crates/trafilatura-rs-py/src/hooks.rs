@@ -125,4 +125,17 @@ impl Hooks for PyHooks {
             func(py, "trafilatura.metadata", "extract_domain")?.call((url,), Some(&kwargs))?.extract()
         })
     }
+
+    fn fix_relative_urls(&self, baseurl: &str, url: &str) -> Result<String> {
+        // 1.11 imports it into htmlprocessing, 2.x into utils
+        call(|py| {
+            let f = func(py, "trafilatura.htmlprocessing", "fix_relative_urls")
+                .or_else(|_| func(py, "trafilatura.utils", "fix_relative_urls"))?;
+            f.call1((baseurl, url))?.extract()
+        })
+    }
+
+    fn urljoin(&self, base: &str, url: &str) -> Result<String> {
+        call(|py| func(py, "urllib.parse", "urljoin")?.call1((base, url))?.extract())
+    }
 }

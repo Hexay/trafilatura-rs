@@ -6,6 +6,7 @@ use super::external::compare_extraction;
 use super::filters;
 use super::htmlprocessing::{prune_node, prune_unwanted_nodes, tree_cleaning, Env};
 use super::htmlprocessing_convert::convert_tags;
+use super::links::Urls;
 use super::main_extractor_comments::extract_comments;
 use super::main_extractor_extract::extract_content;
 use super::metadata::extract_metadata;
@@ -72,12 +73,12 @@ pub fn extract_with(html: &str, opts: &Options, req: &Request, lru: &mut Lru) ->
         other => other?,
     };
     let Some(mut document) = document else { return Ok(None) };
-    if opts.format == Format::Json {
+    if !matches!(opts.format, Format::Txt | Format::Markdown) {
         document.id = req.record_id.map_or(Value::None, Value::str);
         let content = format!("{} {}", document.title.to_py_str(), document.raw_text.to_py_str());
         document.fingerprint = Value::Str(content_fingerprint(&content));
     }
-    determine_returnstring(&document, opts).map(Some)
+    determine_returnstring(&ctx, &document, opts).map(Some)
 }
 
 /// `bare_extraction`: the document, or None where Python catches TypeError/ValueError.
@@ -103,8 +104,11 @@ pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lr
     let tree_backup = tree.deep_copy(ctx);
     let cleaned = tree_cleaning(ctx, tree, opts)?;
     let cleaned_backup = cleaned.deep_copy(ctx);
-    let mut cleaned = convert_tags(ctx, cleaned, opts)?;
-    let mut env = Env { ctx, opts, lru };
+    let doc_url = document.url.as_str().map(str::to_owned);
+    let urls =
+        Urls { hooks: req.hooks, page: req.url, convert: req.url.filter(|u| !u.is_empty()).or(doc_url.as_deref()) };
+    let mut cleaned = convert_tags(ctx, cleaned, opts, urls.hooks, urls.convert)?;
+    let mut env = Env { ctx, opts, lru, urls };
     let (comments, len_comments) = if opts.comments {
         let (body, _, n) = extract_comments(&mut env, cleaned)?;
         (Some(body), n)

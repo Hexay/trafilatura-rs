@@ -47,7 +47,7 @@ static XML_ENCODING_DECL: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// lxml's startDocument hook (`_initSaxDocument`): share the parser dict with the new document.
-unsafe extern "C" fn init_sax_document(ctxt: *mut c_void) {
+pub(super) unsafe extern "C" fn init_sax_document(ctxt: *mut c_void) {
     ffi::xmlSAX2StartDocument(ctxt);
     let c = ctxt as *mut ffi::xmlParserCtxt;
     let doc = (*c).myDoc;
@@ -59,7 +59,7 @@ unsafe extern "C" fn init_sax_document(ctxt: *mut c_void) {
 }
 
 /// lxml collects parse errors into an error log that trafilatura never reads.
-unsafe extern "C" fn ignore_error(_: *mut c_void, _: *const ffi::xmlError) {}
+pub(super) unsafe extern "C" fn ignore_error(_: *mut c_void, _: *const ffi::xmlError) {}
 
 /// CPython's PEP-393 buffer for `s` and the encoding lxml announces for it.
 fn pep393_buffer(s: &str) -> (Cow<'_, [u8]>, &'static str) {
@@ -193,7 +193,7 @@ impl Ctx {
 }
 
 /// `_fixHtmlDictNames`: move element and attribute names into the dict (so `Node::tag` slices stay valid).
-unsafe fn intern_names(dict: *mut ffi::xmlDict, doc: *mut ffi::xmlDoc) {
+pub(super) unsafe fn intern_names(dict: *mut ffi::xmlDict, doc: *mut ffi::xmlDoc) {
     let top = doc as P;
     let mut n = (*doc).children;
     while !n.is_null() && !raw::is_element(n) {

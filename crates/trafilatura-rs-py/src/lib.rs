@@ -87,6 +87,9 @@ fn format(output_format: &str) -> PyResult<Format> {
         "txt" => Ok(Format::Txt),
         "markdown" => Ok(Format::Markdown),
         "json" => Ok(Format::Json),
+        "xml" => Ok(Format::Xml),
+        "html" => Ok(Format::Html),
+        "csv" => Ok(Format::Csv),
         other => Err(PyValueError::new_err(format!("output_format {other:?} is not ported"))),
     }
 }

@@ -55,10 +55,10 @@ fn run_stages(html: &str) -> Vec<(&'static str, String)> {
         out.push((stage, ser(Some(cleaned))));
         let cleaned_backup = cleaned.deep_copy(&ctx);
         stage = "convert";
-        let cleaned = convert_tags(&ctx, cleaned, &opts)?;
+        let cleaned = convert_tags(&ctx, cleaned, &opts, &trafilatura_rs::hooks::NoHooks, None)?;
         out.push((stage, ser(Some(cleaned))));
         stage = "comments";
-        let mut env = Env { ctx: &ctx, opts: &opts, lru: &mut lru };
+        let mut env = Env { ctx: &ctx, opts: &opts, lru: &mut lru, urls: Default::default() };
         let c_tree = cleaned.deep_copy(&ctx);
         let comments = extract_comments(&mut env, c_tree)?;
         out.push((stage, format!("{}\x00{}", ser_triple(&comments), ser(Some(c_tree)))));
@@ -119,6 +119,23 @@ fn docs(path: &str) -> impl Iterator<Item = (u64, String)> {
     })
 }
 
+/// `harness urls pairs.jsonl out.jsonl`: the native URL resolution of each harness/diff_urls.py pair, null where
+/// it would call Python.
+fn urls(pairs: &str, out_path: &str) {
+    use trafilatura_rs::hooks::NoHooks;
+    use trafilatura_rs::trafilatura::links::{fix_relative_urls, get_base_url, join};
+    let mut out = BufWriter::new(std::fs::File::create(out_path).expect("out file"));
+    for line in BufReader::new(std::fs::File::open(pairs).expect("pairs")).lines() {
+        let (kind, base, url): (String, String, String) = serde_json::from_str(&line.expect("line")).expect("pair");
+        let native = match kind.as_str() {
+            "base" => get_base_url(&NoHooks, &base),
+            "fix" => fix_relative_urls(&NoHooks, &base, &url),
+            _ => join(&NoHooks, &base, &url),
+        };
+        writeln!(out, "{}", native.ok().map_or(Value::Null, Value::from)).expect("write");
+    }
+}
+
 type Extract = Box<dyn FnMut(&str) -> trafilatura_rs::dom::Result<Option<String>>>;
 
 /// `extract()` of trafilatura 1.11 (`v2` false) or 2.3.1 with the given options.
@@ -139,6 +156,10 @@ fn main() {
     let (mode, path) = (args[1].as_str(), args[2].as_str());
     let v2 = mode.ends_with('2');
     let mode = mode.trim_end_matches('2');
+    if mode == "urls" {
+        urls(path, &args[3]);
+        return;
+    }
     let stages = |html: &str, cfg: Option<&String>| {
         if v2 {
             v2::run_stages(html, cfg.map_or("balanced", String::as_str))

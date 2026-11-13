@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from parity import CONFIGS, FAST, TRAFILATURA, kwargs_for, pages, run
+from parity import CONFIGS, FAST, TRAFILATURA, features, kwargs_for, pages, run
 
 # 3 passes so repeated segments cross trafilatura's duplicate threshold (max_repetitions=2).
 DEDUP_PASSES = 3
@@ -24,12 +24,13 @@ def test_every_config_is_verified():
     import trafilatura_rs
 
     combos = {
-        ((c.get("output_format", "txt"), c.get("with_metadata", False)),
+        (features(c), (c.get("output_format", "txt"), c.get("with_metadata", False)),
          (c.get("favor_precision", False), c.get("favor_recall", False), c.get("include_tables", True),
           c.get(FAST, False), c["include_comments"]))
         for c in CONFIGS.values()
     }
-    verified = {(out, combo) for out, combos in trafilatura_rs.verified_outputs().items() for combo in combos}
+    verified = {(feats, out, combo) for feats in {features(c) for c in CONFIGS.values()}
+                for out, combos in trafilatura_rs.verified_outputs(features=feats).items() for combo in combos}
     assert combos == verified
 
 

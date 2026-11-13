@@ -28,5 +28,6 @@ pub mod settings;
 pub mod utils;
 pub mod xml;
 mod xml_md;
+mod xml_output;
 mod xml_text;
 pub mod xpaths;

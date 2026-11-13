@@ -1,10 +1,13 @@
 //! trafilatura 2.3.1 core.py `determine_returnstring` (with `_yaml_scalar`) and xml.py `build_json_output`, for
 //! txt, markdown and json.
 use super::xml::xmltotxt;
+use super::xml_output::xml_output;
 use crate::dom::{Ctx, Error, Node, Result};
 use crate::py;
 use crate::py::value::{dump_str, Value};
+use crate::trafilatura::csv_output::csv_output;
 use crate::trafilatura::document::Document;
+use crate::trafilatura::html_output::html_output;
 use crate::trafilatura::settings::{Format, Options};
 use crate::trafilatura::text::normalize_unicode;
 
@@ -90,6 +93,13 @@ fn build_json_output(ctx: &Ctx, doc: &Document, with_metadata: bool) -> Result<S
 pub fn determine_returnstring(ctx: &Ctx, doc: &Document, opts: &Options) -> Result<String> {
     let out = match opts.format {
         Format::Json => build_json_output(ctx, doc, opts.with_metadata)?,
+        Format::Xml => xml_output(ctx, doc)?,
+        Format::Html => html_output(ctx, doc, opts.with_metadata, true)?,
+        Format::Csv => csv_output(
+            doc,
+            &text_of(ctx, doc.body, opts.formatting)?,
+            &text_of(ctx, doc.commentsbody, opts.formatting)?,
+        )?,
         Format::Txt | Format::Markdown => {
             let mut out = String::new();
             if opts.with_metadata {

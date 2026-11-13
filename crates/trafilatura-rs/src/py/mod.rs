@@ -9,6 +9,7 @@ pub mod int;
 pub mod json;
 pub mod pyre;
 pub mod re;
+pub mod urllib;
 pub mod value;
 #[rustfmt::skip]
 mod tables;

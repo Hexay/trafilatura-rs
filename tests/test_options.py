@@ -112,6 +112,25 @@ def test_formatting():
     assert_rust_parity(HTML, rust=False, output_format="json", include_formatting=True)
 
 
+LINKS_PAGE = ("<html><body><article><p>" + "Some text to keep. " * 20 + "</p><p>See <a href='/a?b=1#c'>one</a>, "
+              "<a href='//cdn.example.org/x'>two</a>, <a href='http://[::1]/v6'>three</a>, <a>four</a> and "
+              "<a href='?q'><img src='/i.png' alt=''></a> <img data-src='//e.org/p.jpg' title='t'>.</p>"
+              + "<p>More text to keep around here.</p>" * 5 + "</article></body></html>")
+
+
+@pytest.mark.parametrize("fmt", ["txt", "markdown", "json", "xml", "html"])
+def test_links_and_images(fmt):
+    verified = (fmt, False) in trafilatura_rs.verified_outputs(features=("include_links", "include_images"))
+    for url in (None, "https://example.com/dir/page;p?x=1#f", "http://[::1]:8/"):
+        assert_rust_parity([LINKS_PAGE], rust=verified, include_links=True, include_images=True,
+                           output_format=fmt, url=url)
+    assert_rust_parity([LINKS_PAGE], rust=(fmt, True) in trafilatura_rs.verified_outputs(), output_format=fmt,
+                       with_metadata=True, url="https://example.com/")
+    assert_rust_parity([LINKS_PAGE], rust=False, include_links=1, output_format=fmt)
+    if fmt not in ("txt", "markdown"):
+        assert_rust_parity([LINKS_PAGE], rust=False, output_format=fmt, include_formatting=True)
+
+
 def test_max_tree_size():
     assert_rust_parity(HTML, rust=V1, max_tree_size=40)
 

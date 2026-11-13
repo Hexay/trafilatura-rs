@@ -34,12 +34,24 @@ VERIFIED_OUTPUTS = {
     ("json", True): _FOCUS_GRID,
     ("json", False): _FOCUS_GRID,
     ("markdown", True): _with_comments(_BALANCED),
+    ("xml", False): _with_comments(_BALANCED),
+    ("xml", True): _with_comments(_BALANCED),
 }
 _VERIFIED_BY_ENGINE = {"1.11.0": VERIFIED_OUTPUTS, "2.3.1": VERIFIED_OUTPUTS}
+_FEATURE_OUTPUTS = {out: _with_comments(_BALANCED) for out in (("txt", False), ("markdown", False), ("json", True))}
+# VERIFIED_OUTPUTS' counterpart for calls with include_links and/or include_images, per set of those enabled.
+VERIFIED_FEATURES = {
+    frozenset({"include_links"}): {**_FEATURE_OUTPUTS, ("txt", True): _with_comments(_BALANCED)},
+    frozenset({"include_images"}): _FEATURE_OUTPUTS,
+}
+_FEATURE_KEYS = {"links": "include_links", "images": "include_images"}
 
 
-def verified_outputs(engine=None):
-    """VERIFIED_OUTPUTS for trafilatura `engine` (default: the one `extract` reproduces here, see `engine()`)."""
+def verified_outputs(engine=None, features=()):
+    """VERIFIED_OUTPUTS for trafilatura `engine` (default: the one `extract` reproduces here, see `engine()`), or, with
+    `features` (e.g. ("include_links",)), the outputs verified with those options on."""
+    if features:
+        return VERIFIED_FEATURES.get(frozenset(features), {})
     return _VERIFIED_BY_ENGINE[engine or _versions.engine()]
 
 
@@ -53,7 +65,8 @@ def _rust_kwargs(kwargs, engine, verified=True):
     output = (rust["output_format"], rust["with_metadata"])
     combo = (rust["favor_precision"], rust["favor_recall"], rust["include_tables"], rust["no_fallback"],
              rust["include_comments"])
-    if combo not in _VERIFIED_BY_ENGINE[engine].get(output, ()):
+    features = [name for key, name in _FEATURE_KEYS.items() if rust.get("extra", {}).get(key)]
+    if combo not in verified_outputs(engine, features).get(output, ()):
         return None
     # fromisoformat (htmldate) has the full ISO grammar from 3.11; a document that falls back to Python would update
     # Python's dedup cache instead of ours

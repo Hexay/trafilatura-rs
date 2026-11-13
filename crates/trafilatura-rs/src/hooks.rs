@@ -54,6 +54,18 @@ pub trait Hooks: Sync {
         let _ = url;
         unsupported("courlan")
     }
+
+    /// `courlan.fix_relative_urls(baseurl, url)`, for links `py::urllib` leaves to Python.
+    fn fix_relative_urls(&self, baseurl: &str, url: &str) -> Result<String> {
+        let _ = (baseurl, url);
+        unsupported("courlan")
+    }
+
+    /// `urllib.parse.urljoin(base, url)`, for URLs `py::urllib` leaves to Python.
+    fn urljoin(&self, base: &str, url: &str) -> Result<String> {
+        let _ = (base, url);
+        unsupported("urljoin")
+    }
 }
 
 /// No Python available: every leaf is unsupported.

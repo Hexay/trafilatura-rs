@@ -12,6 +12,7 @@ use crate::justext::{classify_paragraphs, make_paragraphs, revise_paragraph_clas
 use crate::py;
 use crate::readability::v23;
 use crate::trafilatura::htmlprocessing::Env;
+use crate::trafilatura::links::Urls;
 use crate::trafilatura::text::trim;
 use crate::trafilatura::utils::fromstring_bytes;
 use std::collections::HashSet;
@@ -95,7 +96,7 @@ pub fn compare_extraction(env: &mut Env, cleaned_tree: Node, raw_tree: Node, own
         }
     }
     if use_readability {
-        return sanitize_tree(ctx, body, opts);
+        return sanitize_tree(ctx, body, opts, &env.urls);
     }
     Ok((body, text))
 }
@@ -131,12 +132,12 @@ pub fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Extraction> {
 }
 
 /// `sanitize_tree`: readability output converted to trafilatura's vocabulary.
-fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Extraction> {
+fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options, urls: &Urls) -> Result<Extraction> {
     let cleaned = tree_cleaning(ctx, tree, opts)?;
     cleaned.strip_tags(ctx, if opts.links { &["span"] } else { &["span", "a"] });
-    let cleaned = convert_tags(ctx, cleaned, opts)?;
+    let cleaned = convert_tags(ctx, cleaned, opts, urls.hooks, urls.page)?;
     for elem in cleaned.iter(&["graphic"]).collect::<Vec<_>>() {
-        match handle_image(ctx, elem)? {
+        match handle_image(ctx, urls, elem)? {
             None => delete_element(ctx, elem, true)?,
             Some(image) => {
                 elem.clear_attrs();

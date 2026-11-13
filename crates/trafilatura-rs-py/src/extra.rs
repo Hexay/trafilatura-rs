@@ -20,6 +20,8 @@ pub fn apply(opts: &mut Options, extra: &Bound<'_, PyDict>) -> PyResult<()> {
             "url_blacklist" => opts.url_blacklist = value.extract()?,
             "author_blacklist" => opts.author_blacklist = value.extract()?,
             "prune_xpath" => opts.prune_xpath = value.extract()?,
+            "links" => opts.links = value.extract()?,
+            "images" => opts.images = value.extract()?,
             "original_date" => opts.original_date = value.extract()?,
             "extensive_search" => opts.extensive_date_search = value.extract()?,
             other => return Err(PyValueError::new_err(format!("unknown extra option {other:?}"))),
