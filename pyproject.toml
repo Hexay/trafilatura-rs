@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "trafilatura-rs"
-version = "0.1.8"
+version = "0.1.9"
 description = "Byte-exact drop-in Rust port of trafilatura 1.11's and 2.3's extract()"
 readme = "README.md"
 license = { text = "Apache-2.0" }
