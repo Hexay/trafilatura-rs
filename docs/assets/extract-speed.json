@@ -1,0 +1,73 @@
+{
+ "call": "extract(html, favor_precision=True, include_comments=False, deduplicate=True): datatrove's call",
+ "rs_trafilatura": "0.1.1",
+ "docs": 10666,
+ "versions": {
+  "1.11.0": {
+   "runs": 3,
+   "trafilatura": {
+    "mean_ms": 15.77,
+    "p50_ms": 10.14,
+    "p99_ms": 99.07,
+    "minstr": 261.7,
+    "mean_ms_runs": [
+     15.77,
+     18.71,
+     15.26
+    ]
+   },
+   "trafilatura_rs": {
+    "mean_ms": 1.44,
+    "p50_ms": 0.97,
+    "p99_ms": 8.76,
+    "minstr": 19.5,
+    "mean_ms_runs": [
+     1.44,
+     1.45,
+     1.4
+    ],
+    "exact": 10666
+   },
+   "rs": {
+    "mean_ms": 11.07,
+    "p50_ms": 6.93,
+    "p99_ms": 74.08,
+    "minstr": 182.0,
+    "mean_ms_runs": [
+     11.07,
+     12.73,
+     11.0
+    ],
+    "exact": 171
+   },
+   "docs": 10666
+  },
+  "2.3.1": {
+   "runs": 3,
+   "trafilatura": {
+    "mean_ms": 13.72,
+    "p50_ms": 9.07,
+    "p99_ms": 80.71,
+    "minstr": 199.1,
+    "mean_ms_runs": [
+     12.27,
+     13.72,
+     15.33
+    ]
+   },
+   "trafilatura_rs": {
+    "mean_ms": 1.65,
+    "p50_ms": 1.1,
+    "p99_ms": 9.77,
+    "minstr": 24.6,
+    "mean_ms_runs": [
+     1.45,
+     1.65,
+     2.11
+    ],
+    "exact": 10666
+   },
+   "docs": 10666
+  }
+ }
+}

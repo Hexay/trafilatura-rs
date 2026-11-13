@@ -10,7 +10,7 @@ crates/harness            parity and bench binaries
 python/trafilatura_rs     Python API, install() patching
 harness/                  Python reference generators and comparers
 tests/                    pytest parity smoke on tests/fixtures (runs in CI)
-docs/                     trafilatura 1.11 → 2.2.0 → 2.3.1 diffs, README assets
+docs/                     coverage, benchmarks, metadata scope, trafilatura 1.11 → 2.2.0 → 2.3.1 diffs, README chart
 ```
 
 ## Setup (Linux)
@@ -105,7 +105,8 @@ thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min o
 user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
 trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead, and
 `BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura. It installs the
-release build first. `REUSE_BASELINE=1` reruns only trafilatura-rs and takes the other engines' runs from
+release build first. Engines stream the corpus instead of loading it (1.4 GB). Published numbers and the README
+chart (`tools/make_chart.py`): [docs/benchmarks.md](docs/benchmarks.md). `REUSE_BASELINE=1` reruns only trafilatura-rs and takes the other engines' runs from
 `$TRAFILATURA_RS_DATA/bench-cache` (keyed by arguments, corpus, bench scripts and package versions); instruction counts
 stay comparable, CPU times then come from different load.
 
