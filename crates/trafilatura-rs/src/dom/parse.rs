@@ -34,6 +34,9 @@ pub const HTML_PARSER: ParserOpts = ParserOpts {
     default_encoding: Some("utf-8"),
 };
 
+/// htmldate.utils.HTML_PARSER: trafilatura's without `remove_comments`.
+pub const HTMLDATE_PARSER: ParserOpts = ParserOpts { remove_comments: false, ..HTML_PARSER };
+
 /// `lxml.html.html_parser` (defaults), used by fragment_fromstring without a parser.
 pub const LXML_HTML_PARSER: ParserOpts =
     ParserOpts { options: BASE, remove_comments: false, remove_pis: false, default_encoding: None };

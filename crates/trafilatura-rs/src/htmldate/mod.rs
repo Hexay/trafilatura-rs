@@ -1,4 +1,4 @@
-//! Port of htmldate 1.11.0's `find_date`, as trafilatura 1.11's metadata extraction calls it.
+//! Port of htmldate 1.11.0's `find_date`, as trafilatura's metadata extraction calls it, and its `load_html`.
 //! dateutil and dateparser are not ported: they run through `Hooks` (see docs/metadata-formats-scope.md).
 use crate::dom::{Ctx, Error, Method, Node, Result};
 use crate::hooks::Hooks;
@@ -11,14 +11,18 @@ mod header;
 mod regexes;
 mod search_page;
 mod searches;
+mod utils;
 mod validators;
+
+pub use utils::load_html;
 
 /// The `date_extraction_params` trafilatura passes (`set_date_params`): `outputformat` "%Y-%m-%d", no min_date.
 #[derive(Clone, Debug)]
 pub struct DateParams {
     pub original_date: bool,
     pub extensive_search: bool,
-    /// ISO date ("YYYY-MM-DD") as `set_date_params` formats today's local date.
+    /// htmldate's `max_date` str: ISO, as `set_date_params` formats today's local date; anything `fromisoformat`
+    /// rejects (such as "") falls back to htmldate's default, the end of today.
     pub max_date: String,
 }
 

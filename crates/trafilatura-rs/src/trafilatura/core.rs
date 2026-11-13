@@ -88,8 +88,12 @@ fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &m
     }
 }
 
-fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
-    let tree = load_html(ctx, html).ok_or_else(|| value_error("empty HTML tree"))?;
+/// The ValueError for a page `load_html` rejects.
+pub const EMPTY_TREE: &str = "empty HTML tree";
+
+/// `bare_extraction` up to the TypeError/ValueError catch.
+pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
+    let tree = load_html(ctx, html).ok_or_else(|| value_error(EMPTY_TREE))?;
     let mut document = Document::default();
     if opts.with_metadata {
         document = extract_metadata(ctx, tree, req, opts)?;

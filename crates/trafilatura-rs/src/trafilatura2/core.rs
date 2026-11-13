@@ -66,7 +66,7 @@ pub fn extract(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Resu
 }
 
 /// `bare_extraction` up to the TypeError/ValueError catch.
-fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
+pub fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| Error::Value("empty HTML tree".into()))?;
     let mut document = Document::default();
     if opts.with_metadata {

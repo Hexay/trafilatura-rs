@@ -47,6 +47,10 @@ TRAFILATURA_RS_VERIFY_XPATH=1 tools/parity.sh final:fineweb   # cross-check fast
 tools/parity.sh meta:balanced_json   # markdown/metadata/json and option configs (harness/meta_configs.py), via the
                                      # extension and trafilatura_rs's own argument translation
 tools/parity.sh meta2:balanced_json  # same against 2.3.1 (.venv-t23; build with V=23 tools/dev.sh py)
+tools/parity.sh funcs:bare_balanced  # the other drop-ins (bare_extraction, baseline, html2txt, extract_metadata,
+                                     # htmldate.find_date), with CPU time per side (funcs2: 2.3.1; references:
+                                     # make_reference.sh funcs:<cfg>); configs: harness/ref_funcs.py list. Speedups
+                                     # need PROFILE=release tools/dev.sh py
 harness/ref_meta.py list             # every meta config: the focus x output x comments grid, then option extras
 harness/ref_meta.py show docs.jsonl 123 balanced_json          # both outputs of one doc
 harness/export_raw.py docs.jsonl <warc> docs_raw.jsonl         # raw HTTP payloads for the bytes configs; reference
@@ -79,7 +83,8 @@ On the shared box, `parity.sh`, `make_reference.sh` and `bench.sh` take one of t
 (`in_light_slot`, tools/env.sh) and release it in between. Never wrap a loop of jobs, or these scripts, in `flock`:
 a slot held across a loop blocks every other worktree for its whole length. Builds still go under heavy.lock.
 
-Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTPUTS` only with full-corpus parity.
+Any output difference from trafilatura is a bug. New options join `VERIFIED_OUTPUTS` (`VERIFIED_BARE` for
+bare_extraction) only with full-corpus parity.
 `python/trafilatura_rs/_options.py` turns extract() arguments into the `Extractor` each version would build, then
 into `_core.extract` keywords; a new option goes there, gets a `meta_configs.py` entry and a `tests/` case.
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Python reference outputs in $D (untimed), REF_JOBS at a time. Usage:
 #   [FORCE=1] tools/make_reference.sh [job ...]
-#       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | justext | readability
-#       (meta configs: harness/ref_meta.py CONFIGS; meta2: trafilatura 2.3.1). Default: every job but meta.
+#       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | funcs:<cfg>
+#             | funcs2:<cfg> | justext | readability
+#       (meta configs: harness/ref_meta.py CONFIGS, funcs: harness/ref_funcs.py list; meta2/funcs2: trafilatura
+#       2.3.1). Default: every job but meta and funcs.
 # Each reference gets a <ref>.stamp of the Python package versions that produced it (harness/ref_stamp.py). An
 # existing reference is kept when its stamp matches the venv (or it has none: it is adopted); on a mismatch the job
 # stops unless FORCE=1. Each job takes a free light.lock slot for itself, REF_JOBS (2) at a time; don't wrap this
@@ -24,6 +26,8 @@ job() {
     stages2 | final2) out=ref23_${mode%2}_$cfg.jsonl py=$PY23 cmd=("$ROOT/harness/ref2_stages.py" "${mode%2}") ;;
     meta) out=ref_meta_$cfg.jsonl cmd=("$ROOT/harness/ref_meta.py" ref) ;;
     meta2) out=ref23_meta_$cfg.jsonl py=$PY23 cmd=("$ROOT/harness/ref_meta.py" ref) ;;
+    funcs) out=ref_funcs_$cfg.jsonl cmd=("$ROOT/harness/ref_funcs.py" ref) ;;
+    funcs2) out=ref23_funcs_$cfg.jsonl py=$PY23 cmd=("$ROOT/harness/ref_funcs.py" ref) ;;
     justext) out=ref_justext.jsonl cmd=("$ROOT/harness/ref_justext.py" run) cfg= ;;
     readability) out=ref_readability.jsonl cmd=("$ROOT/harness/ref_readability.py" run) cfg= ;;
     *) echo "unknown job $1" >&2; return 2 ;;

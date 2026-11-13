@@ -123,6 +123,7 @@ pub fn extract_metadata(ctx: &Ctx, tree: Node, req: &Request, opts: &Options) ->
     if metadata.image.is_none() {
         metadata.image = as_value(extract_image(tree)?);
     }
+    metadata.date_url = metadata.url.clone();
     metadata.date = as_value(find_date(ctx, tree, metadata.url.as_str(), &date_params(opts, max_date), hooks)?);
     if metadata.sitename.is_none() {
         metadata.sitename = extract_sitename(tree)?;

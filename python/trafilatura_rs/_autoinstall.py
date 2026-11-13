@@ -1,11 +1,13 @@
 """Imported at interpreter startup by `trafilatura_rs.pth` when TRAFILATURA_RS is set (and not "0").
 
-Runs install() right after trafilatura is first imported, so processes that never use trafilatura don't pay for it.
+Runs install() right after trafilatura or htmldate is first imported, so processes that use neither don't pay for it.
 """
 
 import sys
 from importlib.abc import MetaPathFinder
 from importlib.util import find_spec
+
+_WATCHED = ("trafilatura", "htmldate")
 
 
 def _install():
@@ -16,7 +18,7 @@ def _install():
 
 class _InstallAfterImport(MetaPathFinder):
     def find_spec(self, name, path=None, target=None):
-        if name != "trafilatura":
+        if name not in _WATCHED:
             return None
         sys.meta_path.remove(self)
         spec = find_spec(name)
@@ -32,7 +34,7 @@ class _InstallAfterImport(MetaPathFinder):
         return spec
 
 
-if "trafilatura" in sys.modules:
+if any(name in sys.modules for name in _WATCHED):
     _install()
 else:
     sys.meta_path.insert(0, _InstallAfterImport())

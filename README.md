@@ -123,6 +123,55 @@ needs Python would update the wrong deduplication cache. Rare documents the port
 [docs/metadata-formats-scope.md](docs/metadata-formats-scope.md)) are rerun there automatically. None occur in the
 10,666-page corpus.
 
+### Other functions
+
+The rest of trafilatura's public functions, and htmldate's `find_date`, are drop-ins on the same terms: str or bytes
+input runs in Rust; anything else (lxml trees, responses, uncovered arguments) runs the installed Python function,
+and so does any document the port declines. `install()` and `TRAFILATURA_RS=1` swap them too, including the
+references trafilatura uses internally (those calls pass lxml trees, so they stay on Python).
+
+```python
+from trafilatura_rs import bare_extraction, baseline, extract_metadata, find_date, html2txt
+```
+
+| Function | Runs in Rust | Predicate |
+|---|---|---|
+| `html2txt(content, clean=True)` | every call on str/bytes | `supports_html2txt` |
+| `baseline(filecontent)` | every call on str/bytes; same lxml `<body>` | `supports_baseline` |
+| `extract_metadata(filecontent, default_url, date_config, extensive, author_blacklist)` | `date_config` as `extract`'s `date_extraction_params` | `supports_extract_metadata` |
+| `bare_extraction(filecontent, ...)` | `output_format="python"` (the default), the configurations in `VERIFIED_BARE`, the option extras above; not `deduplicate` | `supports_bare_extraction` |
+| `htmldate.find_date(htmlobject, ...)` | `extensive_search`, `original_date`, `url`, `max_date` as str; not URLs to download, `min_date`, another `outputformat` or `deferred_url_extractor` | `supports_find_date` |
+
+`bare_extraction` returns trafilatura's own `Document` (1.11: its dict, as `as_dict=True` does by default) with every
+slot filled from Rust. `body` and `commentsbody` are lxml trees rebuilt element by element from the Rust trees, then
+checked: `etree.tostring` of each must equal the Rust tree's, or the call reruns in Python. Elements are plain
+`etree._Element`s; in Python's trees some are `lxml.html.HtmlElement` proxies, depending on which elements were moved
+from the parsed page. Tag names lxml's API refuses (`<ahref="x">` parses as a tag) also rerun in Python.
+`extract_metadata`, `bare_extraction` with metadata and `find_date` need the versions metadata in `extract` needs.
+
+On the 10,666-page corpus every call below gives the same result as Python on every page; "Python reruns" counts
+the pages that fall back (names lxml's API refuses, and 1.11's error on unparseable pages). CPU time per page, Rust
+path vs the installed Python function in the same process:
+
+| Call | 1.11.0 speedup | 2.3.1 speedup | Python reruns (1.11.0 / 2.3.1) |
+|---|---|---|---|
+| `html2txt(html)` | 2.2x | 4.3x | 0 / 0 |
+| `html2txt(html, clean=False)` | 2.1x | 2.5x | 0 / 0 |
+| `baseline(html)` | 2.2x | 4.2x | 0 / 0 |
+| `extract_metadata(html)` | 1.7x | 2.0x | 0 / 0 |
+| `extract_metadata(html, default_url=url)` | 1.6x | 1.9x | 0 / 0 |
+| `htmldate.find_date(html)` | 2.5x | 2.5x | 0 / 0 |
+| `htmldate.find_date(html, url=url)` | 2.0x | 2.0x | 0 / 0 |
+| `htmldate.find_date(html, extensive_search=False, original_date=True)` | 2.6x | 2.6x | 0 / 0 |
+| `bare_extraction(html)` | 7.6x | 8.0x | 73 / 41 |
+| `bare_extraction(html, favor_precision=True)` | 10.0x | 7.9x | 74 / 40 |
+| `bare_extraction(html, favor_recall=True)` | 7.5x | 6.6x | 73 / 43 |
+| `bare_extraction(html, no_fallback=True)` (2.3.1: `fast=True`) | 7.0x | 7.3x | 65 / 31 |
+| `bare_extraction(html, include_comments=False)`, each focus | 6.8–10.1x | 6.2–7.7x | 64–73 / 29–41 |
+| `bare_extraction(html, with_metadata=True, url=url)`, each focus | 2.4–3.2x | 3.0–3.6x | as without metadata |
+
+Speedups exclude the reruns, which cost the Rust attempt plus the Python call.
+
 ## Exactness
 
 Each configuration is checked page by page against trafilatura 1.11.0 and 2.3.1 on 10,666 Common Crawl pages,

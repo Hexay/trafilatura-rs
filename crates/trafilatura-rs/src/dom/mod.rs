@@ -26,7 +26,7 @@ mod xpath;
 pub use error::{Error, Result};
 pub use html::{document_fromstring, element as html_element, fragment_fromstring, fromstring, Input};
 pub use iter::{DepthFirst, Stepping};
-pub use parse::{ParserOpts, HTML_PARSER, LXML_HTML_PARSER};
+pub use parse::{ParserOpts, HTMLDATE_PARSER, HTML_PARSER, LXML_HTML_PARSER};
 pub use serialize::Method;
 pub use xpath::{XItem, XValue};
 

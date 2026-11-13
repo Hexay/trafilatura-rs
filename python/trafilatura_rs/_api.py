@@ -69,22 +69,27 @@ def _decode_file():
         return None
 
 
-def _plan(filecontent, kwargs, engine, verified=True):
-    """(html str, `_core.extract` keywords) for `extract(filecontent, **kwargs)`, or None. bytes are decoded by the
-    installed trafilatura's own `decode_file`, as its `load_html` does before parsing."""
-    planned = _rust_kwargs(kwargs, engine, verified)
-    if planned is None:
-        return None
-    rust, max_file_size = planned
+def decoded(filecontent, engine, max_file_size=None):
+    """`filecontent` as the str trafilatura's `load_html` parses, or None when it isn't str or bytes (lxml trees,
+    responses) or decoding raises. bytes are decoded by the installed trafilatura's own `decode_file`."""
     if isinstance(filecontent, str):
-        return filecontent, rust
+        return filecontent
     decode = _decode_file() if isinstance(filecontent, bytes) else None
     if decode is None:
         return None
     try:
-        return (decode(filecontent) if engine == "1.11.0" else decode(filecontent, max_file_size)), rust
+        return decode(filecontent) if engine == "1.11.0" else decode(filecontent, max_file_size)
     except Exception:  # noqa: BLE001 - Python raises it again
         return None
+
+
+def _plan(filecontent, kwargs, engine, verified=True):
+    """(html str, `_core.extract` keywords) for `extract(filecontent, **kwargs)`, or None."""
+    planned = _rust_kwargs(kwargs, engine, verified)
+    if planned is None:
+        return None
+    html = decoded(filecontent, engine, planned[1])
+    return None if html is None else (html, planned[0])
 
 
 def supports(**kwargs):
@@ -99,6 +104,19 @@ def _python_extract():
     return original_extract()
 
 
+def bind(python, filecontent, args, kwargs):
+    """`kwargs` with the positional `args` of `python(filecontent, *args, **kwargs)` merged in by name."""
+    if not args:
+        return kwargs
+    if python is None:
+        raise TypeError("positional options need trafilatura installed; pass them as keywords")
+    signature = inspect.signature(python)
+    bound = signature.bind(filecontent, *args, **kwargs).arguments
+    extra = bound.pop("kwargs", {})
+    bound.pop(next(iter(signature.parameters)))
+    return {**bound, **extra}
+
+
 def extract(filecontent, *args, **kwargs):
     """Drop-in for `trafilatura.extract` of the installed trafilatura (2.3.1 when none is installed): Rust for covered
     calls, Python trafilatura for the rest.
@@ -110,13 +128,7 @@ def extract(filecontent, *args, **kwargs):
     back into Python for courlan, dateutil and dateparser, so it needs trafilatura installed.
     """
     python = _python_extract()
-    if args:
-        if python is None:
-            raise TypeError("positional options need trafilatura installed; pass them as keywords")
-        bound = inspect.signature(python).bind(filecontent, *args, **kwargs).arguments
-        extra = bound.pop("kwargs", {})
-        bound.pop("filecontent")
-        kwargs = {**bound, **extra}
+    kwargs = bind(python, filecontent, args, kwargs)
     engine = _versions.engine()
     plan = _plan(filecontent, kwargs, engine)
     if plan is not None and plan[1]["with_metadata"] and python is None:
