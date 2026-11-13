@@ -93,11 +93,11 @@ With the default focus, with and without comments, these also give identical pag
 | Output | Arguments |
 |---|---|
 | XML | `output_format="xml"`, with or without `with_metadata=True` |
-| Links | `include_links=True` with txt (with and without metadata), markdown, and JSON with metadata |
-| Images | `include_images=True` with txt, markdown, and JSON with metadata |
-
-`output_format="html"` and `"csv"`, and the other link/image combinations, are implemented but still run Python
-until their full-corpus parity is in.
+| HTML | `output_format="html"`, with or without `with_metadata=True` |
+| CSV | `output_format="csv"`, with or without `with_metadata=True` |
+| Links | `include_links=True` with txt, markdown, JSON and XML, each with and without metadata |
+| Images | `include_images=True`, the same outputs |
+| Links and images | both, with txt and with JSON with metadata |
 
 Relative link targets and image sources are resolved like courlan and `urllib.parse` do, natively for the common
 URL shapes (identical under Python 3.12 to 3.14 on the corpus' million links) and through Python for the rest.
