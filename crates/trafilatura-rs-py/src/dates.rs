@@ -2,7 +2,7 @@
 //! python-dateutil are the versions `trafilatura_rs._versions.REPRODUCES_DATES` names, else every call runs Python.
 use crate::hooks::to_datetime;
 use pyo3::prelude::*;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use trafilatura_rs::dates::{self, dateutil};
 use trafilatura_rs::py::datetime::DateTime;
 
@@ -32,6 +32,42 @@ fn unicode(py: Python<'_>) -> bool {
 /// `_external_date(s) if has_date_cue(s, ...) else None` is certainly None.
 pub(crate) fn external_date_is_none(py: Python<'_>, s: &str, min_year: i32, max_year: i32) -> bool {
     enabled(py) && dates::external_date_is_none(s, min_year, max_year, unicode(py))
+}
+
+/// (`_external_date`, its parser, whether `trafilatura_rs._dates.stock_external_date` holds) last checked.
+type Checked = Option<(Py<PyAny>, Py<PyAny>, bool)>;
+static STOCK: Mutex<Checked> = Mutex::new(None);
+
+fn today(py: Python<'_>) -> PyResult<i64> {
+    py.import("datetime")?.getattr("date")?.call_method0("today")?.call_method0("toordinal")?.extract()
+}
+
+/// Whether `function` (htmldate's `_external_date`) and htmldate's parser are what the native port reproduces.
+fn stock_external_date(py: Python<'_>, function: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let parser = py.import("htmldate.extractors")?.getattr("get_external_parser")?.call0()?;
+    let known =
+        |s: &Checked| s.as_ref().filter(|(f, p, _)| f.bind(py).is(function) && p.bind(py).is(&parser)).map(|s| s.2);
+    if let Some(ok) = known(&STOCK.lock().expect("stock lock")) {
+        return Ok(ok);
+    }
+    // not under the lock: the check runs Python
+    let ok = py.import("trafilatura_rs._dates")?.call_method1("stock_external_date", (function, &parser))?.extract()?;
+    *STOCK.lock().expect("stock lock") = Some((function.clone().unbind(), parser.unbind(), ok));
+    Ok(ok)
+}
+
+/// `function(s)` (htmldate's `_external_date`) natively, or None to run Python.
+pub(crate) fn external_date(
+    py: Python<'_>,
+    function: &Bound<'_, PyAny>,
+    s: &str,
+) -> PyResult<Option<Option<DateTime>>> {
+    if !(enabled(py) && unicode(py) && stock_external_date(py, function)?) {
+        return Ok(None);
+    }
+    let today = today(py)?;
+    // a bug in the port must not fail the extraction: Python decides instead
+    Ok(std::panic::catch_unwind(|| dates::external_date(s, today)).ok().flatten())
 }
 
 /// `time.tzname` when a name there makes dateutil use tzlocal with a nonzero offset; empty for a fixed UTC zone.
@@ -95,6 +131,22 @@ pub(crate) fn _native_dateutil<'py>(
         None => dateutil::Default::TodayMidnight,
     };
     Ok(match dateutil::parse(s, &default, local_tznames(py)) {
+        None => "defer".into_pyobject(py)?.into_any(),
+        Some(None) => py.None().into_bound(py),
+        Some(Some(d)) => as_tuple(d).into_pyobject(py)?.into_any(),
+    })
+}
+
+/// Differential tests: the native `_external_date(s)` on the local date `today` (an ordinal; None: today), as
+/// "defer", None or (year, month, day, hour, minute, second, microsecond, None).
+#[pyfunction]
+#[pyo3(signature = (s, today=None))]
+pub(crate) fn _native_dateparser<'py>(py: Python<'py>, s: &str, today: Option<i64>) -> PyResult<Bound<'py, PyAny>> {
+    let today = match today {
+        Some(t) => t,
+        None => self::today(py)?,
+    };
+    Ok(match dates::external_date(s, today) {
         None => "defer".into_pyobject(py)?.into_any(),
         Some(None) => py.None().into_bound(py),
         Some(Some(d)) => as_tuple(d).into_pyobject(py)?.into_any(),

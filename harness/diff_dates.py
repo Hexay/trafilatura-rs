@@ -3,8 +3,10 @@
                                                                  dateutil_parse / has_date_cue (/ _external_date)
   diff_dates.py check <strings.jsonl>                            compare every decided native result with Python
   diff_dates.py memo <strings.jsonl>                             check the _external_date memo's assumptions
+  diff_dates.py dateparser <strings.jsonl>...                    compare the native _external_date with Python on
+                                                                 every collected string and FUZZ (20000) more
 Every string is tried with both dateutil defaults (pinned day, today) and as a dateparser input; exit 1 on a
-mismatch."""
+mismatch. PAR (2) processes run Python in the dateparser mode."""
 import json
 import os
 import sys
@@ -20,9 +22,11 @@ def collect(docs_path, out_path, cfgs):
 
     import ref_meta
 
+    import ref_funcs
+
     ref_meta.pin_wall_clock()
-    seen = set()
-    cue, parse = ex.has_date_cue, ex.dateutil_parse
+    seen, external = set(), set()
+    cue, parse, dateparser = ex.has_date_cue, ex.dateutil_parse, ex._external_date
 
     def logged_cue(s, lo, hi):
         seen.add((s, lo.year, hi.year))
@@ -32,15 +36,26 @@ def collect(docs_path, out_path, cfgs):
         seen.add((s, None, None))
         return parse(s, **kwargs)
 
-    ex.has_date_cue, ex.dateutil_parse = logged_cue, logged_parse
+    def logged_external(s):
+        external.add(s)
+        return dateparser(s)
+
+    ex.has_date_cue, ex.dateutil_parse, ex._external_date = logged_cue, logged_parse, logged_external
     extract = ref_meta.rust_extract()
     for cfg in cfgs:
+        func = cfg.removeprefix("funcs:")
         for doc in ref_meta.docs(docs_path):
-            ref_meta.output(extract, doc, cfg)
+            if func == cfg:
+                ref_meta.output(extract, doc, cfg)
+            else:
+                ref_funcs.outcome(ref_funcs.RUST[ref_funcs.CONFIGS[func][0]], doc["html"],
+                                  ref_funcs.kwargs_for(func, doc))
     with open(out_path, "w", encoding="utf-8") as out:
         for s, lo, hi in sorted(seen, key=lambda r: (r[0], r[1] or 0, r[2] or 0)):
             out.write(json.dumps({"s": s, "min": lo, "max": hi}, ensure_ascii=False) + "\n")
-    print(f"{len(seen)} distinct calls")
+        for s in sorted(external):
+            out.write(json.dumps({"s": s, "min": None, "max": None, "ext": True}, ensure_ascii=False) + "\n")
+    print(f"{len(seen)} distinct calls, {len(external)} dateparser strings")
 
 
 def as_tuple(d):
@@ -102,6 +117,51 @@ def check(path):
     return 1 if bad else 0
 
 
+def _py_dateparser(strings):
+    import htmldate.extractors as ex
+
+    return [None if (d := ex._external_date(s)) is None else as_tuple(d) for s in strings]
+
+
+def dateparser(paths, fuzz):
+    """The native `_external_date` against htmldate's on the dateparser strings, every other collected string and
+    `fuzz` generated ones (Python in PAR processes)."""
+    import time
+    from datetime import date
+    from multiprocessing import Pool
+
+    from trafilatura_rs import _core
+
+    import dp_fuzz
+
+    rows = [json.loads(line) for p in paths for line in open(p, encoding="utf-8")]
+    ext = {r["s"] for r in rows if r.get("ext")}
+    groups = {"dateparser": sorted(ext), "collected": sorted({r["s"] for r in rows} - ext)}
+    groups["fuzz"] = sorted(set(dp_fuzz.strings(ext, fuzz)) - ext - set(groups["collected"]))
+    today = date.today().toordinal()
+    stats, bad, par = Counter(), [], int(os.environ.get("PAR", "2"))
+    for group, strings in groups.items():
+        start = time.perf_counter()
+        native = [_core._native_dateparser(s, today) for s in strings]
+        elapsed = time.perf_counter() - start
+        size = -(-len(strings) // (par * 8)) or 1
+        with Pool(par) as pool:
+            chunks = pool.map(_py_dateparser, [strings[i:i + size] for i in range(0, len(strings), size)])
+        expected = [d for chunk in chunks for d in chunk]
+        for s, got, want in zip(strings, native, expected):
+            kind = "defer" if got == "defer" else "native"
+            stats[group, f"{kind} (Python {'None' if want is None else 'date'})"] += 1
+            if got != "defer" and got != want:
+                bad.append((group, s, got, want))
+        print(f"{group}: {len(strings)} strings, native {elapsed:.2f}s")
+    for (group, kind), n in sorted(stats.items()):
+        print(f"{group:12} {kind:28} {n}")
+    for b in bad[:50]:
+        print("MISMATCH", *map(repr, b))
+    print(f"{len(bad)} mismatches")
+    return 1 if bad else 0
+
+
 def memo_stable(result, today):
     """crates/trafilatura-rs-py/src/memo.rs: whether a result computed on local day `today` is kept."""
     if result is None:
@@ -155,4 +215,6 @@ def memo(path):
 if __name__ == "__main__":
     if sys.argv[1] == "collect":
         sys.exit(collect(sys.argv[2], sys.argv[3], sys.argv[4:]))
+    if sys.argv[1] == "dateparser":
+        sys.exit(dateparser(sys.argv[2:], int(os.environ.get("FUZZ", "20000"))))
     sys.exit(memo(sys.argv[2]) if sys.argv[1] == "memo" else check(sys.argv[2]))

@@ -1,5 +1,7 @@
-//! When `DateDataParser.get_date_data(s)` (htmldate's settings, dateparser 1.5.0) returns no date because no locale
-//! accepts the string. A locale accepts a string only if every token it splits off is a dictionary word, a
+//! `DateDataParser.get_date_data(s)` with htmldate's settings (dateparser 1.5.0): a port of the whole call
+//! (date.rs, from locales.txt and unicode.txt), and in front of it, the proof below.
+//!
+//! The proof: when `get_date_data(s)` returns no date because no locale accepts the string. A locale accepts a string only if every token it splits off is a dictionary word, a
 //! relative-time expression or a number. Words are maximal runs of `[^\W\d_]` letters of what the locale sees
 //! (chars.rs). With word spacing, a word ends up whole inside one token or one simplification match, so a word
 //! outside the locale's word list (tables.txt, from harness/gen_dateparser_tables.py) rules the locale out; without
@@ -9,12 +11,36 @@
 //! second applicability check, never count. This proves a None result for strings in no language at all, which
 //! cost dateparser a pass over all ~200 locales; anything else is left to Python.
 mod chars;
+mod date;
+mod dictionary;
+mod locales;
+mod parser;
+mod quick;
 mod sanitize;
+mod strptime;
 mod tables;
+mod tokens;
+mod translate;
+mod tz;
+mod unicode;
 
+use crate::py::datetime::DateTime;
 pub(crate) use chars::versions;
 use std::collections::HashSet;
 use tables::{Locale, Vocabulary, TABLES};
+
+/// `get_date_data(s)["date_obj"]` (see date.rs), `today` being the ordinal of the local date; None when unknown.
+/// Needs the `unicodedata` and `regex` of `versions()`, like the non-ASCII shortcut.
+pub(super) fn date_obj(s: &str, today: i64) -> Option<Option<DateTime>> {
+    date::date_obj(s, today)
+}
+
+/// Whether locales.txt and unicode.txt come from the same dateparser data, `unicodedata` and `regex` as chars.txt.
+pub(super) fn data_consistent() -> bool {
+    let (unidata, regex) = versions();
+    let l = locales::DATA.versions;
+    unicode::versions() == (unidata, regex) && l == (regex, unidata)
+}
 
 /// dateparser's month names of all locales, folded (htmldate's `month_words()`).
 pub(super) fn month_words() -> &'static HashSet<&'static str> {

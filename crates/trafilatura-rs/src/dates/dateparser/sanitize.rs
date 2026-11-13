@@ -1,6 +1,7 @@
-//! `dateparser.date.sanitize_date` (its patterns are `regex`-module ones), as far as it changes letters and word
-//! boundaries; None where a short-cut is unsafe (`, в`, `г.`, a Roman numeral year or a calendar quarter).
-use super::chars::{is_digit, is_ghe, is_space, look_alike, push_letters};
+//! `dateparser.date.sanitize_date` (its patterns are `regex`-module ones); None where it is not ported (`, в`, `г.`,
+//! a Roman numeral year, a calendar quarter, a space only one of `str.strip` and `\s` knows).
+use super::chars::{is_digit, is_ghe, is_space, look_alike};
+use super::unicode::{is, Class};
 
 /// RE_SANITIZE_SKIP: these become a space; None for its `,\sв\b` alternative.
 fn skip(s: &[char]) -> Option<Vec<char>> {
@@ -78,7 +79,7 @@ trait Trim {
 impl Trim for Vec<char> {
     fn retain_trimmed(&mut self, c: char) {
         let start = self.iter().take_while(|&&x| x == c).count();
-        let end = self.len() - self.iter().rev().take_while(|&&x| x == c).count();
+        let end = (self.len() - self.iter().rev().take_while(|&&x| x == c).count()).max(start);
         self.truncate(end);
         self.drain(..start);
     }
@@ -90,11 +91,35 @@ fn periods(s: &[char]) -> Vec<char> {
     (0..s.len()).filter(|&i| keep(i)).map(|i| s[i]).collect()
 }
 
-/// Whether `_RE_ROMAN_YEAR` may match: a word of Roman numeral letters starting with M (its `\b`s fall at least
-/// between any characters this splits on).
+/// Whether `_RE_ROMAN_YEAR` may match a numeral of 3 letters or more (shorter ones neither change nor make a short
+/// Roman year): a word of Roman numeral letters starting with M (its `\b`s fall at least between any characters this
+/// splits on).
 fn has_roman_year(s: &[char]) -> bool {
     s.split(|c| !(c.is_ascii_alphanumeric() || *c == '_'))
-        .any(|w| w.first() == Some(&'M') && w.iter().all(|c| "MDCLXVI".contains(*c)))
+        .any(|w| w.len() >= 3 && w[0] == 'M' && w.iter().all(|c| "MDCLXVI".contains(*c)))
+}
+
+/// RE_SANITIZE_DECIMAL_COMMA `(?<=\d:\d{2}:\d{2}),(?=(\d{3,})(\s*[ap]\.?m\b)?)` (re.I) with `_decimal_comma_to_point`.
+fn decimal_commas(s: &mut [char]) {
+    let d = |s: &[char], i: usize| s.get(i).copied().is_some_and(is_digit);
+    let year_end = (0..s.len()).find(|&i| (i..i + 4).all(|k| d(s, k))).map_or(s.len(), |i| i + 4);
+    for i in 7..s.len() {
+        let behind = [0, 2, 3, 5, 6].iter().all(|&k| d(s, i - 7 + k)) && s[i - 6] == ':' && s[i - 3] == ':';
+        if s[i] != ',' || !behind {
+            continue;
+        }
+        let run = s[i + 1..].iter().take_while(|&&c| is_digit(c)).count();
+        if run < 3 {
+            continue;
+        }
+        let mut j = i + 1 + run;
+        j += s[j..].iter().take_while(|&&c| is_space(c)).count();
+        let meridiem = matches!(s.get(j), Some('a' | 'A' | 'p' | 'P')) && {
+            j += 1 + usize::from(s.get(j + 1) == Some(&'.'));
+            matches!(s.get(j), Some('m' | 'M')) && !s.get(j + 1).is_some_and(|&c| is(Class::Word, c))
+        };
+        s[i] = if run == 4 && !meridiem && year_end > i { ',' } else { '.' };
+    }
 }
 
 /// RE_SANITIZE_ON: `^.*?on:\s+(.*)` → `\1`.
@@ -108,22 +133,37 @@ fn after_on(s: &[char]) -> &[char] {
     s
 }
 
-/// Whether `_RE_QUARTER` may fullmatch (its only letter is Q).
-fn may_be_quarter(s: &[char]) -> bool {
-    s.iter().all(|&c| matches!(c, 'q' | 'Q') || push_letters(c, &mut String::new()) == Some(false))
+/// Whether `_RE_QUARTER` fullmatches (`\s*(?:(19|20)\d\d[-\s]?Q0?[1-4]|Q0?[1-4][-\s]?(19|20)\d\d)\s*`, re.I).
+fn quarter(s: &[char]) -> bool {
+    let start = s.iter().take_while(|&&c| is_space(c)).count();
+    let end = s.len() - s[start..].iter().rev().take_while(|&&c| is_space(c)).count();
+    let m = &s[start..end];
+    let year =
+        |y: &[char]| y.len() == 4 && matches!(y[..2], ['1', '9'] | ['2', '0']) && is_digit(y[2]) && is_digit(y[3]);
+    let sep = |c: Option<&char>| c.is_some_and(|&c| c == '-' || is_space(c));
+    let q = |q: &[char]| matches!(q, ['q' | 'Q', '0', '1'..='4'] | ['q' | 'Q', '1'..='4']);
+    let n = m.len();
+    n >= 6
+        && ((year(&m[..4]) && (q(&m[4..]) || (sep(m.get(4)) && q(&m[5..]))))
+            || (year(&m[n - 4..]) && (q(&m[..n - 4]) || (sep(m.get(n - 5)) && q(&m[..n - 5])))))
 }
 
 /// `sanitize_date(s)` then `_replace_quarter`; None where the date string would be rewritten beyond that.
 pub(super) fn sanitize(s: &str) -> Option<String> {
     let s: Vec<char> = s.chars().collect();
+    // str.strip() and \s disagree on these
+    if s.iter().any(|&c| is(Class::PySpace, c) != is_space(c)) {
+        return None;
+    }
     let s = skip(&s)?;
     if s.windows(2).any(|w| is_ghe(w[0]) && w[1] == '.') {
         return None;
     }
-    let s = periods(&spaces(&croatian(&s)));
+    let mut s = periods(&spaces(&croatian(&s)));
     if has_roman_year(&s) {
         return None;
     }
+    decimal_commas(&mut s);
     let mut s = after_on(&s).to_vec();
     while s.last() == Some(&':') {
         s.pop();
@@ -132,5 +172,5 @@ pub(super) fn sanitize(s: &str) -> Option<String> {
         *c = look_alike(*c).unwrap_or(*c);
     }
     s.retain_trimmed(' ');
-    (!may_be_quarter(&s)).then(|| s.into_iter().collect())
+    (!quarter(&s)).then(|| s.into_iter().collect())
 }
