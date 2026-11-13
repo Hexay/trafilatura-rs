@@ -150,7 +150,7 @@ from the parsed page. Tag names lxml's API refuses (`<ahref="x">` parses as a ta
 `extract_metadata`, `bare_extraction` with metadata and `find_date` need the versions metadata in `extract` needs.
 
 On the 10,666-page corpus every call below gives the same result as Python on every page; "Python reruns" counts
-the pages that fall back (tree checks, lxml-refused names, 1.11's error on unparseable pages). CPU time per page, Rust
+the pages that fall back (names lxml's API refuses, and 1.11's error on unparseable pages). CPU time per page, Rust
 path vs the installed Python function in the same process:
 
 | Call | 1.11.0 speedup | 2.3.1 speedup | Python reruns (1.11.0 / 2.3.1) |
@@ -163,11 +163,11 @@ path vs the installed Python function in the same process:
 | `htmldate.find_date(html)` | 2.5x | 2.5x | 0 / 0 |
 | `htmldate.find_date(html, url=url)` | 2.0x | 2.0x | 0 / 0 |
 | `htmldate.find_date(html, extensive_search=False, original_date=True)` | 2.6x | 2.6x | 0 / 0 |
-| `bare_extraction(html)` | 7.6x | 8.0x | 108 / 90 |
-| `bare_extraction(html, favor_precision=True)` | 10.0x | 7.9x | 115 / 316 |
-| `bare_extraction(html, favor_recall=True)` | 7.5x | 6.6x | 97 / 78 |
+| `bare_extraction(html)` | 7.6x | 8.0x | 73 / 41 |
+| `bare_extraction(html, favor_precision=True)` | 10.0x | 7.9x | 74 / 40 |
+| `bare_extraction(html, favor_recall=True)` | 7.5x | 6.6x | 73 / 43 |
 | `bare_extraction(html, no_fallback=True)` (2.3.1: `fast=True`) | 7.0x | 7.3x | 65 / 31 |
-| `bare_extraction(html, include_comments=False)`, each focus | 6.8–10.1x | 6.2–7.7x | 64–114 / 29–319 |
+| `bare_extraction(html, include_comments=False)`, each focus | 6.8–10.1x | 6.2–7.7x | 64–73 / 29–41 |
 | `bare_extraction(html, with_metadata=True, url=url)`, each focus | 2.4–3.2x | 3.0–3.6x | as without metadata |
 
 Speedups exclude the reruns, which cost the Rust attempt plus the Python call.
