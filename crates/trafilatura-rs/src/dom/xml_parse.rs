@@ -41,7 +41,16 @@ impl Ctx {
             let well_formed = (*ctxt).wellFormed != 0 && err.level < ffi::xmlErrorLevel_XML_ERR_ERROR;
             let message = (!err.message.is_null()).then(|| {
                 let msg = std::ffi::CStr::from_ptr(err.message).to_string_lossy();
-                format!("{}, line {}, column {}", msg.trim_end(), err.line, err.int2)
+                // code, line, column, message: lxml.etree.XMLSyntaxError's arguments (see trafilatura-rs-py)
+                format!(
+                    "{}\x1f{}\x1f{}\x1f{}, line {}, column {}",
+                    err.code,
+                    err.line,
+                    err.int2,
+                    msg.trim_end(),
+                    err.line,
+                    err.int2
+                )
             });
             if !(*ctxt).myDoc.is_null() && (*ctxt).myDoc != doc {
                 ffi::xmlFreeDoc((*ctxt).myDoc);

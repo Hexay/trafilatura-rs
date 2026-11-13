@@ -83,11 +83,15 @@ pub(crate) fn to_py_err(e: Error) -> PyErr {
     }
 }
 
-/// lxml.etree.XMLSyntaxError(message, code, line, column), or Unsupported (rerun in Python) without lxml.
+/// lxml.etree.XMLSyntaxError from "code\x1fline\x1fcolumn\x1fmessage", or Unsupported (rerun in Python) without lxml.
 fn xml_syntax_error(msg: String) -> PyErr {
+    let mut parts = msg.splitn(4, '\x1f');
+    let mut num = || parts.next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
+    let (code, line, column) = (num(), num(), num());
+    let text = msg.rsplit('\x1f').next().unwrap_or_default().to_owned();
     Python::attach(|py| {
         let class = py.import("lxml.etree").and_then(|m| m.getattr("XMLSyntaxError"));
-        match class.and_then(|c| c.call1((msg.as_str(), 1, 0, 0))) {
+        match class.and_then(|c| c.call1((text.as_str(), code, line, column, "<string>"))) {
             Ok(exc) => PyErr::from_value(exc),
             Err(_) => Unsupported::new_err(format!("XMLSyntaxError: {msg}")),
         }

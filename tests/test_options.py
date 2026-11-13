@@ -5,6 +5,7 @@ import gzip
 from configparser import ConfigParser
 
 import pytest
+from lxml.etree import XMLSyntaxError
 import trafilatura.core
 from parity import TRAFILATURA, pages
 from trafilatura.settings import DEFAULT_CONFIG, Extractor
@@ -129,6 +130,15 @@ def test_links_and_images(fmt):
     assert_rust_parity([LINKS_PAGE], rust=False, include_links=1, output_format=fmt)
     if fmt not in ("txt", "markdown"):
         assert_rust_parity([LINKS_PAGE], rust=False, output_format=fmt, include_formatting=True)
+
+
+def test_xml_reparse_error():
+    """An undeclared prefix (Word's <st1:city>) survives in a heading; lxml's re-parse then raises XMLSyntaxError."""
+    html = ("<html><body><article><h3>Formed: <st1:city>Graz</st1:city></h3><p>" + "Some text to keep. " * 20
+            + "</p>" + "<p>More text to keep around here.</p>" * 5 + "</article></body></html>")
+    assert_rust_parity([html], output_format="xml")
+    with pytest.raises(XMLSyntaxError, match="st1"):
+        trafilatura_rs.extract(html, output_format="xml")
 
 
 def test_max_tree_size():
