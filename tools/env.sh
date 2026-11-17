@@ -25,9 +25,10 @@ all_jobs() {
 
 # in_heavy_lock cmd...: run a compile holding $D/heavy.lock (one build at a time across worktrees); nested calls run
 # directly. Don't also wrap tools/dev.sh in `flock heavy.lock`: a second flock on the same file deadlocks.
+# -o: the sccache server a build starts outlives it and would otherwise inherit the lock forever.
 in_heavy_lock() {
   [ -n "${HEAVY_LOCK_HELD:-}" ] && { "$@"; return; }
-  HEAVY_LOCK_HELD=1 flock "$D/heavy.lock" "$@"
+  HEAVY_LOCK_HELD=1 flock -o "$D/heavy.lock" "$@"
 }
 
 # in_light_slot cmd...: run one job holding whichever light.lock.N (N < LIGHT_SLOTS) frees first; nested calls
