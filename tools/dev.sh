@@ -18,10 +18,10 @@ case ${1:?command} in
     [ -x "$PY23" ] || uv venv -q -p 3.13 "$ROOT/.venv-t23"
     uv pip install -q -p "$ROOT/.venv-t23" trafilatura==2.3.1 lxml==6.1.3 lxml-html-clean==0.4.6 justext==3.0.2 \
       courlan==1.4.0 htmldate==1.11.0 dateparser==1.5.0 python-dateutil==4.0.0 charset-normalizer==3.5.2 maturin==1.16.0 pytest ;;
-  build) cargo build --profile "$PROFILE" --manifest-path "$ROOT/Cargo.toml" -p harness ;;
+  build) in_heavy_lock cargo build --profile "$PROFILE" --manifest-path "$ROOT/Cargo.toml" -p harness ;;
   py) venv=$ROOT/.venv${V:+-t$V}  # V=23: into .venv-t23
-    (cd "$ROOT" && VIRTUAL_ENV="$venv" "$venv/bin/maturin" develop --profile "$PROFILE" -q) ;;
-  test) cargo test --profile "$PROFILE" --manifest-path "$ROOT/Cargo.toml" ;;
+    (cd "$ROOT" && VIRTUAL_ENV="$venv" in_heavy_lock "$venv/bin/maturin" develop --profile "$PROFILE" -q) ;;
+  test) in_heavy_lock cargo test --profile "$PROFILE" --manifest-path "$ROOT/Cargo.toml" ;;
   bindgen)
     inc=$(ls -d "$ROOT"/target/release/build/libxml2-sys-*/out/include/libxml2 | head -1)
     bindgen "$ROOT/crates/libxml2-sys/wrapper.h" --allowlist-function '(xml|html).*' --allowlist-type '(xml|html|_xml|_html).*' \

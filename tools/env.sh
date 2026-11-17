@@ -11,7 +11,7 @@ OUT=${TRAFILATURA_RS_OUT:-$D/out/$(basename "$ROOT")}
 CONFIGS=(fineweb balanced recall fast notables)
 # include_comments=True variants (harness/ref_stages.py CONFIGS), final and final2 only
 COMMENT_CONFIGS=(fineweb_comments precision_comments balanced_comments recall_comments fast_comments notables_comments)
-export PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8 CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-4}
+export PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8 CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS:-2}
 export TLDEXTRACT_CACHE=${TLDEXTRACT_CACHE:-$D/tldextract} HF_HOME=${HF_HOME:-$D/hf}
 mkdir -p "$D" "$OUT"
 quiet() { grep -v -E "INFO|WARNING" || true; }
@@ -21,6 +21,13 @@ all_jobs() {
   local c
   printf '%s\n' stages justext readability stages2:balanced stages2:fineweb
   for c in "${CONFIGS[@]}" "${COMMENT_CONFIGS[@]}"; do printf '%s\n' "final:$c" "final2:$c"; done
+}
+
+# in_heavy_lock cmd...: run a compile holding $D/heavy.lock (one build at a time across worktrees); nested calls run
+# directly. Don't also wrap tools/dev.sh in `flock heavy.lock`: a second flock on the same file deadlocks.
+in_heavy_lock() {
+  [ -n "${HEAVY_LOCK_HELD:-}" ] && { "$@"; return; }
+  HEAVY_LOCK_HELD=1 flock "$D/heavy.lock" "$@"
 }
 
 # in_light_slot cmd...: run one job holding whichever light.lock.N (N < LIGHT_SLOTS) frees first; nested calls
