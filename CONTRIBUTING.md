@@ -113,7 +113,8 @@ and `rs_trafilatura.extract(...)`. Each engine runs in a fresh process, on the s
 thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min over rounds) and `perf stat`
 user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
 trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead, and
-`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura. `INPUT=tree` passes
+`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura; `BENCH_FUNC=<cfg>` does the same
+for a `harness/ref_funcs.py` config (`bare_extraction` and the other drop-ins). `INPUT=tree` passes
 `lxml.html.fromstring` trees, parsed outside the timer, to every engine. It installs the
 release build first. Engines stream the corpus instead of loading it (1.4 GB). Published numbers and the README
 chart (`tools/make_chart.py`): [docs/benchmarks.md](docs/benchmarks.md). `REUSE_BASELINE=1` reruns only trafilatura-rs and takes the other engines' runs from

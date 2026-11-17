@@ -2,7 +2,7 @@
 //! the Document (or dict) and the lxml trees from them.
 use crate::convert::{self, Fields};
 use crate::tree::{Input, SameThread};
-use crate::{extra, options, request, to_py_err, Engine};
+use crate::{dedup, extra, options, request, to_py_err, Engine};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use trafilatura_rs::dom::{Ctx, Error, Node, Result};
@@ -13,12 +13,18 @@ use trafilatura_rs::trafilatura::document::Document;
 use trafilatura_rs::trafilatura::settings::Options;
 use trafilatura_rs::{trafilatura, trafilatura2};
 
-fn document(engine: Engine, ctx: &Ctx, input: Input, opts: &Options, req: &Request) -> Result<Option<Document>> {
-    let mut lru = Lru::default();
+fn document(
+    engine: Engine,
+    ctx: &Ctx,
+    input: Input,
+    opts: &Options,
+    req: &Request,
+    lru: &mut Lru,
+) -> Result<Option<Document>> {
     let result = match (engine, input) {
-        (Engine::V1_11, Input::Html(html)) => trafilatura::core::extract_document(ctx, html, opts, req, &mut lru),
-        (Engine::V2_3, Input::Html(html)) => trafilatura2::core::bare_extraction(ctx, html, opts, req, &mut lru),
-        (Engine::V2_3, Input::Tree(tree)) => trafilatura2::core::bare_extraction_tree(ctx, tree, opts, req, &mut lru),
+        (Engine::V1_11, Input::Html(html)) => trafilatura::core::extract_document(ctx, html, opts, req, lru),
+        (Engine::V2_3, Input::Html(html)) => trafilatura2::core::bare_extraction(ctx, html, opts, req, lru),
+        (Engine::V2_3, Input::Tree(tree)) => trafilatura2::core::bare_extraction_tree(ctx, tree, opts, req, lru),
         (Engine::V1_11, Input::Tree(_)) => {
             return Err(Error::Unsupported("trafilatura 1.11 changes the caller's tree".into()))
         }
@@ -62,12 +68,12 @@ fn fields(engine: Engine, ctx: &Ctx, doc: &Document, opts: &Options, python_form
     Ok(fields)
 }
 
-/// `bare_extraction(html, ...)` without deduplication, keywords as in `extract` (html: a str or, for 2.3.1, an lxml
-/// tree); None where Python returns None.
+/// `bare_extraction(html, ...)`, keywords as in `extract` (html: a str or, for 2.3.1, an lxml tree); None where Python
+/// returns None. With `deduplicate` it shares `extract`'s process-wide dedup state (see dedup.rs).
 #[pyfunction]
 #[pyo3(signature = (html, engine, python_format, favor_precision=false, favor_recall=false, include_tables=true,
     no_fallback=false, include_comments=true, output_format="txt", with_metadata=false, url=None, max_date=None,
-    extra=None))]
+    extra=None, deduplicate=false))]
 #[allow(clippy::too_many_arguments)]
 pub fn bare_extraction<'py>(
     py: Python<'py>,
@@ -84,13 +90,14 @@ pub fn bare_extraction<'py>(
     url: Option<&str>,
     max_date: Option<&str>,
     extra: Option<&Bound<'py, PyDict>>,
+    deduplicate: bool,
 ) -> PyResult<Option<Bound<'py, PyDict>>> {
     let (engine, mut opts) = options(
         engine,
         favor_precision,
         favor_recall,
         include_tables,
-        false,
+        deduplicate,
         no_fallback,
         include_comments,
         output_format,
@@ -105,10 +112,10 @@ pub fn bare_extraction<'py>(
     let fields: Option<Fields> = py
         .detach(|| {
             let (ctx, input) = job.get();
-            match document(engine, ctx, input, &opts, &req)? {
+            dedup::run(deduplicate, |lru| match document(engine, ctx, input, &opts, &req, lru)? {
                 Some(doc) => fields(engine, ctx, &doc, &opts, python_format).map(Some),
                 None => Ok(None),
-            }
+            })
         })
         .map_err(to_py_err)?;
     fields.map(|f| convert::dict(py, &f)).transpose()

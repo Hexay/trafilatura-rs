@@ -4,8 +4,8 @@ text, tail) from the Rust trees, then checked: `etree.tostring` of each must equ
 that check reruns the call in Python, as does anything else the port doesn't cover."""
 import importlib
 
-from . import _core, _versions
-from ._api import _BALANCED, _FAST, _PRECISION, _RECALL, _with_comments, bind, source
+from . import _core, _dedup, _versions
+from ._api import _BALANCED, _FAST, _FEATURE_KEYS, _PRECISION, _RECALL, _with_comments, bind, source
 from ._funcs import call, document, metadata_ready
 from ._install import original
 from ._options import core_kwargs
@@ -17,11 +17,18 @@ VERIFIED_BARE = {
     ("python", False): _with_comments(*_FOCUS),
     ("python", True): frozenset((*options, True) for options in _FOCUS),
 }
+# VERIFIED_BARE's counterpart for calls with include_links and/or include_images, per set of those enabled.
+VERIFIED_BARE_FEATURES = {
+    frozenset({"include_links"}): {("python", False): _with_comments(_BALANCED)},
+    frozenset({"include_images"}): {("python", False): _with_comments(_BALANCED)},
+    frozenset({"include_links", "include_images"}): {out: frozenset({(*_BALANCED, True)})
+                                                     for out in (("python", False), ("python", True))},
+}
 
 
 def _plan(filecontent, kwargs, engine):
     """(html str or lxml tree, `_core.bare_extraction` keywords, date_params) for `bare_extraction(filecontent,
-    **kwargs)`, or None. Deduplication stays on Python: a document rerun there would update Python's cache instead of ours."""
+    **kwargs)`, or None."""
     planned = core_kwargs(kwargs, engine, bare=True)
     if planned is None:
         return None
@@ -29,7 +36,9 @@ def _plan(filecontent, kwargs, engine):
     output = ("python" if rust["python_format"] else rust["output_format"], rust["with_metadata"])
     combo = (rust["favor_precision"], rust["favor_recall"], rust["include_tables"], rust["no_fallback"],
              rust["include_comments"])
-    if combo not in VERIFIED_BARE.get(output, ()) or rust.pop("deduplicate") or (output[1] and not metadata_ready()):
+    features = frozenset(name for key, name in _FEATURE_KEYS.items() if rust.get("extra", {}).get(key))
+    verified = VERIFIED_BARE_FEATURES.get(features, {}) if features else VERIFIED_BARE
+    if combo not in verified.get(output, ()) or (output[1] and not metadata_ready()):
         return None
     html = source(filecontent, engine, max_file_size)
     return None if html is None else (html, rust, rust.pop("date_params"))
@@ -95,13 +104,18 @@ def bare_extraction(filecontent, *args, **kwargs):
     planned = None
     if python is not None and not _versions.mismatched_versions(kwargs.get("with_metadata", False)):
         planned = _plan(filecontent, kwargs, engine)
-    if planned is None:
-        return call("bare_extraction", None, (filecontent,), kwargs)
-    html, rust, date_params = planned
-    try:
-        result = run_rust(html, rust, engine, kwargs.get("as_dict", engine == "1.11.0"), date_params)
-    except Exception:  # noqa: BLE001 - Python reruns the call and raises what it raises
-        return python(filecontent, **kwargs)
+    dedup = _dedup.requested(kwargs)
+    with _dedup.lock(dedup):
+        if planned is None:
+            with _dedup.python_uses_rust_cache(dedup):
+                return call("bare_extraction", None, (filecontent,), kwargs)
+        html, rust, date_params = planned
+        try:
+            with _dedup.undo_on_error(rust["deduplicate"]):
+                result = run_rust(html, rust, engine, kwargs.get("as_dict", engine == "1.11.0"), date_params)
+        except Exception:  # noqa: BLE001 - Python reruns the call and raises what it raises
+            with _dedup.python_uses_rust_cache(dedup):
+                return python(filecontent, **kwargs)
     if engine != "1.11.0":  # 2.x's DeprecationWarnings, attributed to our caller as Python's are
         importlib.import_module("trafilatura.core")._check_deprecation(
             kwargs.get("fast", False), no_fallback=kwargs.get("no_fallback", False),

@@ -2,7 +2,7 @@
 //! checks after metadata, `check_authors`, and the `prune_xpath` pass.
 use super::document::Document;
 use super::settings::Options;
-use crate::dom::{Error, Node, Result};
+use crate::dom::{Error, Node, Result, UserItem, UserValue, UserXPath};
 use crate::py;
 
 /// The checks right after `extract_metadata`: Python raises ValueError (the call returns None).
@@ -68,15 +68,45 @@ pub fn check_authors(authors: &str, blacklist: &[String]) -> Result<Option<Strin
     Ok((!kept.is_empty()).then(|| kept.join("; ").trim_matches([';', ' ']).to_owned()))
 }
 
-/// `prune_unwanted_nodes(tree, [XPath(x) for x in prune_xpath])` with the version's node removal. Expressions whose
-/// results Python would not simply remove (errors, strings, attributes, the root) are left to Python.
-pub fn prune_xpath(tree: Node, opts: &Options, mut remove: impl FnMut(Node) -> Result<()>) -> Result<()> {
-    for expr in &opts.prune_xpath {
-        let nodes = tree
-            .xpath_user_elements(expr)
-            .ok_or_else(|| Error::Unsupported(format!("prune_xpath {expr:?} selects more than elements")))?;
-        for node in nodes {
-            remove(node)?;
+/// The attribute a version's removal reads first from each result item: 1.11's `prune_unwanted_nodes` reads `.tail`,
+/// 2.3.1's `delete_element` calls `.getparent()` (which lxml's smart strings have, so their `.tail` fails next).
+#[derive(Clone, Copy)]
+pub enum FirstRead {
+    Tail,
+    GetParent,
+}
+
+fn missing_attribute(type_name: &str, attr: &str) -> Error {
+    Error::Runtime(format!("AttributeError: '{type_name}' object has no attribute '{attr}'"))
+}
+
+/// `prune_unwanted_nodes(tree, [XPath(x) for x in prune_xpath])` with the version's node removal, including what
+/// Python raises for results other than elements (strings, attributes, namespaces, numbers) and XPath errors.
+pub fn prune_xpath(
+    tree: Node,
+    opts: &Options,
+    first: FirstRead,
+    mut remove: impl FnMut(Node) -> Result<()>,
+) -> Result<()> {
+    let first = match first {
+        FirstRead::Tail => "tail",
+        FirstRead::GetParent => "getparent",
+    };
+    let compiled = opts.prune_xpath.iter().map(|e| UserXPath::compile(e)).collect::<Result<Vec<_>>>()?;
+    for xpath in &compiled {
+        let items = match xpath.eval(tree)? {
+            UserValue::Items(items) => items,
+            UserValue::Float => return Err(Error::Type("'float' object is not iterable".into())),
+            UserValue::Bool => return Err(Error::Type("'bool' object is not iterable".into())),
+            UserValue::Str(s) if s.is_empty() => continue,
+            UserValue::Str(_) => return Err(missing_attribute("str", first)),
+        };
+        for item in items {
+            match item {
+                UserItem::Node(node) => remove(node)?,
+                UserItem::SmartString => return Err(missing_attribute("lxml.etree._ElementUnicodeResult", "tail")),
+                UserItem::Tuple => return Err(missing_attribute("tuple", first)),
+            }
         }
     }
     Ok(())

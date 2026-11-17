@@ -102,7 +102,7 @@ pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lr
         document = extract_metadata(ctx, tree, req, opts)?;
         filters::check_metadata(&document, opts)?;
     }
-    filters::prune_xpath(tree, opts, |node| prune_node(ctx, node))?;
+    filters::prune_xpath(tree, opts, filters::FirstRead::Tail, |node| prune_node(ctx, node))?;
     let tree_backup = tree.deep_copy(ctx);
     let cleaned = tree_cleaning(ctx, tree, opts)?;
     let cleaned_backup = cleaned.deep_copy(ctx);

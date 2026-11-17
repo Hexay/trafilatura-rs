@@ -7,6 +7,7 @@
 # CALL=default benches the default call extract(html) instead (see harness/bench_extract.py).
 # BENCH_CFG=<cfg> benches a harness/meta_configs.py config instead, without rs-trafilatura (BENCH_DOCS=<file>: another
 # corpus file, e.g. docs_raw.jsonl for the bytes configs).
+# BENCH_FUNC=<cfg> benches a harness/ref_funcs.py config (bare_extraction etc.) the same way, without rs-trafilatura.
 # V=23 benches trafilatura 2.3.1 (wheel in .venv-t23, no rs-trafilatura).
 # INPUT=tree passes lxml.html.fromstring trees instead of str, parsed outside the timer (with V=23: 1.11 runs trees in
 # Python).
@@ -20,13 +21,13 @@ set -euo pipefail
 N=${1:-}
 py=$PY B=$OUT/bench engines=(none trafilatura trafilatura_rs rs)
 [[ ${V:-} == 23 ]] && py=$PY23 B=$OUT/bench23
-[[ ${V:-} == 23 || -n ${BENCH_CFG:-} ]] && engines=(none trafilatura trafilatura_rs)
-B=$B${CALL:+_$CALL}${BENCH_CFG:+_$BENCH_CFG}${INPUT:+_$INPUT}
-export BENCH_CFG INPUT PYTHONPATH=$ROOT/harness${PYTHONPATH:+:$PYTHONPATH}
+[[ ${V:-} == 23 || -n ${BENCH_CFG:-}${BENCH_FUNC:-} ]] && engines=(none trafilatura trafilatura_rs)
+B=$B${CALL:+_$CALL}${BENCH_CFG:+_$BENCH_CFG}${BENCH_FUNC:+_$BENCH_FUNC}${INPUT:+_$INPUT}
+export BENCH_CFG BENCH_FUNC INPUT PYTHONPATH=$ROOT/harness${PYTHONPATH:+:$PYTHONPATH}
 PROFILE=release bash "$ROOT/tools/dev.sh" py
 docs=$D/${BENCH_DOCS:-docs.jsonl}
-key=$( { echo "$N ${ROUNDS:-2} ${CALL:-} ${BENCH_CFG:-} ${V:-} ${INPUT:-}"; stat -c '%s %Y' "$docs"
-  cat "$ROOT"/harness/{bench_extract,meta_configs,ref_meta}.py; "$py" "$ROOT/harness/ref_stamp.py"
+key=$( { echo "$N ${ROUNDS:-2} ${CALL:-} ${BENCH_CFG:-} ${BENCH_FUNC:-} ${V:-} ${INPUT:-}"; stat -c '%s %Y' "$docs"
+  cat "$ROOT"/harness/{bench_extract,meta_configs,ref_meta,ref_funcs}.py; "$py" "$ROOT/harness/ref_stamp.py"
   "$py" -c 'from importlib.metadata import version as v
 for p in ("rs-trafilatura", "datatrove"):
     try: print(p, v(p))

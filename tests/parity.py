@@ -26,9 +26,9 @@ _OUTPUTS = {
     "json": {"output_format": "json", "with_metadata": True, "url": True, "record_id": "r1"},
     "jsontext": {"output_format": "json", "record_id": "r1"},
 }
-# deduplicate=True on the precision and recall configs without metadata (with metadata it stays on Python)
+# deduplicate=True on the precision and recall configs
 _GRID = {
-    f"{f}_{o}": {**fv, **ov, "deduplicate": f in ("precision", "recall") and not ov.get("with_metadata")}
+    f"{f}_{o}": {**fv, **ov, "deduplicate": f in ("precision", "recall")}
     for f, fv in _FOCUS.items() for o, ov in _OUTPUTS.items()
 }
 _META = {"with_metadata": True, "url": True}

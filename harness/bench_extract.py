@@ -9,6 +9,8 @@ CALL=default switches every engine to its default call: trafilatura.extract(html
 and rs_trafilatura.extract(html).main_content.
 With BENCH_CFG=<cfg> (a harness/meta_configs.py config), trafilatura and trafilatura_rs call extract() with that
 config's arguments instead of datatrove's (rs is not comparable there); bytes configs need BENCH_DOCS=docs_raw.jsonl.
+With BENCH_FUNC=<cfg> (a harness/ref_funcs.py config, e.g. bare_links), trafilatura calls the Python function and
+trafilatura_rs its drop-in (Python reruns included); outputs compare as ref_funcs.canon's JSON.
 BENCH_PY_DATEPARSER=1 keeps htmldate's dateparser calls in Python there (the native port off, for before/after).
 INPUT=tree passes every engine lxml.html.fromstring(html) instead of the str, parsed outside the timer (docs lxml can't
 parse are skipped by all engines, none included, so the parsing nets out of the instruction counts too).
@@ -45,10 +47,31 @@ def config_extractor(engine, cfg):
     return run
 
 
+def func_extractor(engine, cfg):
+    import trafilatura_rs
+    from ref_funcs import CONFIGS, kwargs_for, python_function
+    from ref_meta import pin_wall_clock
+
+    pin_wall_clock()
+    name = CONFIGS[cfg][0]
+    fn = getattr(trafilatura_rs, name) if engine == "trafilatura_rs" else python_function(name)
+    return lambda doc: fn(doc["html"], **kwargs_for(cfg, doc))
+
+
+def comparable(out):
+    if not os.environ.get("BENCH_FUNC"):
+        return out
+    from ref_funcs import canon
+
+    return json.dumps(canon(out, []), ensure_ascii=False, sort_keys=True)
+
+
 def extractor(engine):
     cfg = os.environ.get("BENCH_CFG")
     if engine == "none":
         return lambda doc: None
+    if os.environ.get("BENCH_FUNC"):
+        return func_extractor(engine, os.environ["BENCH_FUNC"])
     if cfg:
         return config_extractor(engine, cfg)
     if engine == "rs":
@@ -107,7 +130,8 @@ def main():
             out = extract(doc)
         except Exception as e:  # noqa: BLE001 - the exception type is part of the compared output
             out = f"EXC:{type(e).__name__}"
-        rows.append((doc["i"], clock() - t, out))
+        ns = clock() - t
+        rows.append((doc["i"], ns, comparable(out)))
     with open(out_path, "w", encoding="utf-8") as f:
         for i, ns, out in rows:
             f.write(json.dumps({"i": i, "ns": ns, "out": out}) + "\n")

@@ -85,19 +85,25 @@ def test_prune_xpath(xpath):
     assert_rust_parity(HTML, prune_xpath=xpath)
 
 
-@pytest.mark.parametrize("xpath", ["//@id", "//p/text()", "/html", "//p[re:test(., 'a')]", "count(//p)"])
-def test_prune_xpath_left_to_python(xpath):
+def detailed(fn, html, kwargs):
+    try:
+        return fn(html, **kwargs)
+    except Exception as e:  # noqa: BLE001
+        return f"EXC:{type(e).__name__}: {e}"
+
+
+@pytest.mark.parametrize("xpath", [
+    "//@id", "//p/text()", "//body/namespace::*", "string(//p)", "string(//h6)", "count(//p)", "boolean(//p)", "/",
+    "..", "/html", "//body/.. | //p", "//p[re:test(., 'a')]", "//x:p", "foo()", "$v", "//[", "", ["//p[1]", "//p["],
+    ["//p[1]", "//p/text()"],
+])
+def test_prune_xpath_non_elements_in_rust(xpath):
+    """Results other than elements, and XPath errors, give trafilatura's result or exception (type and message)."""
     html = '<html><body><article id="a"><p>' + "text " * 80 + "</p><p>more</p></article></body></html>"
     rust = _api._plan(html, {"prune_xpath": xpath}, trafilatura_rs.engine())[1]
-    with pytest.raises(_core.Unsupported):
-        _core.extract(html, **rust)
-    assert outcome(trafilatura_rs.extract, html, {"prune_xpath": xpath}) == outcome(PY_EXTRACT, html,
-                                                                                    {"prune_xpath": xpath})
-
-
-def test_invalid_prune_xpath_raises_like_python():
-    assert outcome(trafilatura_rs.extract, HTML[0], {"prune_xpath": "//["}) == outcome(PY_EXTRACT, HTML[0],
-                                                                                       {"prune_xpath": "//["})
+    expected = detailed(PY_EXTRACT, html, {"prune_xpath": xpath})
+    assert detailed(_core.extract, html, rust) == expected
+    assert detailed(trafilatura_rs.extract, html, {"prune_xpath": xpath}) == expected
 
 
 @pytest.mark.parametrize("params", [{"max_date": "2026-06-30"}, {"original_date": True, "extensive_search": False,

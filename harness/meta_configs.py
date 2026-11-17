@@ -51,6 +51,26 @@ _EXTRAS = {
     "only_meta": {"only_with_metadata": True, "url": True, "include_comments": True},
     "prune": {"prune_xpath": ["//footer", "//div[contains(@class, 'comment')]", "//p[1]"], "include_comments": True},
     "prune_json": {"prune_xpath": "//nav|//aside|//h1", "output_format": "json", "with_metadata": True, "url": True},
+    # prune_xpath results other than elements: text, attribute, namespace and document nodes, scalars, the root,
+    # XPath errors; each list runs until its first expression that raises
+    "prune_text": {"prune_xpath": ["//aside", "//h1/text()"], "include_comments": True},
+    "prune_attr_ns": {"prune_xpath": "//nav/@class | //nav/namespace::*"},
+    "prune_string": {"prune_xpath": ["//footer", "string(//h2)", "boolean(//p)"]},
+    "prune_scalar": {"prune_xpath": ["/", "..", "count(//p)"]},
+    "prune_root": {"prune_xpath": "//body/.. | //aside", "include_comments": True},
+    "prune_syntax": {"prune_xpath": ["//aside", "//p["]},
+    "prune_eval": {"prune_xpath": ["//aside", "//p[re:test(., 'a')]"]},
+    # deduplicate with metadata for the outputs the precision/recall grid lacks
+    "dedup_mdmeta": {"output_format": "markdown", "with_metadata": True, "url": True, "deduplicate": True,
+                     "include_comments": True},
+    "dedup_xmlmeta": {"output_format": "xml", "with_metadata": True, "url": True, "record_id": True,
+                      "deduplicate": True, "include_comments": True},
+    "dedup_htmlmeta": {"output_format": "html", "with_metadata": True, "url": True, "record_id": True,
+                       "deduplicate": True},
+    "dedup_csvmeta": {"output_format": "csv", "with_metadata": True, "url": True, "record_id": True,
+                      "deduplicate": True, "include_comments": True},
+    "dedup_linksimages_json": {"output_format": "json", "with_metadata": True, "url": True, "record_id": True,
+                               "include_links": True, "include_images": True, "deduplicate": True},
     "dates_noorig": {"with_metadata": True, "url": True,
                      "date_extraction_params": {"extensive_search": True, "max_date": PINNED_DAY}},
     "dates_noext": {"output_format": "json", "with_metadata": True, "url": True,
@@ -64,8 +84,8 @@ def _grid():
     for focus, fkw in _FOCUS.items():
         for out, okw in _OUTPUTS.items():
             kw = {**fkw, **okw}
-            if focus in ("precision", "recall") and not kw.get("with_metadata"):
-                kw["deduplicate"] = True  # datatrove-style; with metadata, deduplicate stays on Python
+            if focus in ("precision", "recall"):
+                kw["deduplicate"] = True  # datatrove-style
             yield f"{focus}_{out}", {**kw, "include_comments": False}
             yield f"{focus}_{out}_comments", {**kw, "include_comments": True}
     mdmeta = {"output_format": "markdown", "with_metadata": True, "url": True}

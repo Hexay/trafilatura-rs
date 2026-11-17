@@ -18,7 +18,7 @@ from datetime import date
 import trafilatura_rs
 from ref_meta import pin_wall_clock
 from lxml import etree
-from trafilatura_rs import _bare, _core, _funcs
+from trafilatura_rs import _bare, _core, _dedup, _funcs
 
 V1 = trafilatura_rs.engine() == "1.11.0"
 FAST = "no_fallback" if V1 else "fast"
@@ -32,6 +32,17 @@ def _bare_configs():
         configs[f"bare_{focus}"] = ("bare_extraction", kw)
         configs[f"bare_{focus}_nocomments"] = ("bare_extraction", {**kw, "include_comments": False})
         configs[f"bare_{focus}_meta"] = ("bare_extraction", {**kw, "with_metadata": True, "url": True})
+    for name, kw in (("links", {"include_links": True}), ("images", {"include_images": True})):
+        configs[f"bare_{name}"] = ("bare_extraction", {**kw, "url": True})
+        configs[f"bare_{name}_nocomments"] = ("bare_extraction", {**kw, "url": True, "include_comments": False})
+    both = {"include_links": True, "include_images": True, "url": True}
+    configs["bare_linksimages"] = ("bare_extraction", both)
+    configs["bare_linksimages_meta"] = ("bare_extraction", {**both, "with_metadata": True})
+    # deduplicate: one process-global cache across the run, as in Python
+    configs["bare_precision_dedup"] = ("bare_extraction", {**_FOCUS["precision"], "deduplicate": True})
+    configs["bare_balanced_dedup_meta"] = ("bare_extraction", {"deduplicate": True, "with_metadata": True,
+                                                               "url": True})
+    configs["bare_links_dedup"] = ("bare_extraction", {"include_links": True, "url": True, "deduplicate": True})
     return configs
 
 
@@ -60,7 +71,15 @@ def _rust_bare(html, **kw):
     planned = _bare._plan(html, kw, engine)
     assert planned is not None, f"no Rust path: {kw}"
     html, rust, date_params = planned
-    return _bare.run_rust(html, rust, engine, kw.get("as_dict", V1), date_params)
+    try:
+        with _dedup.undo_on_error(rust["deduplicate"]):
+            return _bare.run_rust(html, rust, engine, kw.get("as_dict", V1), date_params)
+    except Exception:
+        # the drop-in reruns the document in Python on the shared dedup cache; later documents depend on it
+        if rust["deduplicate"]:
+            with _dedup.python_uses_rust_cache(True):
+                python_function("bare_extraction")(html, **kw)
+        raise
 
 
 def _rust_metadata(html, default_url=None):

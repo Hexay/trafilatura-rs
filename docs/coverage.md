@@ -60,12 +60,15 @@ on 117k texts, prefixes and upper-cased variants (`harness/diff_langid.py`): no 
 These options combine with any configuration above:
 
 - `url`, `record_id`
-- `deduplicate=True` (checked with precision and recall). Like trafilatura, it keeps a process-global cache, so
-  output depends on document order exactly as in Python; `trafilatura_rs.reset_caches()` clears it.
+- `deduplicate=True`, with or without metadata (checked with precision and recall, and with metadata for every
+  output format and with links and images). See [Deduplication](#deduplication).
 - `options=Extractor(...)`, `config=` / `settingsfile=` (settings.cfg sizes, `MAX_TREE_SIZE` in 2.3.1,
   `EXTENSIVE_DATE_SEARCH`), `max_tree_size=` (1.11.0)
 - `url_blacklist`, `author_blacklist`, `only_with_metadata`
-- `prune_xpath` with a str or a list of str, as long as each expression selects elements
+- `prune_xpath` with a str or a list of str, whatever the expressions select: elements are pruned; text,
+  attribute and namespace nodes, strings and numbers return None or raise exactly as trafilatura does (its loop
+  reads `.tail` / `.getparent()` from them), and so do XPath syntax and evaluation errors (`XPathSyntaxError`,
+  `XPathEvalError`, with lxml's message)
 - `date_extraction_params` with `max_date` and optionally `original_date`, `extensive_search`
   (and `outputformat="%Y-%m-%d"`)
 
@@ -93,32 +96,44 @@ internal calls pass lxml trees, so they run in Python.
 | `html2txt(content, clean=True)` | every call on str/bytes | `supports_html2txt` |
 | `baseline(filecontent)` | every call on str/bytes | `supports_baseline` |
 | `extract_metadata(filecontent, default_url, date_config, extensive, author_blacklist)` | `date_config` as `extract`'s `date_extraction_params` | `supports_extract_metadata` |
-| `bare_extraction(filecontent, ...)` | `output_format="python"` (the default), the configurations in `VERIFIED_BARE`, with or without metadata, plus the options above | `supports_bare_extraction` |
+| `bare_extraction(filecontent, ...)` | `output_format="python"` (the default), the configurations in `VERIFIED_BARE`, with or without metadata; `include_links` / `include_images` in `VERIFIED_BARE_FEATURES` (default focus); `deduplicate`; plus the options above | `supports_bare_extraction` |
 | `htmldate.find_date(htmlobject, ...)` | `extensive_search`, `original_date`, `url`, `max_date` as str | `supports_find_date` |
 
 `bare_extraction` returns trafilatura's own `Document` (1.11.0: its dict, as `as_dict=True` does by default) with
 every slot filled from Rust. `body` and `commentsbody` are lxml trees rebuilt element by element from the Rust trees,
 then checked: `etree.tostring` of each must equal the Rust tree's, or the call reruns in Python. The elements are
 plain `etree._Element`s, where Python's trees hold some `lxml.html.HtmlElement` proxies. Pages with tag names lxml's
-API refuses (`<ahref="x">` parses as a tag), and 1.11.0's errors on unparseable pages, rerun in Python: 29 to 74 of
+API refuses (`<ahref="x">` parses as a tag), and 1.11.0's errors on unparseable pages, rerun in Python: 27 to 75 of
 the 10,666 pages per configuration.
 
 `extract_metadata`, `bare_extraction` with metadata and `find_date` need the same versions as metadata in `extract`.
+
+## Deduplication
+
+trafilatura keeps one process-global LRU (`trafilatura.deduplication.LRU_TEST`), so with `deduplicate=True` a
+page's output depends on every page deduplicated before it. trafilatura-rs keeps that cache in Rust and makes it the
+only one its calls use, so `extract` and `bare_extraction` give trafilatura's output for any sequence of calls:
+
+- A call or document that runs in Python (not covered, or a page the port declines) runs with trafilatura's
+  `LRU_TEST` pointed at the Rust cache, so it sees and updates the same state.
+- A Rust call whose result is discarded for such a rerun first undoes its own cache updates (the core journals them
+  per call), so no page is counted twice.
+- Deduplicating calls are serialized by a lock, as the cache's updates are in Python.
+
+`trafilatura_rs.reset_caches()` clears it. Calls made to Python trafilatura directly, not through trafilatura_rs or
+`install()`, keep using trafilatura's own cache.
 
 ## Runs in Python
 
 - `target_language` with other outputs, with `include_links` / `include_images`, or a non-str value, and
   `bare_extraction` with `target_language`
-- `with_metadata=True` with `deduplicate=True`: a document that falls back to Python would update the wrong dedup
-  cache
-- `bare_extraction` with `include_links`, `include_images` or `deduplicate`
 - lxml trees with 1.11.0, trees other than `lxml.html.HtmlElement`, and trees for functions other than `extract`
   and `bare_extraction`
 - responses and other non-str/bytes input
 - `bare_extraction` results holding a comment or processing instruction (trees from `lxml.html.fromstring` keep
   them): about 1% of pages
-- 2.3.1's `deduplicate` given a scoped `LRUCache`
-- `prune_xpath` expressions selecting anything but elements
+- 2.3.1's `deduplicate` given a scoped `LRUCache` (trafilatura updates the caller's object)
+- metadata on Python 3.10, whose `datetime.fromisoformat` (called by htmldate) accepts far less than 3.11's
 - `find_date` with URLs to download, `min_date`, another `outputformat` or `deferred_url_extractor`
 - every call, when the installed versions are not ones trafilatura-rs reproduces (see the README, Exactness)
 

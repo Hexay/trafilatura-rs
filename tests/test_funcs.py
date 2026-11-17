@@ -96,7 +96,22 @@ def test_bare_extraction_date_params_written_like_python():
     assert params == ref
 
 
-@pytest.mark.parametrize("kwargs", [{"deduplicate": True}, {"output_format": "xml"}, {"include_links": True},
+@pytest.mark.parametrize("kwargs", [
+    {"include_links": True}, {"include_images": True, "include_comments": False},
+    {"include_links": True, "include_images": True, "with_metadata": True},
+    {"deduplicate": True, "include_links": True}, {"deduplicate": True, "favor_recall": True, "with_metadata": True},
+])
+def test_bare_extraction_links_images_dedup(monkeypatch, kwargs):
+    from trafilatura.meta import reset_caches
+
+    assert trafilatura_rs.supports_bare_extraction(**kwargs)
+    reset_caches()
+    trafilatura_rs.reset_caches()  # both dedup caches start empty; `same` runs Python first, then Rust
+    same("bare_extraction", lambda p: {**kwargs, "url": p["url"]}, monkeypatch, docs=PAGES[:5] * 2)
+
+
+@pytest.mark.parametrize("kwargs", [{"output_format": "xml"}, {"include_links": True, "favor_precision": True},
+                                    {"include_images": True, "with_metadata": True},
                                     {"with_metadata": True, "include_comments": False}])
 def test_bare_extraction_uncovered_calls_fall_back(kwargs):
     from trafilatura.meta import reset_caches

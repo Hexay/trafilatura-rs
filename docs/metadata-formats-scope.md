@@ -133,8 +133,6 @@ Whole calls, decided by `trafilatura_rs.supports()`:
   and `url`, or a custom `outputformat` / `min_date`.
 - Blacklists other than a set/frozenset/list/tuple of str; `prune_xpath` other than str or a list/tuple of str.
 - 2.3.1 with a truthy `max_tree_size` argument (Python raises; `MAX_TREE_SIZE` in a config is covered).
-- `with_metadata=True` together with `deduplicate=True`: a document that falls back to Python would update
-  Python's dedup cache instead of Rust's, changing later results.
 - Metadata on Python < 3.11 (`fromisoformat` grammar), and metadata without trafilatura installed (the callbacks
   need it).
 - Configuration × output combinations not in `VERIFIED_OUTPUTS` (`VERIFIED_FEATURES` with links/images).
@@ -145,8 +143,7 @@ occur on the 10,666-page corpus:
 - `str.title()` on a string containing `Σ` (Final_Sigma context rule not ported); with an `author_blacklist`,
   `str.lower()` on an author with cased letters outside long-stable Unicode blocks, or with a `Σ` whose nearest
   neighbor (past `'.:^` and backtick) is not ASCII, whitespace or a Latin, Greek or Cyrillic letter.
-- A `prune_xpath` expression that errors or selects anything but non-root elements (strings, attributes, numbers),
-  or uses `re:` (unbound for a bare `XPath(expr)` in lxml).
+- A `prune_xpath` expression containing NUL, or whose node-set holds a node type lxml has no Python type for.
 - A str with lone surrogates (lxml's parser takes them; Rust strings cannot).
 - xml output whose serialized tree lxml's re-parse rejects, or csv output containing NUL.
 - 2.3.1: a truthy non-str sitename (Python raises AttributeError from `lstrip`).
@@ -154,6 +151,9 @@ occur on the 10,666-page corpus:
 - JSON-LD nested deeper than 900 levels (Python's RecursionError limit) or with lone `\uD800`-style surrogates.
 - Python exceptions that `extract()` lets escape (odd JSON-LD sitename types, `';'.join` over non-str
   categories, an x-default `<link>` without `href`): the fallback raises the identical exception.
+
+With `deduplicate=True` such a rerun still sees and updates the same cache: see "Deduplication" in
+[coverage.md](coverage.md#deduplication).
 
 URL resolution for links and images (`py/urllib.rs`) is native only where `urllib.parse` agrees across Python
 3.12–3.14 (it changed `urljoin` in 3.14: params, empty `?`/`#`, base fragments); other URLs, bracketed or

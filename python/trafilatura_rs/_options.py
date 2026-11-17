@@ -166,8 +166,6 @@ def _translate(spec, formats):
         return None
     if formats is _BARE_FORMATS and language:
         return None  # bare_extraction with target_language is not verified
-    if formats is _BARE_FORMATS and (spec["links"] or spec["images"]):
-        return None  # bare_extraction with links/images is not verified
     if fmt in _PLAIN_FORMATS and spec["formatting"]:
         return None
     if not (dedup is None or isinstance(dedup, int)) or not (url is None or isinstance(url, str)):
@@ -202,7 +200,7 @@ def _translate(spec, formats):
 
 def _prune_xpath(value):
     if value is None or isinstance(value, str):
-        return [value] if value else []
+        return [] if value is None else [value]  # "" is an invalid expression, not "no pruning"
     if isinstance(value, (list, tuple)) and all(type(v) is str for v in value):
         return list(value)
     return None

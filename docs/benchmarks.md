@@ -69,6 +69,32 @@ Output equals trafilatura's on 3,000 of 3,000 pages in every run. Rust instructi
 metadata XPaths now take the DOM fast path, the lookaround-only `fancy_regex` patterns are prefiltered by a `regex`
 scan, and htmldate's date-cue check runs natively.
 
+## Deduplication with metadata, bare_extraction with links, images and deduplicate
+
+Calls that ran in Python before this work. The first 3,000 corpus pages, `PROFILE=release tools/bench.sh 3000` with
+`BENCH_CFG=<config>` (`extract`, `harness/meta_configs.py`) or `BENCH_FUNC=<config>` (`bare_extraction`,
+`harness/ref_funcs.py`), one run of 2 rounds each, measured 2026-11-17 on main with #16, under load. `BENCH_FUNC`
+calls the public drop-in, so pages that rerun in Python count against trafilatura-rs. Each run is a fresh process,
+so the dedup cache fills from the first page as in trafilatura.
+
+| Config | Arguments | Engine | Python ms / Minstr | trafilatura-rs ms / Minstr | Speedup (CPU / instr) |
+|---|---|---|---:|---:|---:|
+| `precision_meta` | `extract(favor_precision=True, deduplicate=True, with_metadata=True, url=..., include_comments=False)` | 1.11.0 | 38.72 / 372.9 | 5.19 / 39.5 | 7.5x / 9.4x |
+| | | 2.3.1 | 37.36 / 328.1 | 5.21 / 42.8 | 7.2x / 7.7x |
+| `dedup_xmlmeta` | `extract(output_format="xml", deduplicate=True, with_metadata=True, url=..., record_id=...)` | 1.11.0 | 37.99 / 361.4 | 5.34 / 40.7 | 7.1x / 8.9x |
+| | | 2.3.1 | 42.81 / 365.3 | 6.00 / 47.3 | 7.1x / 7.7x |
+| `bare_links` | `bare_extraction(include_links=True, url=...)` | 1.11.0 | 16.62 / 150.7 | 2.60 / 20.3 | 6.4x / 7.4x |
+| | | 2.3.1 | 23.36 / 191.6 | 3.35 / 27.3 | 7.0x / 7.0x |
+| `bare_linksimages_meta` | `bare_extraction(include_links=True, include_images=True, with_metadata=True, url=...)` | 1.11.0 | 34.57 / 325.5 | 5.59 / 46.2 | 6.2x / 7.0x |
+| | | 2.3.1 | 39.12 / 354.3 | 6.11 / 53.3 | 6.4x / 6.6x |
+| `bare_precision_dedup` | `bare_extraction(favor_precision=True, deduplicate=True)` | 1.11.0 | 22.14 / 208.4 | 2.69 / 20.9 | 8.2x / 10.0x |
+| | | 2.3.1 | 19.91 / 160.5 | 2.73 / 20.7 | 7.3x / 7.7x |
+| `bare_balanced_dedup_meta` | `bare_extraction(deduplicate=True, with_metadata=True, url=...)` | 1.11.0 | 34.07 / 321.3 | 5.79 / 44.6 | 5.9x / 7.2x |
+| | | 2.3.1 | 37.59 / 354.7 | 5.82 / 50.5 | 6.5x / 7.0x |
+
+Output equals trafilatura's on 3,000 of 3,000 pages in every run. `prune_xpath` selecting non-elements isn't
+benchmarked: those calls return None or raise at the pruning step, before extraction.
+
 ## The README chart
 
 `docs/assets/extract-speed.svg` is generated from `docs/assets/extract-speed.json`, which holds the medians above for
