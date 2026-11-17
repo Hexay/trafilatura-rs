@@ -98,12 +98,28 @@ def decoded(filecontent, engine, max_file_size=None):
         return None
 
 
+def _lxml_html_tree(filecontent):
+    """Whether `filecontent` is a tree trafilatura's `load_html` takes as is, built by the libxml2 release whose node
+    layout the Rust copy reads (lxml's own: 2.14)."""
+    html = sys.modules.get("lxml.html")
+    return (html is not None and isinstance(filecontent, html.HtmlElement)
+            and sys.modules["lxml.etree"].LIBXML_VERSION[:2] == (2, 14))
+
+
+def source(filecontent, engine, max_file_size=None):
+    """The Rust extraction's input for `filecontent`: under 2.3.1 an lxml.html tree as is (bare_extraction works on a
+    copy, as Rust does); else `decoded(...)`. 1.11.0 cleans the caller's tree in place, so trees stay on Python."""
+    if engine != "1.11.0" and _lxml_html_tree(filecontent):
+        return filecontent
+    return decoded(filecontent, engine, max_file_size)
+
+
 def _plan(filecontent, kwargs, engine, verified=True):
-    """(html str, `_core.extract` keywords) for `extract(filecontent, **kwargs)`, or None."""
+    """(html str or lxml tree, `_core.extract` keywords) for `extract(filecontent, **kwargs)`, or None."""
     planned = _rust_kwargs(kwargs, engine, verified)
     if planned is None:
         return None
-    html = decoded(filecontent, engine, planned[1])
+    html = source(filecontent, engine, planned[1])
     return None if html is None else (html, planned[0])
 
 

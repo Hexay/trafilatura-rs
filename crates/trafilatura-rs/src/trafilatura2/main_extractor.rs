@@ -23,13 +23,13 @@ pub(crate) fn iter_children(el: Node) -> impl Iterator<Item = Node> {
 }
 
 /// `_elem_text`: trimmed plain concatenation of the element's text.
-pub fn elem_text(el: Node) -> String {
-    trim(&el.itertext(true).concat())
+pub fn elem_text(el: Node) -> Result<String> {
+    Ok(trim(&el.itertext(true)?.concat()))
 }
 
 /// `is_text_element`.
-pub(crate) fn is_text_element(el: Node) -> bool {
-    text_chars_test(Some(&el.itertext(true).concat()))
+pub(crate) fn is_text_element(el: Node) -> Result<bool> {
+    Ok(text_chars_test(Some(&el.itertext(true)?.concat())))
 }
 
 /// `_wraps_inline`: ref, or a formatting element wrapping inline content.
@@ -43,13 +43,16 @@ pub fn handle_titles(env: &mut Env, element: Node) -> Result<Option<Node>> {
         process_node(env, element)?
     } else {
         let title = element.deep_copy(env.ctx);
-        title.strip_elements(env.ctx, &["done"], true);
+        title.strip_elements(env.ctx, &["done"], true)?;
         for child in element.iter_descendants(&["*"]) {
             child.set_tag("done")?;
         }
         Some(title)
     };
-    Ok(title.filter(|&t| is_text_element(t)))
+    match title {
+        Some(t) if is_text_element(t)? => Ok(Some(t)),
+        _ => Ok(None),
+    }
 }
 
 /// `handle_formatting`: orphan formatting is wrapped in a paragraph.
@@ -130,8 +133,8 @@ pub fn handle_quotes(env: &mut Env, element: Node) -> Result<Option<Node>> {
     }
     let processed_element = env.ctx.element(element.tag())?;
     process_nested_elements(env, element, processed_element)?;
-    if is_text_element(processed_element) {
-        processed_element.strip_tags(env.ctx, &["quote"]);
+    if is_text_element(processed_element)? {
+        processed_element.strip_tags(env.ctx, &["quote"])?;
         return Ok(Some(processed_element));
     }
     Ok(None)
@@ -168,7 +171,7 @@ pub fn handle_paragraphs(env: &mut Env, element: Node, potential_tags: &Potentia
     unexpected.sort_unstable();
     unexpected.dedup();
     if !unexpected.is_empty() {
-        element.strip_tags(env.ctx, &unexpected);
+        element.strip_tags(env.ctx, &unexpected)?;
     }
     for child in element.iter(&["*"]) {
         if let Some(pc) = handle_textnode(env, child, false, true)? {
@@ -198,7 +201,7 @@ pub fn handle_paragraphs(env: &mut Env, element: Node, potential_tags: &Potentia
                     }
                 }
                 if !tags.is_empty() {
-                    pc.strip_tags(env.ctx, &tags);
+                    pc.strip_tags(env.ctx, &tags)?;
                 }
                 copy_attrs(child, newsub)?;
             }

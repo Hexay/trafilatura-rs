@@ -8,7 +8,7 @@ const CONDITIONAL: &str = "//table|//ul|//div|//aside|//header|//footer|//sectio
 
 pub fn sanitize(ctx: &Ctx, node: Node, cands: &Candidates, min_text_length: usize) -> Result<String> {
     for header in node.iter(&["h1", "h2", "h3", "h4", "h5", "h6"]) {
-        if class_weight(header) < 0 || link_density(header) > 0.33 {
+        if class_weight(header) < 0 || link_density(header)? > 0.33 {
             header.drop_tree(ctx)?;
         }
     }
@@ -31,8 +31,8 @@ pub fn sanitize(ctx: &Ctx, node: Node, cands: &Candidates, min_text_length: usiz
         let score = cands.get(elem).unwrap_or(0.0);
         if weight as f64 + score < 0.0 {
             elem.drop_tree(ctx)?;
-        } else if elem.text_content().matches(',').count() < 10
-            && should_remove(elem, weight, min_text_length, &mut allowed)
+        } else if elem.text_content()?.matches(',').count() < 10
+            && should_remove(elem, weight, min_text_length, &mut allowed)?
         {
             elem.drop_tree(ctx)?;
         }
@@ -45,16 +45,16 @@ fn count(elem: Node, path: &str) -> i64 {
 }
 
 /// The `to_remove` decision chain of the conditional cleaning loop.
-fn should_remove(elem: Node, weight: i64, min_text_length: usize, allowed: &mut HashSet<Node>) -> bool {
+fn should_remove(elem: Node, weight: i64, min_text_length: usize, allowed: &mut HashSet<Node>) -> Result<bool> {
     let p = count(elem, ".//p");
     let img = count(elem, ".//img");
     let li = count(elem, ".//li") - 100;
     let embed = count(elem, ".//embed");
     let input = count(elem, ".//input") - count(elem, ".//input[@type=\"hidden\"]");
-    let content_length = text_length(elem);
-    let density = link_density(elem);
+    let content_length = text_length(elem)?;
+    let density = link_density(elem)?;
     let short = content_length < min_text_length;
-    if p != 0 && img as f64 > 1.0 + p as f64 * 1.3 {
+    Ok(if p != 0 && img as f64 > 1.0 + p as f64 * 1.3 {
         true
     } else if li > p && !matches!(elem.tag(), "ol" | "ul") {
         true
@@ -71,21 +71,25 @@ fn should_remove(elem: Node, weight: i64, min_text_length: usize, allowed: &mut 
     } else if (embed == 1 && content_length < 75) || embed > 1 {
         true
     } else if content_length == 0 {
-        !rich_neighbourhood(elem, allowed)
+        !rich_neighbourhood(elem, allowed)?
     } else {
         false
-    }
+    })
 }
 
 /// The "no content" exception: keep an empty element whose nearest non-empty siblings hold > 1000 chars.
-fn rich_neighbourhood(elem: Node, allowed: &mut HashSet<Node>) -> bool {
+fn rich_neighbourhood(elem: Node, allowed: &mut HashSet<Node>) -> Result<bool> {
     let mut siblings = Vec::new();
-    if let Some(len) = elem.iter_siblings(&[], false).map(text_length).find(|&l| l > 0) {
-        siblings.push(len);
+    for sib in elem.iter_siblings(&[], false) {
+        let len = text_length(sib)?;
+        if len > 0 {
+            siblings.push(len);
+            break;
+        }
     }
     let limit = siblings.len() + 1;
     for sib in elem.iter_siblings(&[], true) {
-        let len = text_length(sib);
+        let len = text_length(sib)?;
         if len > 0 {
             siblings.push(len);
             if siblings.len() >= limit {
@@ -95,7 +99,7 @@ fn rich_neighbourhood(elem: Node, allowed: &mut HashSet<Node>) -> bool {
     }
     if !siblings.is_empty() && siblings.iter().sum::<usize>() > 1000 {
         allowed.extend(elem.iter(&["table", "ul", "div", "section"]));
-        return true;
+        return Ok(true);
     }
-    false
+    Ok(false)
 }

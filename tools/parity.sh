@@ -2,7 +2,8 @@
 # Rust outputs vs the tools/make_reference.sh references (build first: tools/dev.sh build). Usage:
 #   [LIMIT=N] [PAR=2] [FAILING=1] tools/parity.sh [job ...]
 #       job = stages | final:<cfg> | stages2:<cfg> | final2:<cfg> | meta:<cfg> | meta2:<cfg> | funcs:<cfg>
-#             | funcs2:<cfg> | justext | readability
+#             | funcs2:<cfg> | trees[2]:<cfg>:<source> | justext | readability
+#       (trees: extract/bare_extraction on lxml trees, see harness/compare_trees.py list)
 #       (meta/funcs: through the extension, tools/dev.sh py / V=23 tools/dev.sh py; funcs cfgs: harness/ref_funcs.py
 #       list); default: every job but meta and funcs.
 #       Each job takes a free light.lock slot for itself (don't wrap this script in flock); PAR=2 runs two jobs at
@@ -47,6 +48,12 @@ run() {
       [ "$mode" = funcs2 ] && py=$PY23 tag=23
       ref=$D/ref${tag}_funcs_$cfg.jsonl rust=rust${tag}_funcs_$cfg.jsonl ;;
     justext | readability) ref=$D/ref_$mode.jsonl rust=rust_$mode.jsonl ;;
+    trees | trees2)  # no reference: both sides run in one process (harness/compare_trees.py)
+      [ "$mode" = trees2 ] && py=$PY23
+      echo "== $1"
+      "$py" "$ROOT/harness/compare_trees.py" "$docs" "${cfg%%:*}" "${cfg#*:}" "$OUT/${mode}_${cfg/:/_}.bad"
+      echo "($1: $((SECONDS - t0))s)"
+      return ;;
     *) echo "unknown job $1" >&2; return 2 ;;
   esac
   local bad=$OUT/${rust%.jsonl}${LIMIT:+_$LIMIT}.bad

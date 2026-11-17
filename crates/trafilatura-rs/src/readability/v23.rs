@@ -19,7 +19,7 @@ pub fn summary(ctx: &Ctx, doc: Node, min_text_length: usize) -> Result<String> {
     }
     remove_unlikely_candidates(ctx, doc)?;
     transform_misused_divs_into_paragraphs(ctx, doc)?;
-    let cands = score_paragraphs(doc, min_text_length);
+    let cands = score_paragraphs(doc, min_text_length)?;
     let article = match cands.best() {
         Some(best) => get_article(ctx, &cands, best)?,
         None => doc.find("body").unwrap_or(doc),
@@ -76,7 +76,7 @@ fn transform_misused_divs_into_paragraphs(ctx: &Ctx, doc: Node) -> Result<()> {
 
 fn sanitize(ctx: &Ctx, node: Node, cands: &Candidates, min_text_length: usize) -> Result<String> {
     for header in node.iter(&["h1", "h2", "h3", "h4", "h5", "h6"]).collect::<Vec<_>>() {
-        if class_weight(header) < 0 || link_density(header) > 0.33 {
+        if class_weight(header) < 0 || link_density(header)? > 0.33 {
             header.drop_tree(ctx)?;
         }
     }
@@ -94,7 +94,7 @@ fn sanitize(ctx: &Ctx, node: Node, cands: &Candidates, min_text_length: usize) -
         let weight = class_weight(elem);
         let score = cands.get(elem).unwrap_or(0.0);
         if weight as f64 + score < 0.0
-            || (elem.text_content().matches(',').count() < 10 && should_remove(elem, weight, min_text_length))
+            || (elem.text_content()?.matches(',').count() < 10 && should_remove(elem, weight, min_text_length)?)
         {
             elem.drop_tree(ctx)?;
         }
@@ -103,7 +103,7 @@ fn sanitize(ctx: &Ctx, node: Node, cands: &Candidates, min_text_length: usize) -
 }
 
 /// The `to_remove` decision chain of the conditional cleaning loop.
-fn should_remove(elem: Node, weight: i64, min_text_length: usize) -> bool {
+fn should_remove(elem: Node, weight: i64, min_text_length: usize) -> Result<bool> {
     let mut counts: HashMap<&str, i64> = HashMap::new();
     for e in elem.iter_descendants(TEXT_CLEAN_ELEMS) {
         *counts.entry(e.tag()).or_default() += 1;
@@ -111,8 +111,8 @@ fn should_remove(elem: Node, weight: i64, min_text_length: usize) -> bool {
     let n = |k: &str| counts.get(k).copied().unwrap_or(0);
     let (p, img, li, embed) = (n("p"), n("img"), n("li") - 100, n("embed"));
     let input = n("input") - elem.findall(".//input[@type=\"hidden\"]").len() as i64;
-    let content_length = text_length(elem);
-    let density = link_density(elem);
+    let content_length = text_length(elem)?;
+    let density = link_density(elem)?;
     let short = content_length < min_text_length;
     if (p != 0 && img as f64 > 1.0 + p as f64 * 1.3)
         || (li > p && !matches!(elem.tag(), "ol" | "ul"))
@@ -122,11 +122,20 @@ fn should_remove(elem: Node, weight: i64, min_text_length: usize) -> bool {
         || (embed == 1 && content_length < 75)
         || embed > 1
     {
-        return true;
+        return Ok(true);
     }
     if content_length == 0 {
-        let nearest = |preceding| elem.iter_siblings(&[], preceding).map(text_length).find(|&l| l > 0).unwrap_or(0);
-        return nearest(false) + nearest(true) <= 1000;
+        // a comment sibling raises (text_content) as in Python, before or after a non-empty one is found
+        let nearest = |preceding| -> Result<usize> {
+            for sib in elem.iter_siblings(&[], preceding) {
+                let len = text_length(sib)?;
+                if len > 0 {
+                    return Ok(len);
+                }
+            }
+            Ok(0)
+        };
+        return Ok(nearest(false)? + nearest(true)? <= 1000);
     }
-    false
+    Ok(false)
 }

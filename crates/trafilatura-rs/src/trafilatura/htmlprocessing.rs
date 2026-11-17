@@ -84,7 +84,7 @@ pub fn tree_cleaning(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
             stripping_list.remove(i);
         }
     }
-    tree.strip_tags(ctx, &stripping_list);
+    tree.strip_tags(ctx, &stripping_list)?;
     let tcopy = (opts.focus == Focus::Recall && tree.find(".//p").is_some()).then(|| tree.deep_copy(ctx));
     for expression in &cleaning_list {
         for element in tree.iter(&[expression]) {
@@ -110,14 +110,14 @@ pub fn prune_html(ctx: &Ctx, tree: Node) -> Result<Node> {
 
 /// `prune_unwanted_nodes`.
 pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backup: bool) -> Result<Node> {
-    let backup = with_backup.then(|| (tree.text_content_len(), tree.deep_copy(ctx)));
+    let backup = if with_backup { Some((tree.text_content_len()?, tree.deep_copy(ctx))) } else { None };
     for expression in nodelist {
         for subtree in tree.xpath_nodes(expression)? {
             prune_node(ctx, subtree)?;
         }
     }
     if let Some((old_len, backup)) = backup {
-        let new_len = tree.text_content_len();
+        let new_len = tree.text_content_len()?;
         return Ok(if new_len as f64 > old_len as f64 / 7.0 { tree } else { backup });
     }
     Ok(tree)
@@ -135,16 +135,17 @@ pub fn prune_node(ctx: &Ctx, subtree: Node) -> Result<()> {
 
 /// `collect_link_info`: (lengths, count, short elements). Callers only use the text list's size, so each link's
 /// trimmed text is measured, not built.
-pub fn collect_link_info(links: &[Node], favor_precision: bool) -> (usize, usize, usize) {
+pub fn collect_link_info(links: &[Node], favor_precision: bool) -> Result<(usize, usize, usize)> {
     let threshold = if favor_precision { 50 } else { 10 };
-    let lens: Vec<usize> = links.iter().map(|l| l.text_content_trim_len()).filter(|&n| n > 0).collect();
+    let lens = links.iter().map(|l| l.text_content_trim_len()).collect::<Result<Vec<usize>>>()?;
+    let lens: Vec<usize> = lens.into_iter().filter(|&n| n > 0).collect();
     let shortelems = lens.iter().filter(|&&n| n < threshold).count();
-    (lens.iter().sum(), lens.len(), shortelems)
+    Ok((lens.iter().sum(), lens.len(), shortelems))
 }
 
 /// `link_density_test(element, trim(element.text_content()))` -> (result, whether `mylist` is non-empty). Only the
 /// text's length is used, and only when the element has links, so it is computed on demand into `elemlen`.
-pub fn link_density_test(element: Node, elemlen: &mut Option<usize>, favor_precision: bool) -> (bool, bool) {
+pub fn link_density_test(element: Node, elemlen: &mut Option<usize>, favor_precision: bool) -> Result<(bool, bool)> {
     let links = element.findall(".//ref");
     if !links.is_empty() {
         let limitlen = if element.tag() == "p" {
@@ -158,36 +159,39 @@ pub fn link_density_test(element: Node, elemlen: &mut Option<usize>, favor_preci
         } else {
             100
         };
-        let elemlen = *elemlen.get_or_insert_with(|| element.text_content_trim_len());
+        let elemlen = match *elemlen {
+            Some(n) => n,
+            None => *elemlen.insert(element.text_content_trim_len()?),
+        };
         if elemlen < limitlen {
-            let (linklen, elemnum, shortelems) = collect_link_info(&links, favor_precision);
+            let (linklen, elemnum, shortelems) = collect_link_info(&links, favor_precision)?;
             if elemnum == 0 {
-                return (true, false);
+                return Ok((true, false));
             }
             let dense =
                 linklen as f64 > 0.8 * elemlen as f64 || (elemnum > 1 && shortelems as f64 / elemnum as f64 > 0.8);
-            return (dense, true);
+            return Ok((dense, true));
         }
     }
-    (false, false)
+    Ok((false, false))
 }
 
 /// `link_density_test_tables`.
-pub fn link_density_test_tables(element: Node) -> bool {
+pub fn link_density_test_tables(element: Node) -> Result<bool> {
     let links = element.findall(".//ref");
     if links.is_empty() {
-        return false;
+        return Ok(false);
     }
-    let elemlen = element.text_content_trim_len();
+    let elemlen = element.text_content_trim_len()?;
     if elemlen > 250 {
-        let (linklen, elemnum, _) = collect_link_info(&links, false);
+        let (linklen, elemnum, _) = collect_link_info(&links, false)?;
         if elemnum == 0 {
-            return true;
+            return Ok(true);
         }
         let factor = if elemlen < 1000 { 0.8 } else { 0.5 };
-        return linklen as f64 > factor * elemlen as f64;
+        return Ok(linklen as f64 > factor * elemlen as f64);
     }
-    false
+    Ok(false)
 }
 
 /// `delete_by_link_density`.
@@ -202,7 +206,7 @@ pub fn delete_by_link_density(
     let threshold = if favor_precision { 200 } else { 100 };
     for elem in subtree.iter(&[tagname]) {
         let mut elemlen = None;
-        let (result, has_links) = link_density_test(elem, &mut elemlen, favor_precision);
+        let (result, has_links) = link_density_test(elem, &mut elemlen, favor_precision)?;
         if result {
             deletions.push(elem);
         } else if backtracking && has_links {
@@ -246,7 +250,7 @@ pub fn handle_textnode(env: &mut Env, elem: Node, comments_fix: bool, preserve_s
             elem.set_tail(Some(&trim(&tail)))?;
         }
     }
-    if (!truthy(&elem.text()) && textfilter(elem)) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)) {
+    if (!truthy(&elem.text()) && textfilter(elem)) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)?) {
         return Ok(None);
     }
     Ok(Some(elem))
@@ -266,7 +270,7 @@ pub fn process_node(env: &mut Env, elem: Node) -> Result<Option<Node>> {
         elem.set_tail(None)?;
     }
     if (truthy(&elem.text()) || truthy(&elem.tail()))
-        && (textfilter(elem) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)))
+        && (textfilter(elem) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)?))
     {
         return Ok(None);
     }

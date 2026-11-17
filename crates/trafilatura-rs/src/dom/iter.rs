@@ -1,7 +1,7 @@
 //! lxml iterators with their exact laziness: each keeps the *next* matching node, computed when the current one
 //! is handed out, so callers that mutate the tree mid-iteration (trafilatura does) see what Python sees.
 use super::raw::{self, P};
-use super::{cstr, Node, CDATA, ELEMENT, ENTITY_REF, TEXT};
+use super::{cstr, Node, Result, CDATA, ELEMENT, ENTITY_REF, TEXT};
 use crate::py;
 use libxml2_sys as ffi;
 use std::ptr;
@@ -190,51 +190,56 @@ impl Node {
     }
 
     /// `el.itertext(with_tail=...)`: element text at "start", tails of descendants (comments/PIs included) after.
-    pub fn itertext(self, with_tail: bool) -> Vec<String> {
+    pub fn itertext(self, with_tail: bool) -> Result<Vec<String>> {
+        self.require_element()?;
         let mut out = Vec::new();
         unsafe { walk_text(self.raw(), self.raw(), with_tail, &mut out) };
-        out
+        Ok(out)
     }
 
     /// `lxml.html` `text_content()`: XPath `string()` of the element.
-    pub fn text_content(self) -> String {
+    pub fn text_content(self) -> Result<String> {
+        self.require_element()?;
         let mut out = String::new();
         if unsafe { visit_text(self.raw(), &mut |s| out.push_str(s)) } {
-            return out;
+            return Ok(out);
         }
         unsafe {
             let s = ffi::xmlXPathCastNodeToString(self.raw());
             let out = cstr(s).to_owned();
             ffi::xmlFree.expect("xmlFree")(s as *mut _);
-            out
+            Ok(out)
         }
     }
 
     /// `len(el.text_content())` without building the string.
-    pub fn text_content_len(self) -> usize {
+    pub fn text_content_len(self) -> Result<usize> {
+        self.require_element()?;
         let mut n = 0;
         if unsafe { !visit_text(self.raw(), &mut |s| n += py::len(s)) } {
-            return py::len(&self.text_content());
+            return Ok(py::len(&self.text_content()?));
         }
-        n
+        Ok(n)
     }
 
     /// `len(trim(el.text_content()))` without building either string.
-    pub fn text_content_trim_len(self) -> usize {
+    pub fn text_content_trim_len(self) -> Result<usize> {
+        self.require_element()?;
         let mut count = py::TrimLen::default();
         if unsafe { !visit_text(self.raw(), &mut |s| count.feed(s)) } {
-            return py::len(&py::Collapse::of(&self.text_content()));
+            return Ok(py::len(&py::Collapse::of(&self.text_content()?)));
         }
-        count.finish()
+        Ok(count.finish())
     }
 
     /// `trim(el.text_content())` in one pass.
-    pub fn text_content_trimmed(self) -> String {
+    pub fn text_content_trimmed(self) -> Result<String> {
+        self.require_element()?;
         let mut c = py::Collapse::default();
         if unsafe { visit_text(self.raw(), &mut |s| c.push(s)) } {
-            return c.finish();
+            return Ok(c.finish());
         }
-        py::Collapse::of(&self.text_content())
+        Ok(py::Collapse::of(&self.text_content()?))
     }
 }
 

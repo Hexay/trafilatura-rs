@@ -140,7 +140,7 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
     let newtable = ctx.element("table")?;
     let mut ptags_with_div = potential_tags.clone();
     ptags_with_div.insert("div");
-    table_elem.strip_tags(ctx, &["thead", "tbody", "tfoot"]);
+    table_elem.strip_tags(ctx, &["thead", "tbody", "tfoot"])?;
     let nested: HashSet<Node> = table_elem.iter_descendants(&["table"]).flat_map(|t| t.iter(&[])).collect();
     // direct children only, nested tables are left to the main loop; orphan cells join the current row
     let mut rows: Vec<Vec<Node>> = vec![Vec::new()];
@@ -156,7 +156,7 @@ pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialT
             rows.last_mut().expect("first row").push(elem);
             continue;
         } else if tag == "caption" {
-            captions.push(crate::py::strip(&elem.itertext(true).join(" ")).to_owned());
+            captions.push(crate::py::strip(&elem.itertext(true)?.join(" ")).to_owned());
             for sub in elem.iter_descendants(&["*"]) {
                 if sub.tag() == "graphic" {
                     sub.set_tail(None)?;

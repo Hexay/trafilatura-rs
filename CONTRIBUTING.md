@@ -75,6 +75,9 @@ regenerate `chars.txt` (`harness/gen_dateparser_chars.py`), `unicode.txt` (`harn
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`
 counts documents the core declined (`Unsupported`), which the Python API reruns in Python.
 
+`trees:`/`trees2:<cfg>:<source>` jobs pass lxml trees (`harness/compare_trees.py list`) to trafilatura and
+trafilatura_rs in one process, each with its own dedup cache, and also compare the caller's tree after the call.
+
 References are shared in `$TRAFILATURA_RS_DATA`; Rust outputs go to `$TRAFILATURA_RS_OUT` (default
 `$TRAFILATURA_RS_DATA/out/<worktree dir>`), so worktrees running parity at once don't overwrite each other's and need
 no private data dir. Each job also leaves `<output>.bad`, its mismatching doc ids, which `FAILING=1` reruns; for the
@@ -104,7 +107,8 @@ and `rs_trafilatura.extract(...)`. Each engine runs in a fresh process, on the s
 thread, alternated over `ROUNDS` (default 2). It reports per-doc CPU time (min over rounds) and `perf stat`
 user-space instructions net of a load-only baseline, never wall time. It also checks trafilatura-rs output against
 trafilatura's on every doc. `CALL=default tools/bench.sh` benches the default call `extract(html)` instead, and
-`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura. It installs the
+`BENCH_CFG=<cfg>` a `harness/ref_meta.py` config (markdown, metadata, json) against trafilatura. `INPUT=tree` passes
+`lxml.html.fromstring` trees, parsed outside the timer, to every engine. It installs the
 release build first. Engines stream the corpus instead of loading it (1.4 GB). Published numbers and the README
 chart (`tools/make_chart.py`): [docs/benchmarks.md](docs/benchmarks.md). `REUSE_BASELINE=1` reruns only trafilatura-rs and takes the other engines' runs from
 `$TRAFILATURA_RS_DATA/bench-cache` (keyed by arguments, corpus, bench scripts and package versions); instruction counts

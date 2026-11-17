@@ -10,6 +10,8 @@ and rs_trafilatura.extract(html).main_content.
 With BENCH_CFG=<cfg> (a harness/meta_configs.py config), trafilatura and trafilatura_rs call extract() with that
 config's arguments instead of datatrove's (rs is not comparable there); bytes configs need BENCH_DOCS=docs_raw.jsonl.
 BENCH_PY_DATEPARSER=1 keeps htmldate's dateparser calls in Python there (the native port off, for before/after).
+INPUT=tree passes every engine lxml.html.fromstring(html) instead of the str, parsed outside the timer (docs lxml can't
+parse are skipped by all engines, none included, so the parsing nets out of the instruction counts too).
 out.jsonl: {"i", "ns", "out"} per doc; summary on stdout (bench_report.py aggregates runs)."""
 import importlib.metadata  # noqa: F401  datatrove 0.10 uses it without importing it
 import json
@@ -77,6 +79,16 @@ def extractor(engine):
     return lambda doc: extract(doc["html"])
 
 
+def with_tree(doc):
+    """`doc` with its html as an lxml.html tree, or None when lxml can't parse it."""
+    import lxml.html
+
+    try:
+        return {**doc, "html": lxml.html.fromstring(doc["html"])}
+    except Exception:  # noqa: BLE001 - empty documents, str with an encoding declaration
+        return None
+
+
 def main():
     engine, path, out_path = sys.argv[1:4]
     n = int(sys.argv[4]) if len(sys.argv) > 4 else None
@@ -84,6 +96,8 @@ def main():
 
     # streamed, not loaded up front: the corpus is ~1.4 GB, and only extract() is inside the timer
     docs = (d for _, d in zip(range(n or 10**9), read_docs(path)))
+    if os.environ.get("INPUT") == "tree":
+        docs = filter(None, map(with_tree, docs))
     extract = extractor(engine)
     clock = time.process_time_ns
     rows = []

@@ -37,9 +37,9 @@ fn handle_forms(ctx: &Ctx, tree: Node) -> Result<()> {
     if forms.is_empty() {
         return Ok(());
     }
-    let total = tree.text_content_len();
+    let total = tree.text_content_len()?;
     for form in forms {
-        if total > 0 && form.text_content_len() as f64 > total as f64 / 2.0 {
+        if total > 0 && form.text_content_len()? as f64 > total as f64 / 2.0 {
             form.set_tag("div")?;
         } else {
             delete_element(ctx, form, true)?;
@@ -73,7 +73,7 @@ pub fn tree_cleaning(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Node> {
         cleaning_list.retain(|e| !PRESERVE_IMG_CLEANING.contains(e));
         stripping_list.retain(|&t| t != "img");
     }
-    tree.strip_tags(ctx, &stripping_list);
+    tree.strip_tags(ctx, &stripping_list)?;
     // recall: undo the deletions if they remove every paragraph (copied only if no paragraph can survive)
     let copy_needed = opts.focus == Focus::Recall
         && tree.find(".//p").is_some()
@@ -123,8 +123,8 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
         matches.extend(tree.xpath_nodes(expression)?.into_iter().filter(|&e| seen.insert(e)));
     }
     let outer: Vec<Node> = matches.into_iter().filter(|e| !e.iter_ancestors(&[]).any(|a| seen.contains(&a))).collect();
-    let old_len = tree.text_content_len();
-    let pruned: usize = outer.iter().map(|e| e.text_content_len()).sum();
+    let old_len = tree.text_content_len()?;
+    let pruned: usize = outer.iter().map(|e| e.text_content_len()).sum::<Result<usize>>()?;
     if (old_len as f64 - pruned as f64) > old_len as f64 / 7.0 {
         for elem in outer {
             delete_element(ctx, elem, true)?;
@@ -135,9 +135,10 @@ pub fn prune_unwanted_nodes(ctx: &Ctx, tree: Node, nodelist: &[&str], with_backu
 
 /// `collect_link_info`: (lengths, count, short elements). Callers only use the text list's size, so each link's
 /// trimmed text is measured, not built.
-fn collect_link_info(links: &[Node]) -> (usize, usize, usize) {
-    let lens: Vec<usize> = links.iter().map(|l| l.text_content_trim_len()).filter(|&n| n > 0).collect();
-    (lens.iter().sum(), lens.len(), lens.iter().filter(|&&n| n < 10).count())
+fn collect_link_info(links: &[Node]) -> Result<(usize, usize, usize)> {
+    let lens = links.iter().map(|l| l.text_content_trim_len()).collect::<Result<Vec<usize>>>()?;
+    let lens: Vec<usize> = lens.into_iter().filter(|&n| n > 0).collect();
+    Ok((lens.iter().sum(), lens.len(), lens.iter().filter(|&&n| n < 10).count()))
 }
 
 /// `is_paragraph_listing`: every link alone in its paragraph (a document listing, not a farm).
@@ -146,17 +147,17 @@ fn is_paragraph_listing(links: &[Node]) -> bool {
 }
 
 /// `link_density_test` -> (boilerplate, short and linked).
-pub fn link_density_test(element: Node, favor_precision: bool) -> (bool, bool) {
+pub fn link_density_test(element: Node, favor_precision: bool) -> Result<(bool, bool)> {
     let links = element.findall(".//ref");
     if links.is_empty() || element.find(".//graphic").is_some() {
-        return (false, false);
+        return Ok((false, false));
     }
-    let elemlen = element.text_content_trim_len();
+    let elemlen = element.text_content_trim_len()?;
     if links.len() == 1 {
         let threshold = if favor_precision { 10 } else { 100 };
-        let link_len = links[0].text_content_trim_len();
+        let link_len = links[0].text_content_trim_len()?;
         if link_len > threshold && link_len as f64 > elemlen as f64 * 0.9 {
-            return (true, false);
+            return Ok((true, false));
         }
     }
     let limitlen = match (element.tag() == "p", element.next().is_none()) {
@@ -166,36 +167,36 @@ pub fn link_density_test(element: Node, favor_precision: bool) -> (bool, bool) {
         (false, false) => 100,
     };
     if elemlen < limitlen {
-        let (linklen, elemnum, shortelems) = collect_link_info(&links);
+        let (linklen, elemnum, shortelems) = collect_link_info(&links)?;
         if elemnum == 0 {
-            return (true, false);
+            return Ok((true, false));
         }
         let dense = linklen as f64 > elemlen as f64 * 0.8 || (elemnum > 1 && shortelems as f64 / elemnum as f64 > 0.8);
-        return (dense, true);
+        return Ok((dense, true));
     }
     if links.len() > 4 {
-        let (linklen, elemnum, _) = collect_link_info(&links);
+        let (linklen, elemnum, _) = collect_link_info(&links)?;
         if linklen as f64 > elemlen as f64 * LINK_FARM_RATIO && linklen < 100 * elemnum && !is_paragraph_listing(&links)
         {
-            return (true, false);
+            return Ok((true, false));
         }
     }
-    (false, false)
+    Ok((false, false))
 }
 
 /// `link_density_test_tables`.
-pub fn link_density_test_tables(element: Node) -> bool {
+pub fn link_density_test_tables(element: Node) -> Result<bool> {
     let links = element.findall(".//ref");
     if links.is_empty() {
-        return false;
+        return Ok(false);
     }
-    let elemlen = element.text_content_trim_len();
+    let elemlen = element.text_content_trim_len()?;
     if elemlen < 200 {
-        return false;
+        return Ok(false);
     }
-    let (linklen, _, _) = collect_link_info(&links);
+    let (linklen, _, _) = collect_link_info(&links)?;
     let factor = if elemlen < 1000 { 0.8 } else { 0.5 };
-    linklen as f64 > factor * elemlen as f64
+    Ok(linklen as f64 > factor * elemlen as f64)
 }
 
 /// `delete_by_link_density`.
@@ -210,11 +211,11 @@ pub fn delete_by_link_density(
     let len_threshold = if favor_precision { 200 } else { 100 };
     let depth_threshold = if favor_precision { 1 } else { 3 };
     for elem in subtree.iter(&[tagname]) {
-        let (result, short_with_links) = link_density_test(elem, favor_precision);
+        let (result, short_with_links) = link_density_test(elem, favor_precision)?;
         let backtrack = backtracking
             && short_with_links
             && elem.len() >= depth_threshold
-            && elem.text_content_trim_len() < len_threshold;
+            && elem.text_content_trim_len()? < len_threshold;
         if result || backtrack {
             if tagname == "p" && elem.parent().is_some_and(|p| matches!(p.tag(), "item" | "td" | "th")) {
                 continue;
@@ -264,7 +265,7 @@ pub fn handle_textnode(env: &mut Env, elem: Node, comments_fix: bool, preserve_s
             elem.set_tail(trim_or_none(elem.tail()).as_deref())?;
         }
     }
-    if (!truthy(&elem.text()) && textfilter(elem)) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)) {
+    if (!truthy(&elem.text()) && textfilter(elem)) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)?) {
         return Ok(None);
     }
     Ok(Some(elem))
@@ -284,7 +285,7 @@ pub fn process_node(env: &mut Env, elem: Node) -> Result<Option<Node>> {
         elem.set_tail(None)?;
     }
     if (truthy(&elem.text()) || truthy(&elem.tail()))
-        && (textfilter(elem) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)))
+        && (textfilter(elem) || (env.opts.dedup && duplicate_test(elem, env.opts, env.lru)?))
     {
         return Ok(None);
     }

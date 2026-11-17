@@ -74,7 +74,8 @@ Python trafilatura still runs:
 - `target_language`
 - `with_metadata=True` together with `deduplicate=True`
 - `bare_extraction` with `include_links`, `include_images` or `deduplicate`
-- lxml trees and other non-str/bytes input
+- lxml trees with trafilatura 1.11.0 (it changes the caller's tree; 2.3.1 trees run in Rust) and other
+  non-str/bytes input
 - 2.3.1's `deduplicate` given a scoped `LRUCache`
 - `prune_xpath` expressions that select anything but elements
 - every call when the installed versions don't match (see below)

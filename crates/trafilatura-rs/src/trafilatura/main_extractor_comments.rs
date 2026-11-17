@@ -24,7 +24,7 @@ pub fn extract_comments(env: &mut Env, tree: Node) -> Result<(Node, String, usiz
     for expr in COMMENTS_XPATH {
         let Some(subtree) = tree.xpath_first(expr)? else { continue };
         let subtree = prune_unwanted_nodes(env.ctx, subtree, &COMMENTS_DISCARD_XPATH, false)?;
-        subtree.strip_tags(env.ctx, &["a", "ref", "span"]);
+        subtree.strip_tags(env.ctx, &["a", "ref", "span"])?;
         // Python extends lazily: each processed node moves into comments_body before the next one is processed.
         for e in subtree.xpath_nodes(".//*")? {
             if let Some(p) = process_comments_node(env, e)? {
@@ -39,7 +39,7 @@ pub fn extract_comments(env: &mut Env, tree: Node) -> Result<(Node, String, usiz
             break;
         }
     }
-    let text = body_text(comments_body);
+    let text = body_text(comments_body)?;
     let n = py::len(&text);
     Ok((comments_body, text, n))
 }

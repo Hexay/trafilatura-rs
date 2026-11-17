@@ -4,9 +4,11 @@ mod bare;
 mod convert;
 mod dates;
 mod extra;
+mod extractor;
 mod funcs;
 mod hooks;
 mod memo;
+mod tree;
 
 use hooks::PyHooks;
 use pyo3::create_exception;
@@ -24,6 +26,7 @@ use trafilatura_rs::trafilatura::deduplication::Lru;
 use trafilatura_rs::trafilatura::settings::{Focus, Format, Options};
 use trafilatura_rs::trafilatura::utils::load_html;
 use trafilatura_rs::{trafilatura, trafilatura2};
+use tree::{Input, SameThread};
 
 create_exception!(_core, Unsupported, PyException, "The call needs a code path only Python trafilatura has.");
 
@@ -50,6 +53,21 @@ impl Engine {
         match self {
             Engine::V1_11 => trafilatura::core::extract_with(html, opts, req, lru),
             Engine::V2_3 => trafilatura2::core::extract(html, opts, req, lru),
+        }
+    }
+
+    /// `extract` given an lxml tree, copied as 2.3.1 copies it; 1.11 cleans the caller's tree in place instead.
+    fn extract_tree(
+        self,
+        ctx: &Ctx,
+        tree: Node,
+        opts: &Options,
+        req: &Request,
+        lru: &mut Lru,
+    ) -> Result<Option<String>> {
+        match self {
+            Engine::V1_11 => Err(Error::Unsupported("trafilatura 1.11 changes the caller's tree".into())),
+            Engine::V2_3 => trafilatura2::core::extract_tree(ctx, tree, opts, req, lru),
         }
     }
 
@@ -148,8 +166,8 @@ pub(crate) fn request<'a>(url: Option<&'a str>, record_id: Option<&'a str>, max_
     Request { url, record_id, max_date, hooks: &PyHooks }
 }
 
-/// `trafilatura.extract` of trafilatura `engine` (trafilatura's defaults) with the process-wide dedup state.
-/// `max_date` is today's local date as htmldate's `set_date_params` formats it (needed with metadata); `extra`
+/// `trafilatura.extract` of trafilatura `engine` (trafilatura's defaults) with the process-wide dedup state, on a
+/// str or (2.3.1) an lxml tree, see tree.rs. `max_date` is today's local date as htmldate's `set_date_params` formats it (needed with metadata); `extra`
 /// sets the remaining options (see extra.rs). Raises `Unsupported` where only Python trafilatura can answer.
 #[pyfunction]
 #[pyo3(signature = (html, engine, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
@@ -158,7 +176,7 @@ pub(crate) fn request<'a>(url: Option<&'a str>, record_id: Option<&'a str>, max_
 #[allow(clippy::too_many_arguments)]
 fn extract(
     py: Python<'_>,
-    html: &str,
+    html: &Bound<'_, PyAny>,
     engine: &str,
     favor_precision: bool,
     favor_recall: bool,
@@ -188,14 +206,28 @@ fn extract(
         extra::apply(&mut opts, extra)?;
     }
     let req = request(url, record_id, max_date);
-    py.detach(|| {
-        if deduplicate {
-            engine.extract(html, &opts, &req, &mut GLOBAL_LRU.lock().expect("lru lock"))
-        } else {
-            engine.extract(html, &opts, &req, &mut Lru::default())
+    let ctx = Ctx::new();
+    let result = match Input::new(&ctx, html)? {
+        Input::Html(html) => py.detach(|| with_lru(deduplicate, |lru| engine.extract(html, &opts, &req, lru))),
+        Input::Tree(tree) => {
+            let job = SameThread((&ctx, tree));
+            py.detach(|| {
+                let (ctx, tree) = job.get();
+                with_lru(deduplicate, |lru| engine.extract_tree(ctx, tree, &opts, &req, lru))
+            })
         }
-    })
-    .map_err(to_py_err)
+    };
+    result.map_err(to_py_err)
+}
+
+/// `f` with the process-wide dedup state when deduplicating, else a fresh one. Lock it without the GIL: the
+/// extraction calls back into Python.
+fn with_lru<T>(deduplicate: bool, f: impl FnOnce(&mut Lru) -> T) -> T {
+    if deduplicate {
+        f(&mut GLOBAL_LRU.lock().expect("lru lock"))
+    } else {
+        f(&mut Lru::default())
+    }
 }
 
 /// htmldate's `find_date(trafilatura.utils.load_html(html), original_date=True, extensive_search=True,
@@ -218,60 +250,6 @@ fn reset_caches() {
     GLOBAL_LRU.lock().expect("lru lock").clear();
 }
 
-/// An extractor with its own dedup state, independent of the module-level one.
-#[pyclass(subclass)]
-struct Extractor {
-    engine: Engine,
-    opts: Options,
-    lru: Lru,
-}
-
-#[pymethods]
-impl Extractor {
-    #[new]
-    #[pyo3(signature = (engine, favor_precision=false, favor_recall=false, include_tables=true, deduplicate=false,
-        no_fallback=false, include_comments=true, output_format="txt", with_metadata=false))]
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        engine: &str,
-        favor_precision: bool,
-        favor_recall: bool,
-        include_tables: bool,
-        deduplicate: bool,
-        no_fallback: bool,
-        include_comments: bool,
-        output_format: &str,
-        with_metadata: bool,
-    ) -> PyResult<Self> {
-        let (engine, opts) = options(
-            engine,
-            favor_precision,
-            favor_recall,
-            include_tables,
-            deduplicate,
-            no_fallback,
-            include_comments,
-            output_format,
-            with_metadata,
-        )?;
-        Ok(Extractor { engine, opts, lru: Lru::default() })
-    }
-
-    #[pyo3(signature = (html, url=None, record_id=None, max_date=None))]
-    fn extract(
-        &mut self,
-        py: Python<'_>,
-        html: &str,
-        url: Option<&str>,
-        record_id: Option<&str>,
-        max_date: Option<&str>,
-    ) -> PyResult<Option<String>> {
-        let Extractor { engine, opts, lru } = self;
-        let req = request(url, record_id, max_date);
-        py.detach(|| engine.extract(html, opts, &req, lru)).map_err(to_py_err)
-    }
-}
-
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract, m)?)?;
@@ -285,7 +263,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dates::_native_dateutil, m)?)?;
     m.add_function(wrap_pyfunction!(dates::_native_external_date, m)?)?;
     m.add_function(wrap_pyfunction!(dates::_native_dateparser, m)?)?;
-    m.add_class::<Extractor>()?;
+    m.add_class::<extractor::Extractor>()?;
     m.add("Unsupported", m.py().get_type::<Unsupported>())?;
     Ok(())
 }

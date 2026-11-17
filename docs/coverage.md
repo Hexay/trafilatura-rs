@@ -11,6 +11,15 @@ the port declines inside a covered call rerun in Python; see
 Input is a str, or bytes decoded by the installed trafilatura's own `decode_file` (as its `load_html` does). That
 includes the trafilatura command line, which passes file contents as bytes with `options=Extractor(...)`.
 
+With 2.3.1, an `lxml.html.HtmlElement` also runs in Rust (`extract` and `bare_extraction`, the same configurations).
+2.3.1 extracts from `copy(tree)`, so Rust copies the libxml2 nodes the same way lxml's `copy()` does (the
+document's properties, the element subtree and its tail text, no doctype; no reserialising) and the caller's tree is left
+untouched, as in Python. Verified on the 10,562 to 10,620 corpus pages each builder parses, for trees from
+`lxml.html.fromstring`, `document_fromstring` and `trafilatura.load_html`: outputs and the caller's tree after the
+call (`etree.tostring`) equal Python's (`tools/parity.sh trees2:<cfg>:<source>`). 1.11.0 cleans the caller's tree in
+place (changed on 10,549 of 10,562 pages), so 1.11.0 trees run in Python. Other trees (`etree._Element` from
+`etree.HTMLParser`, `_ElementTree`) run in Python, where `load_html` rejects them and `extract` returns None.
+
 Plain text (`trafilatura_rs.VERIFIED`):
 
 | Configuration | Arguments |
@@ -94,7 +103,11 @@ the 10,666 pages per configuration.
 - `with_metadata=True` with `deduplicate=True`: a document that falls back to Python would update the wrong dedup
   cache
 - `bare_extraction` with `include_links`, `include_images` or `deduplicate`
-- lxml trees, responses and other non-str/bytes input
+- lxml trees with 1.11.0, trees other than `lxml.html.HtmlElement`, and trees for functions other than `extract`
+  and `bare_extraction`
+- responses and other non-str/bytes input
+- `bare_extraction` results holding a comment or processing instruction (trees from `lxml.html.fromstring` keep
+  them): about 1% of pages
 - 2.3.1's `deduplicate` given a scoped `LRUCache`
 - `prune_xpath` expressions selecting anything but elements
 - `find_date` with URLs to download, `min_date`, another `outputformat` or `deferred_url_extractor`

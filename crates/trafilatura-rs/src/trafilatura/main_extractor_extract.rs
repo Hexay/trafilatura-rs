@@ -61,9 +61,9 @@ pub fn recover_wild_text(
     }
     let search_tree = prune_unwanted_sections(env, tree, potential_tags)?;
     if !potential_tags.contains("ref") {
-        search_tree.strip_tags(env.ctx, &["a", "ref", "span"]);
+        search_tree.strip_tags(env.ctx, &["a", "ref", "span"])?;
     } else {
-        search_tree.strip_tags(env.ctx, &["span"]);
+        search_tree.strip_tags(env.ctx, &["span"])?;
     }
     for e in search_tree.xpath_nodes(&search_expr)? {
         if let Some(processed) = handle_textelem(env, e, potential_tags)? {
@@ -73,8 +73,8 @@ pub fn recover_wild_text(
     Ok(result_body)
 }
 
-pub(crate) fn body_text(body: Node) -> String {
-    py::strip(&body.itertext(true).join(" ")).to_owned()
+pub(crate) fn body_text(body: Node) -> Result<String> {
+    Ok(py::strip(&body.itertext(true)?.join(" ")).to_owned())
 }
 
 /// `_extract`: (result body, text, potential tags).
@@ -96,7 +96,7 @@ fn extract(env: &mut Env, tree: Node) -> Result<(Node, String, PotentialTags)> {
         let subtree = prune_unwanted_sections(env, subtree, &potential_tags)?;
         if potential_tags.contains("table") || opts.focus == Focus::Precision {
             for elem in subtree.iter(&["table"]) {
-                if link_density_test_tables(elem) {
+                if link_density_test_tables(elem)? {
                     elem.parent()
                         .ok_or_else(|| attribute_error("'NoneType' object has no attribute 'remove'"))?
                         .remove(env.ctx, elem)?;
@@ -112,10 +112,10 @@ fn extract(env: &mut Env, tree: Node) -> Result<(Node, String, PotentialTags)> {
             potential_tags.insert("div");
         }
         if !potential_tags.contains("ref") {
-            subtree.strip_tags(env.ctx, &["ref"]);
+            subtree.strip_tags(env.ctx, &["ref"])?;
         }
         if !potential_tags.contains("span") {
-            subtree.strip_tags(env.ctx, &["span"]);
+            subtree.strip_tags(env.ctx, &["span"])?;
         }
         let mut subelems = subtree.xpath_nodes(".//*")?;
         if !subelems.is_empty() && subelems.iter().all(|e| e.tag() == "lb") {
@@ -135,7 +135,7 @@ fn extract(env: &mut Env, tree: Node) -> Result<(Node, String, PotentialTags)> {
             break;
         }
     }
-    let temp_text = body_text(result_body);
+    let temp_text = body_text(result_body)?;
     Ok((result_body, temp_text, potential_tags))
 }
 
@@ -146,10 +146,10 @@ pub fn extract_content(env: &mut Env, cleaned_tree: Node) -> Result<(Node, Strin
     let (mut result_body, mut temp_text, mut potential_tags) = extract(env, cleaned_tree)?;
     if result_body.is_empty() || py::len(&temp_text) < env.opts.min_extracted_size {
         result_body = recover_wild_text(env, backup_tree, result_body, &mut potential_tags)?;
-        temp_text = body_text(result_body);
+        temp_text = body_text(result_body)?;
     }
-    result_body.strip_elements(env.ctx, &["done"], true);
-    result_body.strip_tags(env.ctx, &["div"]);
+    result_body.strip_elements(env.ctx, &["done"], true)?;
+    result_body.strip_tags(env.ctx, &["div"])?;
     let n = py::len(&temp_text);
     Ok((result_body, temp_text, n))
 }

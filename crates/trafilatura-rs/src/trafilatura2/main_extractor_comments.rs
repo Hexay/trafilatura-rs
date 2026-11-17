@@ -13,7 +13,7 @@ pub fn extract_comments(env: &mut Env, tree: Node) -> Result<(Node, String)> {
     for expr in COMMENTS_XPATH {
         let Some(subtree) = tree.xpath_first(expr)? else { continue };
         let subtree = prune_unwanted_nodes(env.ctx, subtree, &COMMENTS_DISCARD_XPATH, false)?;
-        subtree.strip_tags(env.ctx, &["ref", "span"]);
+        subtree.strip_tags(env.ctx, &["ref", "span"])?;
         // see crate::trafilatura::main_extractor_comments: nodes move into comments_body one at a time
         for elem in subtree.xpath_nodes(".//*")? {
             if !TAG_CATALOG.contains(&elem.tag()) {
@@ -29,6 +29,6 @@ pub fn extract_comments(env: &mut Env, tree: Node) -> Result<(Node, String)> {
             break;
         }
     }
-    let text = body_text(comments_body);
+    let text = body_text(comments_body)?;
     Ok((comments_body, text))
 }

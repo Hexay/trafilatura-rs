@@ -24,6 +24,7 @@ mod tree;
 mod xml_parse;
 mod xpath;
 
+pub use copy::copy_foreign;
 pub use error::{Error, Result};
 pub use html::{document_fromstring, element as html_element, fragment_fromstring, fromstring, Input};
 pub use iter::{DepthFirst, Stepping};

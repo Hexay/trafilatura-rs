@@ -128,7 +128,7 @@ pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lr
     let (postbody, temp_text, len_text) = result;
     if let Some(max) = opts.max_tree_size {
         if postbody.len() > max {
-            postbody.strip_tags(ctx, &["hi"]);
+            postbody.strip_tags(ctx, &["hi"])?;
         }
         if postbody.len() > max {
             return Err(value_error("output tree too long"));
@@ -137,7 +137,7 @@ pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lr
     if len_text < opts.min_output_size && len_comments < opts.min_output_comm_size {
         return Err(value_error("text and comments not long enough"));
     }
-    if opts.dedup && duplicate_test(postbody, opts, env.lru) {
+    if opts.dedup && duplicate_test(postbody, opts, env.lru)? {
         return Err(value_error("duplicate document"));
     }
     document.raw_text = Value::Str(temp_text);

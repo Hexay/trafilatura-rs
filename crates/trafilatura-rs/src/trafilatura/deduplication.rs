@@ -2,7 +2,7 @@
 //! the caller's `Extractor` so the per-worker, document-order state is explicit).
 use super::settings::Options;
 use super::text::trim;
-use crate::dom::Node;
+use crate::dom::{Node, Result};
 use std::collections::{BTreeMap, HashMap};
 
 pub const LRU_SIZE: usize = 4096;
@@ -93,15 +93,15 @@ fn put_in_cache(lru: &mut Lru, key: &str) {
 }
 
 /// `duplicate_test`.
-pub fn duplicate_test(el: Node, options: &Options, lru: &mut Lru) -> bool {
-    let test = trim(&el.itertext(true).join(" "));
+pub fn duplicate_test(el: Node, options: &Options, lru: &mut Lru) -> Result<bool> {
+    let test = trim(&el.itertext(true)?.join(" "));
     if crate::py::len(&test) > options.min_duplcheck_size {
         let cached = lru.get(&test);
         if cached > options.max_repetitions as i64 {
             lru.put(&test, cached + 1);
-            return true;
+            return Ok(true);
         }
     }
     put_in_cache(lru, &test);
-    false
+    Ok(false)
 }

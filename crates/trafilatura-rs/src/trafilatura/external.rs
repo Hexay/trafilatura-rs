@@ -20,8 +20,8 @@ const TEI_VALID_TAGS: &[&str] = &[
 
 pub type Extraction = (Node, String, usize);
 
-fn joined_text(n: Node) -> String {
-    trim(&n.itertext(true).join(" "))
+fn joined_text(n: Node) -> Result<String> {
+    Ok(trim(&n.itertext(true)?.join(" ")))
 }
 
 /// `try_justext` with target_language None (the full JT_STOPLIST).
@@ -44,11 +44,10 @@ fn try_justext(ctx: &Ctx, tree: Node) -> Result<Option<Node>> {
 fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Option<Extraction>> {
     let tree = prune_unwanted_nodes(ctx, tree, &PAYWALL_DISCARD_XPATH, false)?;
     let tree = prune_unwanted_nodes(ctx, tree, &REMOVE_COMMENTS_XPATH, false)?;
-    Ok(try_justext(ctx, tree)?.and_then(|body| {
-        let text = joined_text(body);
-        let n = py::len(&text);
-        (n > 0).then_some((body, text, n))
-    }))
+    let Some(body) = try_justext(ctx, tree)? else { return Ok(None) };
+    let text = joined_text(body)?;
+    let n = py::len(&text);
+    Ok((n > 0).then_some((body, text, n)))
 }
 
 /// `sanitize_tree`. Python's `tree.findall(SANITIZED_XPATH)` is an ElementPath lookup of a `|` union, which lxml
@@ -56,9 +55,9 @@ fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Option<Extraction>> {
 fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Extraction> {
     let cleaned = tree_cleaning(ctx, tree, opts)?;
     if !opts.links {
-        cleaned.strip_tags(ctx, &["a"]);
+        cleaned.strip_tags(ctx, &["a"])?;
     }
-    cleaned.strip_tags(ctx, &["span"]);
+    cleaned.strip_tags(ctx, &["span"])?;
     let cleaned = convert_tags(ctx, cleaned, opts, &NoHooks, None)?;
     for el in cleaned.iter(&["td", "th", "tr"]) {
         match el.tag() {
@@ -71,8 +70,8 @@ fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options) -> Result<Extraction> {
         }
     }
     let invalid: Vec<&str> = cleaned.iter(&["*"]).map(|e| e.tag()).filter(|t| !TEI_VALID_TAGS.contains(t)).collect();
-    cleaned.strip_tags(ctx, &invalid);
-    let text = joined_text(cleaned);
+    cleaned.strip_tags(ctx, &invalid)?;
+    let text = joined_text(cleaned)?;
     let n = py::len(&text);
     Ok((cleaned, text, n))
 }
