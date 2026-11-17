@@ -20,7 +20,7 @@ fn new_row(ctx: &crate::dom::Ctx, span: &Option<String>) -> Result<Node> {
 pub fn handle_table(env: &mut Env, table_elem: Node, potential_tags: &PotentialTags) -> Result<Option<Node>> {
     let ctx = env.ctx;
     let newtable = ctx.element("table")?;
-    table_elem.strip_tags(ctx, &["thead", "tbody", "tfoot"]);
+    table_elem.strip_tags(ctx, &["thead", "tbody", "tfoot"])?;
     let mut max_cols: i128 = 0;
     for tr in table_elem.iter(&["tr"]) {
         let mut sum: i128 = 0;

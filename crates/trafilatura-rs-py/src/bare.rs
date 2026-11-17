@@ -1,6 +1,7 @@
 //! `bare_extraction` as Document slots with `body`/`commentsbody` serialized; python/trafilatura_rs/_bare.py builds
 //! the Document (or dict) and the lxml trees from them.
 use crate::convert::{self, Fields};
+use crate::tree::{Input, SameThread};
 use crate::{extra, options, request, to_py_err, Engine};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -12,11 +13,15 @@ use trafilatura_rs::trafilatura::document::Document;
 use trafilatura_rs::trafilatura::settings::Options;
 use trafilatura_rs::{trafilatura, trafilatura2};
 
-fn document(engine: Engine, ctx: &Ctx, html: &str, opts: &Options, req: &Request) -> Result<Option<Document>> {
+fn document(engine: Engine, ctx: &Ctx, input: Input, opts: &Options, req: &Request) -> Result<Option<Document>> {
     let mut lru = Lru::default();
-    let result = match engine {
-        Engine::V1_11 => trafilatura::core::extract_document(ctx, html, opts, req, &mut lru),
-        Engine::V2_3 => trafilatura2::core::bare_extraction(ctx, html, opts, req, &mut lru),
+    let result = match (engine, input) {
+        (Engine::V1_11, Input::Html(html)) => trafilatura::core::extract_document(ctx, html, opts, req, &mut lru),
+        (Engine::V2_3, Input::Html(html)) => trafilatura2::core::bare_extraction(ctx, html, opts, req, &mut lru),
+        (Engine::V2_3, Input::Tree(tree)) => trafilatura2::core::bare_extraction_tree(ctx, tree, opts, req, &mut lru),
+        (Engine::V1_11, Input::Tree(_)) => {
+            return Err(Error::Unsupported("trafilatura 1.11 changes the caller's tree".into()))
+        }
     };
     match result {
         // 1.11 reads `options.source` while discarding it: AttributeError unless `options` was passed
@@ -57,7 +62,8 @@ fn fields(engine: Engine, ctx: &Ctx, doc: &Document, opts: &Options, python_form
     Ok(fields)
 }
 
-/// `bare_extraction(html, ...)` without deduplication, keywords as in `extract`; None where Python returns None.
+/// `bare_extraction(html, ...)` without deduplication, keywords as in `extract` (html: a str or, for 2.3.1, an lxml
+/// tree); None where Python returns None.
 #[pyfunction]
 #[pyo3(signature = (html, engine, python_format, favor_precision=false, favor_recall=false, include_tables=true,
     no_fallback=false, include_comments=true, output_format="txt", with_metadata=false, url=None, max_date=None,
@@ -65,7 +71,7 @@ fn fields(engine: Engine, ctx: &Ctx, doc: &Document, opts: &Options, python_form
 #[allow(clippy::too_many_arguments)]
 pub fn bare_extraction<'py>(
     py: Python<'py>,
-    html: &str,
+    html: &Bound<'py, PyAny>,
     engine: &str,
     python_format: bool,
     favor_precision: bool,
@@ -94,11 +100,13 @@ pub fn bare_extraction<'py>(
         extra::apply(&mut opts, extra)?;
     }
     let req = request(url, None, max_date);
+    let ctx = Ctx::new();
+    let job = SameThread((&ctx, Input::new(&ctx, html)?));
     let fields: Option<Fields> = py
         .detach(|| {
-            let ctx = Ctx::new();
-            match document(engine, &ctx, html, &opts, &req)? {
-                Some(doc) => fields(engine, &ctx, &doc, &opts, python_format).map(Some),
+            let (ctx, input) = job.get();
+            match document(engine, ctx, input, &opts, &req)? {
+                Some(doc) => fields(engine, ctx, &doc, &opts, python_format).map(Some),
                 None => Ok(None),
             }
         })

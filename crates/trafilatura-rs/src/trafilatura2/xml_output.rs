@@ -10,16 +10,19 @@ use crate::trafilatura::xml_output::{clean_attributes, meta_items, serialize_xml
 const NESTING_WHITELIST: &[&str] = &["cell", "figure", "item", "note", "quote"];
 
 /// `is_padding_cell`: an empty cell keeping the following values of its row in their columns.
-fn is_padding_cell(el: Node) -> bool {
-    el.tag() == "cell" && el.parent().is_some_and(|p| text_chars_test(Some(&p.itertext(true).concat())))
+fn is_padding_cell(el: Node) -> Result<bool> {
+    match el.parent() {
+        Some(p) if el.tag() == "cell" => Ok(text_chars_test(Some(&p.itertext(true)?.concat()))),
+        _ => Ok(false),
+    }
 }
 
 /// `keeps_empty`.
-fn keeps_empty(el: Node) -> bool {
-    match el.parent() {
+fn keeps_empty(el: Node) -> Result<bool> {
+    Ok(match el.parent() {
         None => true,
-        Some(parent) => el.tag() == "graphic" || parent.tag() == "code" || separates_inline(el) || is_padding_cell(el),
-    }
+        Some(parent) => el.tag() == "graphic" || parent.tag() == "code" || separates_inline(el) || is_padding_cell(el)?,
+    })
 }
 
 fn is_blank(s: Option<String>) -> bool {
@@ -69,7 +72,7 @@ fn remove_empty_elements(ctx: &Ctx, tree: Node) -> Result<()> {
         if element.is_empty()
             && !text_chars_test(element.text().as_deref())
             && !text_chars_test(element.tail().as_deref())
-            && !keeps_empty(element)
+            && !keeps_empty(element)?
         {
             delete_element(ctx, element, false)?;
         }
@@ -81,7 +84,7 @@ fn remove_empty_elements(ctx: &Ctx, tree: Node) -> Result<()> {
 pub fn xml_output(ctx: &Ctx, doc: &Document) -> Result<String> {
     let body = doc.body.expect("extracted body");
     for element in body.iter(&["*"]) {
-        if element.is_empty() && is_blank(element.text()) && is_blank(element.tail()) && !keeps_empty(element) {
+        if element.is_empty() && is_blank(element.text()) && is_blank(element.tail()) && !keeps_empty(element)? {
             delete_element(ctx, element, false)?;
         }
     }

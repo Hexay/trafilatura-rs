@@ -175,7 +175,7 @@ pub fn spaced_text(element: Node) -> Result<String> {
         elem.set_text(Some(&spaced(elem.text())))?;
         elem.set_tail(Some(&spaced(elem.tail())))?;
     }
-    Ok(trim(&element.text_content()))
+    Ok(trim(&element.text_content()?))
 }
 
 /// `block_text(fragment_fromstring(raw, create_parent="div"))`: the fragment body's spaced text (the wrapper div

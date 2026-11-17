@@ -95,20 +95,20 @@ pub fn opens_item(el: Node) -> bool {
 }
 
 /// `_item_needs_marker`: whether the item renders content of its own before any sublist.
-pub fn item_needs_marker(item: Node) -> bool {
+pub fn item_needs_marker(item: Node) -> Result<bool> {
     if text_chars_test(item.text().as_deref()) {
-        return true;
+        return Ok(true);
     }
     for child in item.children() {
         if child.tag() == "list" {
-            return false;
+            return Ok(false);
         }
-        let text = child.itertext(true).concat() + &child.tail().unwrap_or_default();
+        let text = child.itertext(true)?.concat() + &child.tail().unwrap_or_default();
         if text_chars_test(Some(&text)) || child.iter(&["graphic"]).next().is_some() {
-            return true;
+            return Ok(true);
         }
     }
-    false
+    Ok(false)
 }
 
 /// `_collect_inline_text`.

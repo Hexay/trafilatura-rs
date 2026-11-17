@@ -33,7 +33,7 @@ impl Document {
                 prep::remove_unlikely_candidates(ctx, self.doc)?;
             }
             prep::transform_misused_divs_into_paragraphs(ctx, self.doc)?;
-            let cands = scoring::score_paragraphs(self.doc, self.min_text_length);
+            let cands = scoring::score_paragraphs(self.doc, self.min_text_length)?;
             let article = match cands.best() {
                 Some(best) => get_article(ctx, &cands, best)?,
                 None if ruthless => {
@@ -72,7 +72,7 @@ fn get_article(ctx: &Ctx, cands: &Candidates, (best, best_score): (Node, f64)) -
         let append = if sibling == best || cands.get(sibling).is_some_and(|s| s >= threshold) {
             true
         } else if sibling.tag() == "p" {
-            let density = link_density(sibling);
+            let density = link_density(sibling)?;
             let content = sibling.text().unwrap_or_default();
             let len = py::len(&content);
             (len > 80 && density < 0.25) || (len <= 80 && density == 0.0 && regexes::dot_space(&content))

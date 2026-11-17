@@ -95,14 +95,14 @@ pub fn handle_lists(env: &mut Env, element: Node) -> Result<Option<Node>> {
                 }
             }
         }
-        if is_text_element(new_child_elem) || new_child_elem.iter(&["graphic"]).next().is_some() {
+        if is_text_element(new_child_elem)? || new_child_elem.iter(&["graphic"]).next().is_some() {
             update_elem_rendition(child, new_child_elem)?;
             processed_element.append(new_child_elem)?;
         }
         child.set_tag("done")?;
     }
     element.set_tag("done")?;
-    if is_text_element(processed_element) {
+    if is_text_element(processed_element)? {
         update_elem_rendition(element, processed_element)?;
         return Ok(Some(processed_element));
     }

@@ -117,7 +117,7 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options, hooks: &dyn Hooks, ur
         for elem in tree.xpath_nodes(&expr)? {
             elem.set_tag("ref")?;
         }
-        tree.strip_tags(ctx, &["a"]);
+        tree.strip_tags(ctx, &["a"])?;
     } else {
         let base_url = match url.filter(|u| !u.is_empty()) {
             Some(u) => get_base_url(hooks, u)?,
@@ -137,7 +137,7 @@ pub fn convert_tags(ctx: &Ctx, tree: Node, opts: &Options, hooks: &dyn Hooks, ur
             elem.set_tag("hi")?;
         }
     } else {
-        tree.strip_tags(ctx, REND_TAGS);
+        tree.strip_tags(ctx, REND_TAGS)?;
     }
     for elem in tree.iter(CONVERSION_TAGS) {
         convert(elem)?;

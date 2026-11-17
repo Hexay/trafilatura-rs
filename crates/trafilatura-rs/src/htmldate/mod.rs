@@ -148,7 +148,7 @@ pub fn find_date(
 
     if !env.extensive {
         clean_html(ctx, search_tree, &["script", "style"])?;
-        let text = search_tree.itertext(true).join(" ");
+        let text = search_tree.itertext(true)?.join(" ");
         return searches::pattern_search(&env, &text, &regexes::TIMESTAMP_LOOSE_PATTERN);
     }
 

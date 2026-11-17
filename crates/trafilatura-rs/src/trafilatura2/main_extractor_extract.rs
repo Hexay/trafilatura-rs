@@ -48,7 +48,12 @@ pub fn prune_unwanted_sections(
         tree = delete_by_link_density(ctx, tree, "p", false, favor_precision)?;
     }
     if potential_tags.contains("table") || favor_precision {
-        let boilerplate: Vec<Node> = tree.iter(&["table"]).filter(|&t| link_density_test_tables(t)).collect();
+        let mut boilerplate = Vec::new();
+        for t in tree.iter(&["table"]) {
+            if link_density_test_tables(t)? {
+                boilerplate.push(t);
+            }
+        }
         for elem in boilerplate {
             delete_element(ctx, elem, false)?;
         }
@@ -62,7 +67,7 @@ pub fn prune_unwanted_sections(
     }
     // after the link density tests, which need the refs
     let unwanted: &[&str] = if potential_tags.contains("ref") { &["span"] } else { &["span", "ref"] };
-    tree.strip_tags(ctx, unwanted);
+    tree.strip_tags(ctx, unwanted)?;
     Ok(tree)
 }
 
@@ -82,7 +87,7 @@ pub fn recover_wild_text(
     }
     let search_tree = prune_unwanted_sections(env, tree, &potential_tags, env.opts.fast)?;
     let subelems = search_tree.xpath_nodes(&search_expr)?;
-    let elem_texts: Vec<String> = result_body.children().into_iter().map(elem_text).collect();
+    let elem_texts: Vec<String> = result_body.children().into_iter().map(elem_text).collect::<Result<_>>()?;
     let mut existing = elem_texts.iter().filter(|t| !t.is_empty()).cloned().collect::<Vec<_>>().join("\n");
     let mut existing_len = py::len(&existing);
     let mut existing_elems: HashSet<String> = elem_texts.into_iter().collect();
@@ -95,7 +100,7 @@ pub fn recover_wild_text(
         if processed == subelem {
             handled.insert(subelem);
         }
-        let text = elem_text(processed);
+        let text = elem_text(processed)?;
         // image-only blocks have no text to compare, their sources are checked against the body
         let images: HashSet<Option<String>> = processed.iter(&["graphic"]).map(|g| g.get("src")).collect();
         if text.is_empty() && !images.is_empty() {
@@ -218,7 +223,7 @@ fn extract(env: &mut Env, tree: Node) -> Result<(Node, String, PotentialTags)> {
             break;
         }
     }
-    let temp_text = body_text(result_body);
+    let temp_text = body_text(result_body)?;
     Ok((result_body, temp_text, potential_tags))
 }
 
@@ -232,19 +237,19 @@ pub fn extract_content(env: &mut Env, cleaned_tree: Node) -> Result<Extraction> 
         let consumed: HashSet<Node> =
             order.iter().zip(backup_tree.iter(&[])).filter(|(e, _)| e.tag() == "done").map(|(_, twin)| twin).collect();
         result_body = recover_wild_text(env, backup_tree, result_body, &potential_tags, &consumed)?;
-        temp_text = body_text(result_body);
+        temp_text = body_text(result_body)?;
     }
     let mut previous: Option<String> = None;
     for el in result_body.children() {
-        let current = elem_text(el);
+        let current = elem_text(el)?;
         if !current.is_empty() && previous.as_ref() == Some(&current) && py::len(&current) > MIN_DUPLICATE_LENGTH {
             delete_element(env.ctx, el, false)?;
         } else {
             previous = Some(current);
         }
     }
-    result_body.strip_elements(env.ctx, &["done"], true);
-    result_body.strip_tags(env.ctx, &["div"]);
+    result_body.strip_elements(env.ctx, &["done"], true)?;
+    result_body.strip_tags(env.ctx, &["div"])?;
     for linebreak in result_body.iter(&["lb"]) {
         let blank_tail = linebreak.tail().is_some_and(|t| !t.is_empty() && !text_chars_test(Some(&t)));
         if blank_tail && !linebreak.iter_ancestors(&[]).any(|a| SPACING_PROTECTED.contains(&a.tag())) {

@@ -35,6 +35,20 @@ trafilatura-rs output equals trafilatura's on 10,666 of 10,666 pages in every ru
 trafilatura 1.11.0's on 171 pages with datatrove's call and 98 with the default call. rs-trafilatura is compared with
 1.11.0 only; it doesn't depend on the trafilatura version.
 
+## lxml tree input, trafilatura 2.3.1
+
+`V=23 INPUT=tree PROFILE=release tools/bench.sh`: each engine gets `lxml.html.fromstring` trees built outside the
+timer (10,562 pages lxml parses), one run of 2 rounds, measured 2026-11-17. trafilatura-rs copies the tree into Rust
+instead of parsing HTML.
+
+| Call | trafilatura mean | trafilatura-rs mean | Minstr/page | Speedup (CPU) | Speedup (instructions) |
+|---|---:|---:|---:|---:|---:|
+| datatrove's | 20.02 ms | 2.24 ms | 184.8 / 17.4 | 8.9x | 10.6x |
+| `extract(tree)` | 25.83 ms | 2.67 ms | 227.1 / 19.6 | 9.7x | 11.6x |
+
+Output equals trafilatura's on 10,562 of 10,562 pages in both. 1.11.0 trees run in Python (see
+[coverage.md](coverage.md#extract)).
+
 ## The README chart
 
 `docs/assets/extract-speed.svg` is generated from `docs/assets/extract-speed.json`, which holds the medians above for

@@ -24,8 +24,8 @@ const TEI_VALID_TAGS: &[&str] = &[
 /// Adopt justext only when the text it replaces is at most this much longer.
 const JUSTEXT_OVERRIDE_RATIO: usize = 3;
 
-fn joined_text(n: Node) -> String {
-    trim(&n.itertext(true).join(" "))
+fn joined_text(n: Node) -> Result<String> {
+    Ok(trim(&n.itertext(true)?.join(" ")))
 }
 
 /// `try_readability`: the summary re-parsed as bytes, or an empty `HtmlElement()` when anything fails.
@@ -127,14 +127,14 @@ fn try_justext(ctx: &Ctx, tree: Node) -> Result<Node> {
 pub fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Extraction> {
     let tree = basic_cleaning(ctx, tree)?;
     let body = try_justext(ctx, tree)?;
-    let text = joined_text(body);
+    let text = joined_text(body)?;
     Ok((body, text))
 }
 
 /// `sanitize_tree`: readability output converted to trafilatura's vocabulary.
 fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options, urls: &Urls) -> Result<Extraction> {
     let cleaned = tree_cleaning(ctx, tree, opts)?;
-    cleaned.strip_tags(ctx, if opts.links { &["span"] } else { &["span", "a"] });
+    cleaned.strip_tags(ctx, if opts.links { &["span"] } else { &["span", "a"] })?;
     let cleaned = convert_tags(ctx, cleaned, opts, urls.hooks, urls.page)?;
     for elem in cleaned.iter(&["graphic"]).collect::<Vec<_>>() {
         match handle_image(ctx, urls, elem)? {
@@ -162,7 +162,7 @@ fn sanitize_tree(ctx: &Ctx, tree: Node, opts: &Options, urls: &Urls) -> Result<E
         el.set_tag(if el.tag() == "tr" { "row" } else { "cell" })?;
     }
     let invalid: Vec<&str> = cleaned.iter(&["*"]).map(|e| e.tag()).filter(|t| !TEI_VALID_TAGS.contains(t)).collect();
-    cleaned.strip_tags(ctx, &invalid);
-    let text = joined_text(cleaned);
+    cleaned.strip_tags(ctx, &invalid)?;
+    let text = joined_text(cleaned)?;
     Ok((cleaned, text))
 }

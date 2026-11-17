@@ -75,7 +75,7 @@ pub fn handle_lists(env: &mut Env, element: Node) -> Result<Option<Node>> {
         child.set_tag("done")?;
     }
     element.set_tag("done")?;
-    if is_text_element(processed_element) {
+    if is_text_element(processed_element)? {
         update_elem_rendition(element, processed_element)?;
         return Ok(Some(processed_element));
     }

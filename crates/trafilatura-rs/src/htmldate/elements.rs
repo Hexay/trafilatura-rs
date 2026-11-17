@@ -59,7 +59,7 @@ pub(super) fn examine_elements(env: &Env, elements: &[Node]) -> Result<Option<St
     }
     for elem in elements {
         let title = crate::py::Collapse::of(&elem.get("title").unwrap_or_default());
-        for text in [elem.text_content_trimmed(), title] {
+        for text in [elem.text_content_trimmed()?, title] {
             if let Some(attempt) = examine_text(env, &text)? {
                 return Ok(Some(attempt));
             }

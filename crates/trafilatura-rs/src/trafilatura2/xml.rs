@@ -69,7 +69,7 @@ pub fn process_element(
     }
     let consumes = consumes_inline_children(el);
     let renders_inline = truthy(&el.text()) || consumes;
-    if tag == "item" && !in_cell && item_needs_marker(el) {
+    if tag == "item" && !in_cell && item_needs_marker(el)? {
         out.push(list_marker(el, fmt));
     }
     if renders_inline && (tag != "item" || consumes || text_chars_test(el.text().as_deref())) {

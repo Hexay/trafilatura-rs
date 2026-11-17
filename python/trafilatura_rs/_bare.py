@@ -5,7 +5,7 @@ that check reruns the call in Python, as does anything else the port doesn't cov
 import importlib
 
 from . import _core, _versions
-from ._api import _BALANCED, _FAST, _PRECISION, _RECALL, _with_comments, bind, decoded
+from ._api import _BALANCED, _FAST, _PRECISION, _RECALL, _with_comments, bind, source
 from ._funcs import call, document, metadata_ready
 from ._install import original
 from ._options import core_kwargs
@@ -20,8 +20,8 @@ VERIFIED_BARE = {
 
 
 def _plan(filecontent, kwargs, engine):
-    """(html str, `_core.bare_extraction` keywords, date_params) for `bare_extraction(filecontent, **kwargs)`, or
-    None. Deduplication stays on Python: a document rerun there would update Python's cache instead of ours."""
+    """(html str or lxml tree, `_core.bare_extraction` keywords, date_params) for `bare_extraction(filecontent,
+    **kwargs)`, or None. Deduplication stays on Python: a document rerun there would update Python's cache instead of ours."""
     planned = core_kwargs(kwargs, engine, bare=True)
     if planned is None:
         return None
@@ -31,7 +31,7 @@ def _plan(filecontent, kwargs, engine):
              rust["include_comments"])
     if combo not in VERIFIED_BARE.get(output, ()) or rust.pop("deduplicate") or (output[1] and not metadata_ready()):
         return None
-    html = decoded(filecontent, engine, max_file_size)
+    html = source(filecontent, engine, max_file_size)
     return None if html is None else (html, rust, rust.pop("date_params"))
 
 

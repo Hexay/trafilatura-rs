@@ -1,6 +1,6 @@
 //! `_Element` accessors and mutations (etree.pyx), in lxml's libxml2 call order.
 use super::raw::{self, P};
-use super::{cstr, Ctx, Error, Node, Result, ELEMENT};
+use super::{cstr, Ctx, Error, Node, Result, COMMENT, ELEMENT, PI};
 use libxml2_sys as ffi;
 use std::ffi::CString;
 use std::ptr;
@@ -55,8 +55,31 @@ pub(crate) unsafe fn new_xml_doc() -> *mut ffi::xmlDoc {
 }
 
 impl Node {
+    /// `el.text`; a comment's or PI's is its content (lxml's `__ContentOnlyElement`).
     pub fn text(self) -> Option<String> {
-        unsafe { raw::collect_text((*self.raw()).children) }
+        unsafe {
+            match self.node_type() {
+                COMMENT | PI => Some(cstr((*self.raw()).content).to_owned()),
+                _ => raw::collect_text((*self.raw()).children),
+            }
+        }
+    }
+
+    fn content_only(self) -> bool {
+        matches!(self.node_type(), COMMENT | PI)
+    }
+
+    /// lxml's `_rootNodeOrRaise`: `text_content`, `itertext`, `strip_tags` and the like refuse comments and PIs.
+    pub(crate) fn require_element(self) -> Result<()> {
+        if !self.is_element() {
+            return Err(Error::Value("Input object is not an XML element".into()));
+        }
+        Ok(())
+    }
+
+    fn not_writable(self, what: &str) -> Error {
+        let class = if self.node_type() == COMMENT { "_Comment" } else { "_ProcessingInstruction" };
+        Error::Runtime(format!("AttributeError: attribute '{what}' of 'lxml.etree.{class}' objects is not writable"))
     }
 
     pub fn tail(self) -> Option<String> {
@@ -64,6 +87,12 @@ impl Node {
     }
 
     pub fn set_text(self, value: Option<&str>) -> Result<()> {
+        if self.content_only() {
+            let v = value.map(raw::utf8).transpose()?;
+            let vp = v.as_ref().map_or(ptr::null(), |c| c.as_ptr() as *const ffi::xmlChar);
+            unsafe { ffi::xmlNodeSetContent(self.raw(), vp) };
+            return Ok(());
+        }
         unsafe { raw::set_node_text(self.raw(), value) }
     }
 
@@ -73,6 +102,9 @@ impl Node {
 
     /// `el.tag = name`.
     pub fn set_tag(self, name: &str) -> Result<()> {
+        if self.content_only() {
+            return Err(self.not_writable("tag"));
+        }
         let c = check_tag(is_html_doc(self.doc()), name)?;
         unsafe {
             ffi::xmlNodeSetName(self.raw(), c.as_ptr() as *const ffi::xmlChar);
@@ -104,6 +136,9 @@ impl Node {
 
     /// `el.set(key, value)`; `None` (valueless attribute) is only accepted in HTML documents.
     pub fn set(self, key: &str, value: Option<&str>) -> Result<()> {
+        if self.content_only() {
+            return Err(Error::Type("this element does not have children or attributes".into()));
+        }
         let html = is_html_doc(self.doc());
         let k = if html { name_cstring(key)? } else { check_tag(false, key)? };
         let v = match value {

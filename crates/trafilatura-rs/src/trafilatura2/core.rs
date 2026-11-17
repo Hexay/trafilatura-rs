@@ -53,7 +53,19 @@ impl Extractor {
 /// raises (2.x no longer catches RuntimeError).
 pub fn extract(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<String>> {
     let ctx = Ctx::new();
-    let mut document = match bare_extraction(&ctx, html, opts, req, lru) {
+    let document = bare_extraction(&ctx, html, opts, req, lru);
+    output(&ctx, document, opts, req)
+}
+
+/// `extract` given a tree: `tree` is bare_extraction's `copy(filecontent)` (see `dom::copy_foreign`).
+pub fn extract_tree(ctx: &Ctx, tree: Node, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Option<String>> {
+    let document = bare_extraction_tree(ctx, tree, opts, req, lru);
+    output(ctx, document, opts, req)
+}
+
+/// The rest of `extract` after `bare_extraction`.
+fn output(ctx: &Ctx, document: Result<Document>, opts: &Options, req: &Request) -> Result<Option<String>> {
+    let mut document = match document {
         Err(Error::Value(_) | Error::Type(_)) => return Ok(None),
         other => other?,
     };
@@ -63,12 +75,17 @@ pub fn extract(html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Resu
         let content = format!("{} {}", document.title.to_py_str(), document.raw_text.to_py_str());
         document.fingerprint = Value::Str(content_fingerprint(&content));
     }
-    determine_returnstring(&ctx, &document, opts).map(Some)
+    determine_returnstring(ctx, &document, opts).map(Some)
 }
 
 /// `bare_extraction` up to the TypeError/ValueError catch.
 pub fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| Error::Value("empty HTML tree".into()))?;
+    bare_extraction_tree(ctx, tree, opts, req, lru)
+}
+
+/// `bare_extraction` from the loaded tree on.
+pub fn bare_extraction_tree(ctx: &Ctx, tree: Node, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let mut document = Document::default();
     if opts.with_metadata {
         document = extract_metadata(ctx, tree, req, opts)?;
@@ -82,7 +99,7 @@ pub fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru
     let ((postbody, temp_text), (commentsbody, temp_comments)) = trafilatura_sequence(&mut env, tree)?;
     if let Some(max) = opts.max_tree_size {
         if postbody.len() > max {
-            postbody.strip_tags(ctx, &["hi"]);
+            postbody.strip_tags(ctx, &["hi"])?;
         }
         if postbody.len() > max {
             return Err(Error::Value("output tree too long".into()));
@@ -91,7 +108,7 @@ pub fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru
     if py::len(&temp_text) < opts.min_output_size && py::len(&temp_comments) < opts.min_output_comm_size {
         return Err(Error::Value("text and comments not long enough".into()));
     }
-    if opts.dedup && duplicate_test(postbody, opts, env.lru) {
+    if opts.dedup && duplicate_test(postbody, opts, env.lru)? {
         return Err(Error::Value("duplicate document".into()));
     }
     document.raw_text = Value::Str(temp_text);
@@ -230,19 +247,18 @@ fn caught<T>(r: Result<T>) -> Result<Option<T>> {
 /// Thread-forum salvage: append the captured posts missing from the body.
 fn salvage_forum_posts(result: Extraction, posts: Node) -> Result<Extraction> {
     let body = result.0;
-    let texts: Vec<String> = body.children().into_iter().map(elem_text).filter(|t| !t.is_empty()).collect();
-    let existing = texts.join("\n");
-    let salvaged: Vec<Node> = posts
-        .children()
-        .into_iter()
-        .filter(|&el| {
-            let t = elem_text(el);
-            !t.is_empty() && !existing.contains(&t)
-        })
-        .collect();
+    let texts = body.children().into_iter().map(elem_text).collect::<Result<Vec<_>>>()?;
+    let existing = texts.into_iter().filter(|t| !t.is_empty()).collect::<Vec<_>>().join("\n");
+    let mut salvaged = Vec::new();
+    for el in posts.children() {
+        let t = elem_text(el)?;
+        if !t.is_empty() && !existing.contains(&t) {
+            salvaged.push(el);
+        }
+    }
     if salvaged.is_empty() {
         return Ok(result);
     }
     body.extend(&salvaged)?;
-    Ok((body, body_text(body)))
+    Ok((body, body_text(body)?))
 }

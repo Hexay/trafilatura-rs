@@ -20,13 +20,13 @@ fn iter_children(el: Node) -> impl Iterator<Item = Node> {
     el.child(0).into_iter().flat_map(|first| std::iter::once(first).chain(first.iter_siblings(&[], false)))
 }
 
-fn joined_text(el: Node) -> String {
-    el.itertext(true).concat()
+fn joined_text(el: Node) -> Result<String> {
+    Ok(el.itertext(true)?.concat())
 }
 
 /// `is_text_element`.
-pub(crate) fn is_text_element(el: Node) -> bool {
-    text_chars_test(Some(&joined_text(el)))
+pub(crate) fn is_text_element(el: Node) -> Result<bool> {
+    Ok(text_chars_test(Some(&joined_text(el)?)))
 }
 
 /// `handle_titles`.
@@ -43,7 +43,10 @@ pub fn handle_titles(env: &mut Env, element: Node) -> Result<Option<Node>> {
         }
         Some(title)
     };
-    Ok(title.filter(|&t| text_chars_test(Some(&joined_text(t)))))
+    match title {
+        Some(t) if text_chars_test(Some(&joined_text(t)?)) => Ok(Some(t)),
+        _ => Ok(None),
+    }
 }
 
 /// `handle_formatting`.
@@ -114,8 +117,8 @@ pub fn handle_quotes(env: &mut Env, element: Node) -> Result<Option<Node>> {
         define_newelem(processed, processed_element)?;
         child.set_tag("done")?;
     }
-    if is_text_element(processed_element) {
-        processed_element.strip_tags(env.ctx, &["quote"]);
+    if is_text_element(processed_element)? {
+        processed_element.strip_tags(env.ctx, &["quote"])?;
         return Ok(Some(processed_element));
     }
     Ok(None)
@@ -176,7 +179,7 @@ fn handle_paragraphs(env: &mut Env, element: Node, potential_tags: &PotentialTag
                         if let Some(t) = item.text().filter(|t| text_chars_test(Some(t))) {
                             item.set_text(Some(&format!(" {t}")))?;
                         }
-                        processed_child.strip_tags(env.ctx, &[item.tag()]);
+                        processed_child.strip_tags(env.ctx, &[item.tag()])?;
                     }
                 }
                 if child.tag() == "hi" {

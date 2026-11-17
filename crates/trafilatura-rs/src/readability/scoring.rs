@@ -1,6 +1,6 @@
 //! Candidate scoring: `score_paragraphs`, `class_weight`, `score_node`, `get_link_density`, `select_best_candidate`.
 use super::regexes::{NEGATIVE, POSITIVE};
-use crate::dom::Node;
+use crate::dom::{Node, Result};
 use crate::py;
 use std::collections::HashMap;
 
@@ -38,17 +38,17 @@ impl Candidates {
 }
 
 /// `text_length`.
-pub fn text_length(n: Node) -> usize {
+pub fn text_length(n: Node) -> Result<usize> {
     n.text_content_trim_len()
 }
 
-pub fn link_density(n: Node) -> f64 {
-    let total = match text_length(n) {
+pub fn link_density(n: Node) -> Result<f64> {
+    let total = match text_length(n)? {
         0 => 1,
         t => t,
     };
-    let links: usize = n.findall(".//a").into_iter().map(text_length).sum();
-    links as f64 / total as f64
+    let links: usize = n.findall(".//a").into_iter().map(text_length).sum::<Result<usize>>()?;
+    Ok(links as f64 / total as f64)
 }
 
 pub fn class_weight(n: Node) -> i64 {
@@ -76,12 +76,12 @@ fn score_node(n: Node) -> f64 {
     score as f64
 }
 
-pub fn score_paragraphs(doc: Node, min_text_length: usize) -> Candidates {
+pub fn score_paragraphs(doc: Node, min_text_length: usize) -> Result<Candidates> {
     let mut cands = Candidates::default();
     for elem in doc.iter(&["p", "pre", "td"]) {
         let Some(parent) = elem.parent() else { continue };
         let grand_parent = parent.parent();
-        let text = elem.text_content_trimmed();
+        let text = elem.text_content_trimmed()?;
         let len = py::len(&text);
         if len < min_text_length {
             continue;
@@ -99,7 +99,7 @@ pub fn score_paragraphs(doc: Node, min_text_length: usize) -> Candidates {
         }
     }
     for entry in &mut cands.order {
-        entry.1 *= 1.0 - link_density(entry.0);
+        entry.1 *= 1.0 - link_density(entry.0)?;
     }
-    cands
+    Ok(cands)
 }

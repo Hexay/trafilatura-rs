@@ -3,7 +3,7 @@
 use super::iter::{traverse_next, Tags};
 use super::mutate::remove_node;
 use super::raw::{self, P};
-use super::{Ctx, Node, ELEMENT};
+use super::{Ctx, Node, Result, ELEMENT};
 use libxml2_sys as ffi;
 use std::ptr;
 
@@ -51,13 +51,11 @@ unsafe fn for_each_element(top: P, mut body: impl FnMut(P)) {
 
 impl Node {
     /// `strip_tags(el, *tags)`.
-    pub fn strip_tags(self, ctx: &Ctx, tags: &[&str]) {
-        if tags.is_empty() {
-            return;
-        }
+    pub fn strip_tags(self, ctx: &Ctx, tags: &[&str]) -> Result<()> {
+        self.require_element()?;
         let m = Tags::for_node(tags, self.raw());
-        if m.rejects_all() {
-            return;
+        if tags.is_empty() || m.rejects_all() {
+            return Ok(());
         }
         unsafe {
             for_each_element(self.raw(), |n| {
@@ -82,16 +80,15 @@ impl Node {
                 }
             });
         }
+        Ok(())
     }
 
     /// `strip_elements(el, *tags, with_tail=...)`.
-    pub fn strip_elements(self, ctx: &Ctx, tags: &[&str], with_tail: bool) {
-        if tags.is_empty() {
-            return;
-        }
+    pub fn strip_elements(self, ctx: &Ctx, tags: &[&str], with_tail: bool) -> Result<()> {
+        self.require_element()?;
         let m = Tags::for_node(tags, self.raw());
-        if m.rejects_all() {
-            return;
+        if tags.is_empty() || m.rejects_all() {
+            return Ok(());
         }
         unsafe {
             for_each_element(self.raw(), |n| {
@@ -116,6 +113,7 @@ impl Node {
                 }
             });
         }
+        Ok(())
     }
 
     /// `el.findall(path)` for `tag`, `*`, `./tag`, `.//tag`, `.//*` and `.//tag[@attr="value"]`.

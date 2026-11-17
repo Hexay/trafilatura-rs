@@ -92,7 +92,7 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<Extraction> {
     let postbody = ctx.element("body")?;
     if let Some(body_elem) = tree.find(".//body") {
         let p = postbody.sub_element("p")?;
-        let joined = body_elem.itertext(true).iter().map(|e| trim(e)).filter(|t| !t.is_empty()).collect::<Vec<_>>();
+        let joined = body_elem.itertext(true)?.iter().map(|e| trim(e)).filter(|t| !t.is_empty()).collect::<Vec<_>>();
         p.set_text(Some(&remove_control_characters(&joined.join("\n"))))?;
         let text = p.text().unwrap_or_default();
         let n = py::len(&text);

@@ -12,7 +12,7 @@ use crate::py::pyre::group;
 pub(crate) fn extract_metainfo(tree: Node, expressions: &[&str], len_limit: usize) -> Result<Option<String>> {
     for expression in expressions {
         for elem in tree.xpath_nodes(expression)? {
-            let content = trim(&elem.itertext(true).join(" "));
+            let content = trim(&elem.itertext(true)?.join(" "));
             let len = crate::py::len(&content);
             if !content.is_empty() && 2 < len && len < len_limit {
                 return Ok(Some(content));
@@ -25,7 +25,7 @@ pub(crate) fn extract_metainfo(tree: Node, expressions: &[&str], len_limit: usiz
 /// `examine_title_element`: the trimmed `<title>` and the two parts around a separator.
 pub fn examine_title_element(tree: Node) -> Result<(Option<String>, Option<String>, Option<String>)> {
     let Some(title_element) = tree.xpath_first(".//head//title")? else { return Ok((None, None, None)) };
-    let title = trim(&title_element.text_content());
+    let title = trim(&title_element.text_content()?);
     if let Some(m) = HTMLTITLE_REGEX.match_(&title) {
         let (first, second) = (group(&m, 1).map(str::to_owned), group(&m, 2).map(str::to_owned));
         return Ok((Some(title), first, second));
@@ -37,7 +37,7 @@ pub fn examine_title_element(tree: Node) -> Result<(Option<String>, Option<Strin
 pub fn extract_title(tree: Node) -> Result<Option<String>> {
     let h1_results = tree.findall(".//h1");
     if h1_results.len() == 1 {
-        let title = trim(&h1_results[0].text_content());
+        let title = trim(&h1_results[0].text_content()?);
         if !title.is_empty() {
             return Ok(Some(title));
         }
@@ -50,10 +50,10 @@ pub fn extract_title(tree: Node) -> Result<Option<String>> {
         return Ok(Some(t));
     }
     if let Some(h1) = h1_results.first() {
-        return Ok(Some(h1.text_content()));
+        return Ok(Some(h1.text_content()?));
     }
     if let Some(h2) = tree.xpath_first(".//h2")? {
-        return Ok(Some(h2.text_content()));
+        return Ok(Some(h2.text_content()?));
     }
     Ok(title)
 }
@@ -106,7 +106,7 @@ pub fn extract_catstags(metatype: &str, tree: Node) -> Result<Vec<String>> {
     for expression in expressions {
         for elem in tree.xpath_nodes(expression)? {
             if href.is_match(&elem.get("href").unwrap_or_default()) {
-                results.push(elem.text_content());
+                results.push(elem.text_content()?);
             }
         }
         if !results.is_empty() {

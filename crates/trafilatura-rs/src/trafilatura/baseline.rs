@@ -45,7 +45,7 @@ fn json_article_text(ctx: &Ctx, script_text: &str) -> Result<Option<String>> {
             if s.contains("<p>") {
                 let tree = load_html(ctx, &s)
                     .ok_or_else(|| attribute_error("'NoneType' object has no attribute 'text_content'"))?;
-                Ok(Some(trim(&tree.text_content())))
+                Ok(Some(trim(&tree.text_content()?)))
             } else {
                 Ok(Some(trim(&s)))
             }
@@ -59,7 +59,7 @@ fn json_article_text(ctx: &Ctx, script_text: &str) -> Result<Option<String>> {
 pub fn html2txt(ctx: &Ctx, tree: Node, clean: bool) -> Result<String> {
     let Some(body) = tree.find(".//body") else { return Ok(String::new()) };
     let body = if clean { basic_cleaning(ctx, body)? } else { body };
-    Ok(py::Collapse::of(&body.text_content()))
+    Ok(py::Collapse::of(&body.text_content()?))
 }
 
 /// `baseline`: (body, text, text length in code points).
@@ -80,7 +80,7 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<(Node, String, usize)> {
     let tree = basic_cleaning(ctx, tree)?;
     let mut temp_text = String::new();
     for article in tree.findall(".//article") {
-        let text = trim(&article.text_content());
+        let text = trim(&article.text_content()?);
         if py::len(&text) > 100 {
             add_p(postbody, &text)?;
             append_text(&mut temp_text, &text);
@@ -93,7 +93,7 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<(Node, String, usize)> {
     let mut results = HashSet::new();
     let mut temp_text = String::new();
     for element in tree.iter(&["blockquote", "code", "p", "pre", "q", "quote"]) {
-        let entry = trim(&element.text_content());
+        let entry = trim(&element.text_content()?);
         if !results.contains(&entry) {
             add_p(postbody, &entry)?;
             append_text(&mut temp_text, &entry);
@@ -107,7 +107,7 @@ pub fn baseline(ctx: &Ctx, tree: Node) -> Result<(Node, String, usize)> {
     let postbody = ctx.element("body")?;
     if let Some(body_elem) = tree.find(".//body") {
         let elem = postbody.sub_element("p")?;
-        let joined = body_elem.itertext(true).iter().map(|e| trim(e)).collect::<Vec<_>>().join("\n");
+        let joined = body_elem.itertext(true)?.iter().map(|e| trim(e)).collect::<Vec<_>>().join("\n");
         elem.set_text(Some(&joined))?;
         let text = elem.text().unwrap_or_default();
         let n = py::len(&text);
