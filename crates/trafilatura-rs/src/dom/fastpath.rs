@@ -13,9 +13,9 @@ mod resolve;
 #[cfg(test)]
 mod tests;
 use path::Path;
+pub(crate) use pred::{parse_step, Step};
 #[cfg(test)]
 pub(crate) use tests::assert_planned;
-pub(crate) use pred::{parse_step, Step};
 
 pub(crate) static VERIFY: LazyLock<bool> = LazyLock::new(|| std::env::var_os("TRAFILATURA_RS_VERIFY_XPATH").is_some());
 
