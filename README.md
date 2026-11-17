@@ -67,19 +67,21 @@ other functions. `trafilatura_rs.engine()` returns the trafilatura version being
   classifier that answers only when float32 rounding can't change the result; close calls go to Python)
 - metadata: title, author, date (a port of htmldate's `find_date`, with native ports of the dateutil and dateparser
   calls it makes; rare strings go to Python), sitename, categories, tags, license, JSON-LD
-- `html2txt`, `baseline`, `extract_metadata`, `bare_extraction` and htmldate's `find_date`
+- `html2txt`, `baseline`, `extract_metadata`, `bare_extraction` (also with links, images and `deduplicate`) and
+  htmldate's `find_date`
 - trafilatura's command line, which calls `extract` with bytes
 
 Python trafilatura still runs:
 
 - `target_language` with other outputs or with links/images
-- `with_metadata=True` together with `deduplicate=True`
-- `bare_extraction` with `include_links`, `include_images` or `deduplicate`
 - lxml trees with trafilatura 1.11.0 (it changes the caller's tree; 2.3.1 trees run in Rust) and other
   non-str/bytes input
 - 2.3.1's `deduplicate` given a scoped `LRUCache`
-- `prune_xpath` expressions that select anything but elements
+- metadata on Python 3.10
 - every call when the installed versions don't match (see below)
+
+With `deduplicate=True`, calls that run in Python share trafilatura-rs's deduplication cache, so outputs depend on
+earlier pages exactly as in trafilatura.
 
 Which configurations each output is verified for, and the details per function: [docs/coverage.md](https://github.com/Hexay/trafilatura-rs/blob/main/docs/coverage.md).
 
@@ -124,13 +126,17 @@ load). The other rows are the results recorded in the pull request that added th
 | `output_format="json", with_metadata=True, include_comments=False`, balanced / precision | 5.4x / 6.0x | 4.4x / 6.9x | 3,000 | [#16](https://github.com/Hexay/trafilatura-rs/pull/16) |
 | `output_format` xml, html, csv (`include_comments=False`) | 9.9–10.4x | 8.4–9.2x | 3,000 | [#13](https://github.com/Hexay/trafilatura-rs/pull/13) |
 | `include_links` / `include_images`, without metadata | 7.2–9.8x | 7.4–8.4x | 3,000 | [#13](https://github.com/Hexay/trafilatura-rs/pull/13) |
+| `deduplicate=True, with_metadata=True`: txt with `favor_precision`, xml | 7.1–7.5x | 7.1–7.2x | 3,000 | [benchmarks](https://github.com/Hexay/trafilatura-rs/blob/main/docs/benchmarks.md#deduplication-with-metadata-bare_extraction-with-links-images-and-deduplicate) |
+| `bare_extraction(html, include_links=True, ...)`, alone and with images and metadata | 6.2–6.4x | 6.4–7.0x | 3,000 | [benchmarks](https://github.com/Hexay/trafilatura-rs/blob/main/docs/benchmarks.md#deduplication-with-metadata-bare_extraction-with-links-images-and-deduplicate) |
+| `bare_extraction(html, deduplicate=True)`, `favor_precision` / with metadata | 8.2x / 5.9x | 7.3x / 6.5x | 3,000 | [benchmarks](https://github.com/Hexay/trafilatura-rs/blob/main/docs/benchmarks.md#deduplication-with-metadata-bare_extraction-with-links-images-and-deduplicate) |
 | `bare_extraction(html)`, each focus, with and without comments | 6.8–10.1x | 6.2–8.0x | 10,666 | [#10](https://github.com/Hexay/trafilatura-rs/pull/10) |
 | `bare_extraction(html, with_metadata=True, url=...)` | 2.4–3.2x | 3.0–3.6x | 10,666 | [#10](https://github.com/Hexay/trafilatura-rs/pull/10) |
 | `html2txt(html)` / `baseline(html)` | 2.2x | 4.2–4.3x | 10,666 | [#10](https://github.com/Hexay/trafilatura-rs/pull/10) |
 | `extract_metadata(html)`, with and without `default_url` | 1.6–1.7x | 1.9–2.0x | 10,666 | [#10](https://github.com/Hexay/trafilatura-rs/pull/10) |
 | `htmldate.find_date(html)`, with and without `url` | 2.0–2.6x | 2.0–2.6x | 10,666 | [#10](https://github.com/Hexay/trafilatura-rs/pull/10) |
 
-The `bare_extraction` speedups leave out the 29 to 74 pages per configuration that rerun in Python.
+The `bare_extraction` speedups from #10 leave out the 29 to 74 pages per configuration that rerun in Python; the
+3,000-page ones include them.
 
 ## Contributing
 

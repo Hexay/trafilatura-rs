@@ -13,11 +13,50 @@ pub struct Lru {
     map: HashMap<String, (i64, u64)>,
     order: BTreeMap<u64, String>,
     tick: u64,
+    journal: Option<Journal>,
+}
+
+/// Every change since `begin`, as each key's previous (value, tick), so `rollback` can restore the state exactly.
+struct Journal {
+    tick: u64,
+    undo: Vec<(String, Option<(i64, u64)>)>,
 }
 
 impl Lru {
+    /// Start recording changes; replaces any earlier recording.
+    pub fn begin(&mut self) {
+        self.journal = Some(Journal { tick: self.tick, undo: Vec::new() });
+    }
+
+    /// Stop recording and keep the changes.
+    pub fn commit(&mut self) {
+        self.journal = None;
+    }
+
+    /// Undo every change since `begin` (none without one).
+    pub fn rollback(&mut self) {
+        let Some(journal) = self.journal.take() else { return };
+        for (key, old) in journal.undo.into_iter().rev() {
+            if let Some((_, tick)) = self.map.remove(&key) {
+                self.order.remove(&tick);
+            }
+            if let Some((value, tick)) = old {
+                self.order.insert(tick, key.clone());
+                self.map.insert(key, (value, tick));
+            }
+        }
+        self.tick = journal.tick;
+    }
+
+    fn record(&mut self, key: &str) {
+        if let Some(journal) = &mut self.journal {
+            journal.undo.push((key.to_owned(), self.map.get(key).copied()));
+        }
+    }
+
     fn touch(&mut self, key: &str) -> Option<i64> {
         let (value, old) = *self.map.get(key)?;
+        self.record(key);
         self.order.remove(&old);
         self.tick += 1;
         self.order.insert(self.tick, key.to_owned());
@@ -36,12 +75,22 @@ impl Lru {
             return;
         }
         if self.map.len() >= LRU_SIZE {
-            let (_, oldest) = self.order.pop_first().expect("non-empty when full");
+            let oldest = self.order.first_key_value().expect("non-empty when full").1.clone();
+            self.record(&oldest);
+            self.order.pop_first();
             self.map.remove(&oldest);
         }
+        self.record(key);
         self.tick += 1;
         self.order.insert(self.tick, key.to_owned());
         self.map.insert(key.to_owned(), (value, self.tick));
+    }
+
+    /// 2.x `increment`: store the count plus one, return the previous count or -1.
+    pub fn increment(&mut self, key: &str) -> i64 {
+        let previous = self.get(key);
+        self.put(key, previous.max(0) + 1);
+        previous
     }
 
     pub fn clear(&mut self) {
@@ -104,4 +153,38 @@ pub fn duplicate_test(el: Node, options: &Options, lru: &mut Lru) -> Result<bool
     }
     put_in_cache(lru, &test);
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Lru, LRU_SIZE};
+
+    type State = (Vec<(String, (i64, u64))>, Vec<(u64, String)>, u64);
+
+    fn state(lru: &Lru) -> State {
+        let mut map: Vec<_> = lru.map.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        map.sort();
+        (map, lru.order.iter().map(|(t, k)| (*t, k.clone())).collect(), lru.tick)
+    }
+
+    #[test]
+    fn rollback_restores_evictions_and_order() {
+        let mut lru = Lru::default();
+        for i in 0..LRU_SIZE {
+            lru.put(&i.to_string(), 1);
+        }
+        lru.get("7");
+        let before = state(&lru);
+        lru.begin();
+        for i in 0..10 {
+            lru.increment(&format!("new{i}"));
+            lru.increment("3");
+        }
+        lru.put("7", 9);
+        assert_ne!(state(&lru), before);
+        lru.rollback();
+        assert_eq!(state(&lru), before);
+        lru.rollback();
+        assert_eq!(state(&lru), before);
+    }
 }

@@ -3,6 +3,7 @@
 mod bare;
 mod convert;
 mod dates;
+mod dedup;
 mod extra;
 mod extractor;
 mod funcs;
@@ -19,7 +20,6 @@ use pyo3::exceptions::{
 };
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use std::sync::{LazyLock, Mutex};
 use trafilatura_rs::dom::{Ctx, Error, Node, Result};
 use trafilatura_rs::htmldate::{find_date, DateParams};
 use trafilatura_rs::trafilatura::core::Request;
@@ -30,9 +30,6 @@ use trafilatura_rs::{trafilatura, trafilatura2};
 use tree::{Input, SameThread};
 
 create_exception!(_core, Unsupported, PyException, "The call needs a code path only Python trafilatura has.");
-
-/// trafilatura keeps its deduplication LRU module-global; so does the module-level `extract`.
-static GLOBAL_LRU: LazyLock<Mutex<Lru>> = LazyLock::new(|| Mutex::new(Lru::default()));
 
 /// The trafilatura release an extraction reproduces.
 #[derive(Clone, Copy)]
@@ -96,6 +93,11 @@ pub(crate) fn to_py_err(e: Error) -> PyErr {
                 "KeyError" => PyKeyError::new_err(msg),
                 "AssertionError" => PyAssertionError::new_err(msg),
                 "XMLSyntaxError" => xml_syntax_error(msg),
+                "XPathSyntaxError" | "XPathEvalError" => {
+                    let kind = kind.to_owned();
+                    Python::attach(|py| lxml_error(py, &kind, (msg.as_str(),)))
+                        .unwrap_or_else(|| Unsupported::new_err(format!("{kind}: {msg}")))
+                }
                 _ => PyRuntimeError::new_err(m),
             }
         }
@@ -108,13 +110,14 @@ fn xml_syntax_error(msg: String) -> PyErr {
     let mut num = || parts.next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
     let (code, line, column) = (num(), num(), num());
     let text = msg.rsplit('\x1f').next().unwrap_or_default().to_owned();
-    Python::attach(|py| {
-        let class = py.import("lxml.etree").and_then(|m| m.getattr("XMLSyntaxError"));
-        match class.and_then(|c| c.call1((text.as_str(), code, line, column, "<string>"))) {
-            Ok(exc) => PyErr::from_value(exc),
-            Err(_) => Unsupported::new_err(format!("XMLSyntaxError: {msg}")),
-        }
-    })
+    Python::attach(|py| lxml_error(py, "XMLSyntaxError", (text.as_str(), code, line, column, "<string>")))
+        .unwrap_or_else(|| Unsupported::new_err(format!("XMLSyntaxError: {msg}")))
+}
+
+/// lxml.etree's exception `class` built from `args`; None without lxml.
+fn lxml_error<'py>(py: Python<'py>, class: &str, args: impl pyo3::call::PyCallArgs<'py>) -> Option<PyErr> {
+    let class = py.import("lxml.etree").and_then(|m| m.getattr(class)).ok()?;
+    class.call1(args).ok().map(PyErr::from_value)
 }
 
 fn format(output_format: &str) -> PyResult<Format> {
@@ -209,26 +212,16 @@ fn extract(
     let req = request(url, record_id, max_date);
     let ctx = Ctx::new();
     let result = match Input::new(&ctx, html)? {
-        Input::Html(html) => py.detach(|| with_lru(deduplicate, |lru| engine.extract(html, &opts, &req, lru))),
+        Input::Html(html) => py.detach(|| dedup::run(deduplicate, |lru| engine.extract(html, &opts, &req, lru))),
         Input::Tree(tree) => {
             let job = SameThread((&ctx, tree));
             py.detach(|| {
                 let (ctx, tree) = job.get();
-                with_lru(deduplicate, |lru| engine.extract_tree(ctx, tree, &opts, &req, lru))
+                dedup::run(deduplicate, |lru| engine.extract_tree(ctx, tree, &opts, &req, lru))
             })
         }
     };
     result.map_err(to_py_err)
-}
-
-/// `f` with the process-wide dedup state when deduplicating, else a fresh one. Lock it without the GIL: the
-/// extraction calls back into Python.
-fn with_lru<T>(deduplicate: bool, f: impl FnOnce(&mut Lru) -> T) -> T {
-    if deduplicate {
-        f(&mut GLOBAL_LRU.lock().expect("lru lock"))
-    } else {
-        f(&mut Lru::default())
-    }
 }
 
 /// htmldate's `find_date(trafilatura.utils.load_html(html), original_date=True, extensive_search=True,
@@ -245,17 +238,16 @@ fn _find_date(py: Python<'_>, html: &str, max_date: &str, url: Option<&str>) -> 
     .map_err(to_py_err)
 }
 
-/// Clear the module-level dedup state (`trafilatura.meta.reset_caches` equivalent for this module).
-#[pyfunction]
-fn reset_caches() {
-    GLOBAL_LRU.lock().expect("lru lock").clear();
-}
-
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(extract, m)?)?;
     m.add_function(wrap_pyfunction!(_find_date, m)?)?;
-    m.add_function(wrap_pyfunction!(reset_caches, m)?)?;
+    m.add_function(wrap_pyfunction!(dedup::reset_caches, m)?)?;
+    m.add_function(wrap_pyfunction!(dedup::_dedup_undo, m)?)?;
+    m.add_function(wrap_pyfunction!(dedup::_dedup_commit, m)?)?;
+    m.add_function(wrap_pyfunction!(dedup::_dedup_get, m)?)?;
+    m.add_function(wrap_pyfunction!(dedup::_dedup_put, m)?)?;
+    m.add_function(wrap_pyfunction!(dedup::_dedup_increment, m)?)?;
     m.add_function(wrap_pyfunction!(funcs::html2txt, m)?)?;
     m.add_function(wrap_pyfunction!(funcs::baseline, m)?)?;
     m.add_function(wrap_pyfunction!(funcs::extract_metadata, m)?)?;

@@ -35,7 +35,14 @@ def rust_extract():
     def run(html, **kw):
         plan = trafilatura_rs._api._plan(html, kw, trafilatura_rs.engine(), verified=False)
         assert plan is not None, f"no Rust code path: {kw}"
-        return trafilatura_rs._core.extract(plan[0], **plan[1])
+        try:
+            return trafilatura_rs._core.extract(plan[0], **plan[1])
+        except trafilatura_rs._core.Unsupported:
+            # the drop-in reruns the document in Python on the shared dedup cache; later documents depend on it
+            if plan[1]["deduplicate"]:
+                with trafilatura_rs._dedup.python_uses_rust_cache(True):
+                    python_extract()(html, **kw)
+            raise
 
     return run
 

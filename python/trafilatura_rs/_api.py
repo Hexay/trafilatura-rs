@@ -3,7 +3,7 @@ import inspect
 import sys
 import warnings
 
-from . import _versions
+from . import _dedup, _versions
 from ._core import Extractor as _RustExtractor
 from ._core import Unsupported
 from ._core import extract as _rust_extract
@@ -71,9 +71,8 @@ def _rust_kwargs(kwargs, engine, verified=True):
     features = [name for key, name in _FEATURE_KEYS.items() if rust.get("extra", {}).get(key)]
     if combo not in verified_outputs(engine, features).get(output, ()):
         return None
-    # fromisoformat (htmldate) has the full ISO grammar from 3.11; a document that falls back to Python would update
-    # Python's dedup cache instead of ours
-    if output[1] and (sys.version_info < (3, 11) or rust["deduplicate"]):
+    # fromisoformat (htmldate) has the full ISO grammar from 3.11
+    if output[1] and sys.version_info < (3, 11):
         return None
     return planned
 
@@ -165,20 +164,23 @@ def extract(filecontent, *args, **kwargs):
     plan = _plan(filecontent, kwargs, engine)
     if plan is not None and plan[1]["with_metadata"] and python is None:
         plan = None
-    if plan is not None and (python is None or not _versions.mismatched_versions(plan[1]["with_metadata"])):
-        if engine != "1.11.0" and kwargs.get("no_fallback"):
-            warnings.warn('"no_fallback" will be removed, use "fast" instead', DeprecationWarning, stacklevel=2)
-        try:
-            return _rust_extract(plan[0], **plan[1])
-        except (Unsupported, UnicodeEncodeError):  # lone surrogates: lxml's parser takes them, Rust strings can't
-            if python is None:
-                raise
-    if python is None:
-        if kwargs.get("max_tree_size"):
-            raise ValueError('"max_tree_size" will be removed, use settings.cfg instead')
-        raise NotImplementedError("trafilatura_rs covers only verified_outputs() configurations; install "
-                                  "trafilatura to fall back to it for other calls")
-    return python(filecontent, **kwargs)
+    dedup = _dedup.requested(kwargs)
+    with _dedup.lock(dedup):
+        if plan is not None and (python is None or not _versions.mismatched_versions(plan[1]["with_metadata"])):
+            if engine != "1.11.0" and kwargs.get("no_fallback"):
+                warnings.warn('"no_fallback" will be removed, use "fast" instead', DeprecationWarning, stacklevel=2)
+            try:
+                return _rust_extract(plan[0], **plan[1])
+            except (Unsupported, UnicodeEncodeError):  # lone surrogates: lxml's parser takes them, Rust strings can't
+                if python is None:
+                    raise
+        if python is None:
+            if kwargs.get("max_tree_size"):
+                raise ValueError('"max_tree_size" will be removed, use settings.cfg instead')
+            raise NotImplementedError("trafilatura_rs covers only verified_outputs() configurations; install "
+                                      "trafilatura to fall back to it for other calls")
+        with _dedup.python_uses_rust_cache(dedup):
+            return python(filecontent, **kwargs)
 
 
 class Extractor(_RustExtractor):

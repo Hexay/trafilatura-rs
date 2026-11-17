@@ -93,7 +93,7 @@ pub fn bare_extraction_tree(ctx: &Ctx, tree: Node, opts: &Options, req: &Request
         document = extract_metadata(ctx, tree, req, opts)?;
         filters::check_metadata(&document, opts)?;
     }
-    filters::prune_xpath(tree, opts, |node| delete_element(ctx, node, true))?;
+    filters::prune_xpath(tree, opts, filters::FirstRead::GetParent, |node| delete_element(ctx, node, true))?;
     let doc_url = document.url.as_str().map(str::to_owned);
     let urls =
         Urls { hooks: req.hooks, page: req.url, convert: req.url.filter(|u| !u.is_empty()).or(doc_url.as_deref()) };

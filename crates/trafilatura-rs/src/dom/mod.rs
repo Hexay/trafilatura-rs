@@ -23,6 +23,7 @@ mod slots;
 mod tree;
 mod xml_parse;
 mod xpath;
+mod xpath_user;
 
 pub use copy::copy_foreign;
 pub use error::{Error, Result};
@@ -31,6 +32,7 @@ pub use iter::{DepthFirst, Stepping};
 pub use parse::{ParserOpts, HTMLDATE_PARSER, HTML_PARSER, LXML_HTML_PARSER};
 pub use serialize::Method;
 pub use xpath::{XItem, XValue};
+pub use xpath_user::{UserItem, UserValue, UserXPath};
 
 use libxml2_sys as ffi;
 use std::ffi::CStr;
