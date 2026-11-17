@@ -2,7 +2,7 @@
 //! `trafilatura_rs._langid.model()` vouches for the installed identifier, and the jusText stoplists.
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use trafilatura_rs::justext::Stoplist;
 use trafilatura_rs::langid::Model;
@@ -96,7 +96,7 @@ pub(crate) fn justext_stoplist(py: Python<'_>, lang: &str) -> PyResult<Option<Ar
     }
     // not under the lock: reading runs Python
     let words = get_stoplist.call1((&name,))?;
-    let words: Vec<String> = py.import("justext.core")?.getattr("define_stoplist")?.call1((words,))?.extract()?;
+    let words: HashSet<String> = py.import("justext.core")?.getattr("define_stoplist")?.call1((words,))?.extract()?;
     let list = Arc::new(Stoplist::from_lowercased(words));
     let mut cache = STOPLISTS.lock().expect("stoplist lock");
     if !cache.as_ref().is_some_and(|(f, _)| f.bind(py).is(&get_stoplist)) {

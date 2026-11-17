@@ -7,7 +7,8 @@ import trafilatura.utils
 from parity import FAST
 from test_options import HTML, assert_rust_parity
 
-from trafilatura_rs import _core
+import trafilatura_rs
+from trafilatura_rs import _api, _core
 
 GERMAN = ("<html><head>{meta}</head><body><article><h1>Ein Bericht</h1><p>"
           + "Die Stadt hat am Montag beschlossen, die neue Brücke über den Fluss früher als geplant zu öffnen. " * 6
@@ -22,6 +23,14 @@ PAGES = [GERMAN.format(meta=m) for m in ("", '<meta http-equiv="content-language
                                     {"favor_precision": True, "include_comments": False}])
 def test_target_language(lang, kwargs):
     assert_rust_parity(PAGES, target_language=lang, **kwargs)
+
+
+@pytest.mark.parametrize("lang", ["en", "de"])
+def test_no_python_fallback(lang):
+    """The stock detector and stoplists never leave the core (Unsupported would rerun the call in Python)."""
+    for html in PAGES:
+        plan = _api._plan(html, {"target_language": lang}, trafilatura_rs.engine())
+        _core.extract(plan[0], **plan[1])
 
 
 def test_unverified_or_odd_languages():
