@@ -45,9 +45,17 @@ Other outputs (`trafilatura_rs.verified_outputs()`):
 | Links | `include_links=True` with txt, markdown, JSON or XML, with or without metadata | default |
 | Images | `include_images=True`, the same outputs | default |
 | Links and images | both, with txt, and with JSON with metadata | default |
+| Target language | `target_language="en"` (any str) with txt, and with JSON with metadata | default, precision, recall, fast |
 
 Relative link targets and image sources are resolved as courlan and `urllib.parse` do: natively for the common URL
 shapes, through Python for the rest.
+
+With `target_language`, the `<meta>` language check, jusText's language stoplist and the language filter run in Rust.
+Detection is py3langid 0.4.0's `classify`, ported: the port scores in f64 and bounds the float32 rounding numpy's
+BLAS can add in any summation order, and answers only when the winner is ahead of every other language by more than
+that bound. Otherwise, or with another py3langid, a patched `language_classifier` or a non-default identifier, the
+installed py3langid decides. Checked on the corpus (`lang_*` configs: English over every focus, German and French) and
+on 117k texts, prefixes and upper-cased variants (`harness/diff_langid.py`): no mismatch, 10 texts deferred to Python.
 
 These options combine with any configuration above:
 
@@ -99,7 +107,8 @@ the 10,666 pages per configuration.
 
 ## Runs in Python
 
-- `target_language`
+- `target_language` with other outputs, with `include_links` / `include_images`, or a non-str value, and
+  `bare_extraction` with `target_language`
 - `with_metadata=True` with `deduplicate=True`: a document that falls back to Python would update the wrong dedup
   cache
 - `bare_extraction` with `include_links`, `include_images` or `deduplicate`

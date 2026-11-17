@@ -100,7 +100,18 @@ def _feature_grid():
             yield f"{name}_comments", {**kw, "include_comments": True}
 
 
-CONFIGS = {**dict(_grid()), **dict(_feature_grid()), **{k: {**v, "include_comments": False} for k, v in _LEGACY.items()},
+def _language_grid():
+    """`lang_<l>_<focus>_<out>[_comments]`: target_language "en" over every focus, plain text and JSON with metadata,
+    with and without comments; "de" and "fr" balanced, text with comments and JSON without."""
+    outputs = {"txt": {}, "json": _OUTPUTS["json"]}
+    combos = [("en", f, out, c) for f in _FOCUS for out in outputs for c in (False, True)]
+    combos += [(lang, "balanced", out, out == "txt") for lang in ("de", "fr") for out in outputs]
+    for lang, focus, out, comments in combos:
+        kw = {"target_language": lang, **_FOCUS[focus], **outputs[out], "include_comments": comments}
+        yield f"lang_{lang}_{focus}_{out}{'_comments' if comments else ''}", kw
+
+
+CONFIGS = {**dict(_grid()), **dict(_feature_grid()), **dict(_language_grid()), **{k: {**v, "include_comments": False} for k, v in _LEGACY.items()},
            **{k: {"include_comments": False, **v} for k, v in _EXTRAS.items()}}
 
 

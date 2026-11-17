@@ -45,8 +45,9 @@ VERIFIED_FEATURES = {
     frozenset({"include_images"}): _FEATURE_OUTPUTS,
     frozenset({"include_links", "include_images"}): {out: _with_comments(_BALANCED) for out in (("txt", False),
                                                                                                   ("json", True))},
+    frozenset({"target_language"}): {out: _FOCUS_GRID for out in (("txt", False), ("json", True))},
 }
-_FEATURE_KEYS = {"links": "include_links", "images": "include_images"}
+_FEATURE_KEYS = {"links": "include_links", "images": "include_images", "lang": "target_language"}
 
 
 def verified_outputs(engine=None, features=()):

@@ -12,6 +12,7 @@ use crate::justext::{classify_paragraphs, make_paragraphs, revise_paragraph_clas
 use crate::py;
 use crate::readability::v23;
 use crate::trafilatura::htmlprocessing::Env;
+use crate::trafilatura::language::justext_stoplist;
 use crate::trafilatura::links::Urls;
 use crate::trafilatura::text::trim;
 use crate::trafilatura::utils::fromstring_bytes;
@@ -82,7 +83,7 @@ pub fn compare_extraction(env: &mut Env, cleaned_tree: Node, raw_tree: Node, own
     }
     let unclean = !body.xpath_nodes(SANITIZED_XPATH)?.is_empty();
     if unclean || len_text < opts.min_extracted_size {
-        let (body2, text2) = justext_rescue(ctx, cleaned_tree)?;
+        let (body2, text2) = justext_rescue(env, cleaned_tree)?;
         let len2 = py::len(&text2);
         let accept = if unclean {
             len_text <= JUSTEXT_OVERRIDE_RATIO * len2
@@ -101,8 +102,8 @@ pub fn compare_extraction(env: &mut Env, cleaned_tree: Node, raw_tree: Node, own
     Ok((body, text))
 }
 
-/// `try_justext` with target_language None (the full JT_STOPLIST); any jusText exception gives an empty body.
-fn try_justext(ctx: &Ctx, tree: Node) -> Result<Node> {
+/// `try_justext(tree, url, target_language)` with the stoplist it picks; any jusText exception gives an empty body.
+fn try_justext(ctx: &Ctx, tree: Node, stoplist: &Stoplist) -> Result<Node> {
     let body = ctx.element("body")?;
     let params = Params {
         length_low: 50,
@@ -113,7 +114,7 @@ fn try_justext(ctx: &Ctx, tree: Node) -> Result<Node> {
         no_headings: true,
     };
     let Ok(mut paragraphs) = make_paragraphs(tree) else { return Ok(body) };
-    classify_paragraphs(&mut paragraphs, Stoplist::jt(), &params);
+    classify_paragraphs(&mut paragraphs, stoplist, &params);
     revise_paragraph_classification(&mut paragraphs, 150);
     for p in paragraphs.iter().filter(|p| !p.is_boilerplate()) {
         let el = ctx.element("p")?;
@@ -124,9 +125,11 @@ fn try_justext(ctx: &Ctx, tree: Node) -> Result<Node> {
 }
 
 /// `justext_rescue`: jusText on the basic-cleaned tree.
-pub fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Extraction> {
+pub fn justext_rescue(env: &Env, tree: Node) -> Result<Extraction> {
+    let ctx = env.ctx;
     let tree = basic_cleaning(ctx, tree)?;
-    let body = try_justext(ctx, tree)?;
+    let stoplist = justext_stoplist(env.opts, env.urls.hooks)?;
+    let body = try_justext(ctx, tree, stoplist.get())?;
     let text = joined_text(body)?;
     Ok((body, text))
 }

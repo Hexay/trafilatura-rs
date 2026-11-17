@@ -7,6 +7,7 @@ mod case_tables;
 pub mod datetime;
 pub mod int;
 pub mod json;
+mod prefilter;
 pub mod pyre;
 pub mod re;
 pub mod urllib;

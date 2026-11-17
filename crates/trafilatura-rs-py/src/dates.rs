@@ -17,13 +17,13 @@ pub(crate) fn enabled(py: Python<'_>) -> bool {
     })
 }
 
-/// Whether the running `unicodedata` and `regex` are the ones the non-ASCII dateparser shortcut was generated for.
+/// Whether the running `unicodedata` and `regex` are ones the dateparser tables hold for (`dates::unicode_supported`).
 fn unicode(py: Python<'_>) -> bool {
     *UNICODE.get_or_init(|| {
         let check = || -> PyResult<bool> {
             let unidata: String = py.import("unicodedata")?.getattr("unidata_version")?.extract()?;
             let regex: String = py.import("regex")?.getattr("__version__")?.extract()?;
-            Ok((unidata.as_str(), regex.as_str()) == dates::unicode_versions())
+            Ok(dates::unicode_supported(&unidata, &regex))
         };
         check().unwrap_or(false)
     })
@@ -32,6 +32,22 @@ fn unicode(py: Python<'_>) -> bool {
 /// `_external_date(s) if has_date_cue(s, ...) else None` is certainly None.
 pub(crate) fn external_date_is_none(py: Python<'_>, s: &str, min_year: i32, max_year: i32) -> bool {
     enabled(py) && dates::external_date_is_none(s, min_year, max_year, unicode(py))
+}
+
+/// `function(s, datetime(min_year, 1, 1), datetime(max_year, 1, 1))` natively when `function` is htmldate's own
+/// `has_date_cue`, else None to run Python.
+pub(crate) fn has_date_cue(
+    py: Python<'_>,
+    function: &Bound<'_, PyAny>,
+    s: &str,
+    min_year: i32,
+    max_year: i32,
+) -> PyResult<Option<bool>> {
+    let named = |attr: &str, want: &str| -> PyResult<bool> { Ok(function.getattr(attr)?.extract::<String>()? == want) };
+    if !(enabled(py) && named("__module__", "htmldate.extractors")? && named("__qualname__", "has_date_cue")?) {
+        return Ok(None);
+    }
+    Ok(dates::has_date_cue(s, min_year, max_year))
 }
 
 /// (`_external_date`, its parser, whether `trafilatura_rs._dates.stock_external_date` holds) last checked.

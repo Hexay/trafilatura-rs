@@ -1,8 +1,11 @@
 //! Leaves of metadata extraction that run in the embedding Python process (see docs/metadata-formats-scope.md):
 //! dateparser and dateutil (large, locale- and clock-dependent) and courlan's URL helpers (per-document string
-//! functions, exact by construction when called). Without a provider each returns `Error::Unsupported`.
+//! functions, exact by construction when called); for `target_language`, py3langid and jusText's per-language
+//! stoplists. Without a provider each returns `Error::Unsupported`.
 use crate::dom::{Error, Result};
+use crate::justext::Stoplist;
 use crate::py::datetime::DateTime;
+use std::sync::Arc;
 
 fn unsupported<T>(what: &str) -> Result<T> {
     Err(Error::Unsupported(what.to_owned()))
@@ -65,6 +68,19 @@ pub trait Hooks: Sync {
     fn urljoin(&self, base: &str, url: &str) -> Result<String> {
         let _ = (base, url);
         unsupported("urljoin")
+    }
+
+    /// trafilatura's `utils.language_classifier(temp_text, temp_comments)`: py3langid's label for the longer of the
+    /// two, None when no detector is installed.
+    fn language_classifier(&self, text: &str, comments: &str) -> Result<Option<String>> {
+        let _ = (text, comments);
+        unsupported("py3langid")
+    }
+
+    /// `get_stoplist(JUSTEXT_LANGUAGES[lang])` (jusText) for a `lang` in JUSTEXT_LANGUAGES, else None.
+    fn justext_stoplist(&self, lang: &str) -> Result<Option<Arc<Stoplist>>> {
+        let _ = lang;
+        unsupported("justext stoplist")
     }
 }
 

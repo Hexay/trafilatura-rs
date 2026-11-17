@@ -144,11 +144,28 @@ def _metadata(spec, rust, extra):
     return True
 
 
+def _language(lang):
+    """`extra` entries for target_language (none when falsy, as `if options.lang` reads it), or None when the port
+    has no path for it."""
+    if not lang:
+        return {}
+    if type(lang) is not str:
+        return None
+    try:
+        flag = importlib.import_module("trafilatura.core").LANGID_FLAG
+    except (ImportError, AttributeError):
+        return None
+    return {"lang": lang, "langid": flag} if type(flag) is bool else None
+
+
 def _translate(spec, formats):
     """`_core.extract` keywords for an Extractor's attributes, or None."""
     fmt, focus, dedup, url = spec["format"], spec["focus"], spec["dedup"], spec["url"]
-    if fmt not in formats or focus not in _FOCUS or spec["lang"]:
+    language = _language(spec["lang"])
+    if fmt not in formats or focus not in _FOCUS or language is None:
         return None
+    if formats is _BARE_FORMATS and language:
+        return None  # bare_extraction with target_language is not verified
     if formats is _BARE_FORMATS and (spec["links"] or spec["images"]):
         return None  # bare_extraction with links/images is not verified
     if fmt in _PLAIN_FORMATS and spec["formatting"]:
@@ -165,7 +182,7 @@ def _translate(spec, formats):
     }
     if any(not (spec[key] is None or type(spec[key]) is bool) for key in ("links", "images")):
         return None  # trafilatura tests both `is True` and truthiness
-    extra = {key: True for key in ("links", "images") if spec[key]}
+    extra = {key: True for key in ("links", "images") if spec[key]} | language
     for key, default in _SIZES.items():
         value = spec[key]
         if value is not None and (type(value) is not int or value < 0):

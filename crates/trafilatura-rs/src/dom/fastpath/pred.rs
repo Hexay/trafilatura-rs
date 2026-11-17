@@ -4,7 +4,7 @@
 //!   preds := atom (or atom)*
 //!   atom  := contains(V, "s") | starts-with(V, "s") | @a="v" | @a
 //!          | contains(U, "s") | starts-with(U, "s") | re:test(U, 'pattern'[, 'flags'])
-//!          | not(self::a or self::b ...) | not(.//name) | not(ancestor::name)
+//!          | not(self::a or self::b ...) | not(.//name) | not(ancestor::name) | name="v"
 //!   V := @a | translate(@a, "ABC", "abc")      U := @a | @a|@b ...
 //! A union U is converted to a string as libxml2 does for function arguments (sorted node-set): the value of the
 //! first listed attribute in the element's attribute order, "" if none. `re:test` is Python `re.search` (lxml).
@@ -56,6 +56,8 @@ pub(crate) struct Preds {
     pub not_desc: Vec<String>,
     /// `not(ancestor::name)` atoms.
     pub not_anc: Vec<String>,
+    /// `name="v"` atoms: some child element `name` has string-value `v`.
+    pub child_equals: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 pub(crate) struct Step {
@@ -100,6 +102,23 @@ unsafe fn has_ancestor(n: P, is_name: impl Fn(*const ffi::xmlChar) -> bool) -> b
             return true;
         }
         p = (*p).parent;
+    }
+    false
+}
+
+/// Whether a child element of `n` named `name` has the string-value `value` (XPath `name="value"`).
+unsafe fn has_child_equal(n: P, name: &[u8], value: &[u8]) -> bool {
+    let mut c = (*n).children;
+    while !c.is_null() {
+        if (*c).type_ == ELEMENT && (*c).ns.is_null() && cstr((*c).name).as_bytes() == name {
+            let s = ffi::xmlNodeGetContent(c);
+            let equal = cstr(s).as_bytes() == value;
+            ffi::xmlFree.expect("xmlFree")(s as *mut _);
+            if equal {
+                return true;
+            }
+        }
+        c = (*c).next;
     }
     false
 }
@@ -149,6 +168,7 @@ impl Step {
                 || rg.not_self.iter().any(|tags| !tags.contains(&name))
                 || rg.not_desc.iter().any(|&t| t.is_null() || !has_descendant(n, |d| d == t))
                 || rg.not_anc.iter().any(|&t| t.is_null() || !has_ancestor(n, |d| d == t))
+                || g.child_equals.iter().any(|(t, v)| has_child_equal(n, t, v))
         })
     }
 
@@ -169,6 +189,7 @@ impl Step {
                 || g.not_self.iter().any(|tags| !tags.iter().any(|t| t == name))
                 || g.not_desc.iter().any(|t| !has_descendant(n, eq(t.as_bytes())))
                 || g.not_anc.iter().any(|t| !has_ancestor(n, eq(t.as_bytes())))
+                || g.child_equals.iter().any(|(t, v)| has_child_equal(n, t, v))
         })
     }
 }

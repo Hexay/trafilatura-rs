@@ -18,6 +18,8 @@ static RE_TEST: LazyLock<Regex> = LazyLock::new(|| {
 });
 static EQUALS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^@([\w-]+)\s*=\s*(["'])(.*?)["']$"#).unwrap());
 static PRESENT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^@([\w-]+)$").unwrap());
+static CHILD_EQUALS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^([A-Za-z_][\w-]*)\s*=\s*(["'])(.*?)["']$"#).unwrap());
 
 /// Splits `s` at top-level (outside quotes, parentheses and brackets) occurrences of `sep`.
 pub(crate) fn split_top<'a>(s: &'a str, sep: &str) -> Vec<&'a str> {
@@ -167,6 +169,8 @@ fn parse_preds(body: &str) -> Option<Preds> {
             }
         } else if let Some(c) = EQUALS.captures(atom) {
             group(&mut groups, c[1].as_bytes(), None).4.push(c[3].as_bytes().to_vec());
+        } else if let Some(c) = CHILD_EQUALS.captures(atom) {
+            preds.child_equals.push((c[1].as_bytes().to_vec(), c[3].as_bytes().to_vec()));
         } else {
             let c = PRESENT.captures(atom)?;
             group(&mut groups, c[1].as_bytes(), None).5 = true;

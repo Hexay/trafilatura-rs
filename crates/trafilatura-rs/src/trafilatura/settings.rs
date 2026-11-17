@@ -46,6 +46,10 @@ pub struct Options {
     /// htmldate's `original_date` and `extensive_search` (`date_params`).
     pub original_date: bool,
     pub extensive_date_search: bool,
+    /// `target_language` (`Extractor.lang`), non-empty.
+    pub lang: Option<String>,
+    /// trafilatura's `LANGID_FLAG`: py3langid is installed.
+    pub langid: bool,
 }
 
 impl Default for Options {
@@ -75,6 +79,8 @@ impl Default for Options {
             prune_xpath: Vec::new(),
             original_date: true,
             extensive_date_search: true,
+            lang: None,
+            langid: false,
         }
     }
 }

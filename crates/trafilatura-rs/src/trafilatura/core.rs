@@ -1,4 +1,4 @@
-//! trafilatura/core.py: `bare_extraction` and `extract` for txt, markdown and json output (no language checks).
+//! trafilatura/core.py: `bare_extraction` and `extract` (language checks in language.rs).
 use super::baseline::baseline;
 use super::deduplication::{content_fingerprint, duplicate_test, Lru};
 use super::document::Document;
@@ -6,6 +6,7 @@ use super::external::compare_extraction;
 use super::filters;
 use super::htmlprocessing::{prune_node, prune_unwanted_nodes, tree_cleaning, Env};
 use super::htmlprocessing_convert::convert_tags;
+use super::language::{check_lang_early, language_filter};
 use super::links::Urls;
 use super::main_extractor_comments::extract_comments;
 use super::main_extractor_extract::extract_content;
@@ -95,6 +96,7 @@ pub const EMPTY_TREE: &str = "empty HTML tree";
 /// `bare_extraction` up to the TypeError/ValueError catch.
 pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
     let tree = load_html(ctx, html).ok_or_else(|| value_error(EMPTY_TREE))?;
+    check_lang_early(tree, opts)?;
     let mut document = Document::default();
     if opts.with_metadata {
         document = extract_metadata(ctx, tree, req, opts)?;
@@ -109,11 +111,11 @@ pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lr
         Urls { hooks: req.hooks, page: req.url, convert: req.url.filter(|u| !u.is_empty()).or(doc_url.as_deref()) };
     let mut cleaned = convert_tags(ctx, cleaned, opts, urls.hooks, urls.convert)?;
     let mut env = Env { ctx, opts, lru, urls };
-    let (comments, len_comments) = if opts.comments {
-        let (body, _, n) = extract_comments(&mut env, cleaned)?;
-        (Some(body), n)
+    let (comments, temp_comments, len_comments) = if opts.comments {
+        let (body, text, n) = extract_comments(&mut env, cleaned)?;
+        (Some(body), text, n)
     } else {
-        (None, 0)
+        (None, String::new(), 0)
     };
     if opts.focus == Focus::Precision {
         cleaned = prune_unwanted_nodes(ctx, cleaned, &REMOVE_COMMENTS_XPATH, false)?;
@@ -140,6 +142,7 @@ pub fn extract_document(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lr
     if opts.dedup && duplicate_test(postbody, opts, env.lru)? {
         return Err(value_error("duplicate document"));
     }
+    language_filter(&mut document, &temp_text, &temp_comments, opts, req.hooks)?;
     document.raw_text = Value::Str(temp_text);
     document.body = Some(postbody);
     document.commentsbody = comments;

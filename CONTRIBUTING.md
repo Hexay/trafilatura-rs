@@ -63,13 +63,19 @@ harness/diff_dates.py memo strings.jsonl                      # _external_date m
 FUZZ=20000 PAR=2 harness/diff_dates.py dateparser strings*.jsonl  # native dateparser port vs Python (+ fuzz)
 harness/diff_urls.py collect docs.jsonl pairs.jsonl           # the corpus' link/image URLs, then per Python:
 target/iter/harness urls pairs.jsonl native.jsonl && python3.X harness/diff_urls.py check pairs.jsonl native.jsonl
+harness/diff_langid.py ref_meta_*json*.jsonl                  # native py3langid classify vs Python on corpus texts
 ```
 
 After a dateparser, python-dateutil or htmldate bump, regenerate `crates/trafilatura-rs/src/dates/dateparser/tables.txt`
 (`harness/gen_dateparser_tables.py`) and `locales.txt` (`harness/gen_dateparser_locales.py > locales.txt`), rerun
 `diff_dates.py` (check and dateparser) and update `REPRODUCES_DATES`. After a `regex` or Python (Unicode) bump,
 regenerate `chars.txt` (`harness/gen_dateparser_chars.py`), `unicode.txt` (`harness/gen_dateparser_unicode.py`),
-`tables.txt` and `locales.txt`; until then non-ASCII strings skip the proof and every string skips the port.
+`tables.txt` and `locales.txt`; until then non-ASCII strings skip the proof and every string skips the port. A `regex`
+release whose four regenerated tables equal the committed ones apart from the stamp can instead go into
+`SAME_TABLES_REGEX` (crates/trafilatura-rs/src/dates/mod.rs), after `diff_dates.py` check and dateparser pass under it.
+
+After a py3langid bump, rerun `harness/diff_langid.py ref_meta_balanced_json.jsonl ref_meta_recall_json_comments.jsonl`
+(native classify vs Python on the corpus' texts) and the `lang_*` meta configs, then update `REPRODUCES_LANGID`.
 
 `meta:`/`meta2:` jobs go through the built extension (`tools/dev.sh py`), so htmldate's dateutil/dateparser and courlan
 callbacks run as they do for users. Both sides pin the wall clock (see docs/metadata-formats-scope.md); `fallbacks`

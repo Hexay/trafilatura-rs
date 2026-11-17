@@ -1,6 +1,7 @@
 //! trafilatura/external.py: readability/jusText fallbacks and the choice between them and the own extraction.
 use super::htmlprocessing::{prune_unwanted_nodes, tree_cleaning, Env};
 use super::htmlprocessing_convert::convert_tags;
+use super::language::justext_stoplist;
 use super::settings::{Focus, Options};
 use super::text::trim;
 use super::xpaths::{OVERALL_DISCARD_XPATH, PAYWALL_DISCARD_XPATH, REMOVE_COMMENTS_XPATH};
@@ -24,10 +25,10 @@ fn joined_text(n: Node) -> Result<String> {
     Ok(trim(&n.itertext(true)?.join(" ")))
 }
 
-/// `try_justext` with target_language None (the full JT_STOPLIST).
-fn try_justext(ctx: &Ctx, tree: Node) -> Result<Option<Node>> {
+/// `try_justext(tree, url, target_language)` with the stoplist it picks for the target language.
+fn try_justext(ctx: &Ctx, tree: Node, stoplist: &Stoplist) -> Result<Option<Node>> {
     let body = ctx.element("body")?;
-    let paragraphs = match custom_justext(tree, Stoplist::jt()) {
+    let paragraphs = match custom_justext(tree, stoplist) {
         Ok(p) => p,
         Err(Error::Value(_)) => return Ok(None),
         Err(e) => return Err(e),
@@ -41,10 +42,12 @@ fn try_justext(ctx: &Ctx, tree: Node) -> Result<Option<Node>> {
 }
 
 /// `justext_rescue(tree, options, postbody, 0, '')`: returns the jusText result when it has any text.
-fn justext_rescue(ctx: &Ctx, tree: Node) -> Result<Option<Extraction>> {
+fn justext_rescue(env: &Env, tree: Node) -> Result<Option<Extraction>> {
+    let ctx = env.ctx;
     let tree = prune_unwanted_nodes(ctx, tree, &PAYWALL_DISCARD_XPATH, false)?;
     let tree = prune_unwanted_nodes(ctx, tree, &REMOVE_COMMENTS_XPATH, false)?;
-    let Some(body) = try_justext(ctx, tree)? else { return Ok(None) };
+    let stoplist = justext_stoplist(env.opts, env.urls.hooks)?;
+    let Some(body) = try_justext(ctx, tree, stoplist.get())? else { return Ok(None) };
     let text = joined_text(body)?;
     let n = py::len(&text);
     Ok((n > 0).then_some((body, text, n)))
@@ -115,7 +118,7 @@ pub fn compare_extraction(env: &mut Env, tree: Node, backup_tree: Node, own: Ext
     }
     let mut jt_result = false;
     if !body.xpath_nodes(SANITIZED_XPATH)?.is_empty() || len_text < opts.min_extracted_size {
-        if let Some((body2, text2, len2)) = justext_rescue(ctx, tree)? {
+        if let Some((body2, text2, len2)) = justext_rescue(env, tree)? {
             jt_result = true;
             if len_text <= 4 * len2 {
                 (body, text, len_text) = (body2, text2, len2);

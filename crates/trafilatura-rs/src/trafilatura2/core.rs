@@ -1,5 +1,5 @@
-//! trafilatura 2.3.1 core.py: `trafilatura_sequence`, `bare_extraction` and `extract` for txt, markdown and json
-//! output (no language checks).
+//! trafilatura 2.3.1 core.py: `trafilatura_sequence`, `bare_extraction` and `extract` (language checks in
+//! trafilatura/language.rs).
 use super::baseline::{baseline, html2txt_len};
 use super::deduplication::content_fingerprint;
 use super::external::{compare_extraction, justext_rescue};
@@ -22,6 +22,7 @@ use crate::trafilatura::deduplication::{duplicate_test, Lru};
 use crate::trafilatura::document::Document;
 use crate::trafilatura::filters;
 use crate::trafilatura::htmlprocessing::Env;
+use crate::trafilatura::language::{check_lang_early, language_filter};
 use crate::trafilatura::links::Urls;
 use crate::trafilatura::main_extractor_extract::body_text;
 use crate::trafilatura::settings::Format;
@@ -86,6 +87,7 @@ pub fn bare_extraction(ctx: &Ctx, html: &str, opts: &Options, req: &Request, lru
 
 /// `bare_extraction` from the loaded tree on.
 pub fn bare_extraction_tree(ctx: &Ctx, tree: Node, opts: &Options, req: &Request, lru: &mut Lru) -> Result<Document> {
+    check_lang_early(tree, opts)?;
     let mut document = Document::default();
     if opts.with_metadata {
         document = extract_metadata(ctx, tree, req, opts)?;
@@ -111,6 +113,7 @@ pub fn bare_extraction_tree(ctx: &Ctx, tree: Node, opts: &Options, req: &Request
     if opts.dedup && duplicate_test(postbody, opts, env.lru)? {
         return Err(Error::Value("duplicate document".into()));
     }
+    language_filter(&mut document, &temp_text, &temp_comments, opts, req.hooks)?;
     document.raw_text = Value::Str(temp_text);
     document.body = Some(postbody);
     document.commentsbody = Some(commentsbody);
@@ -224,7 +227,7 @@ pub fn escalate(env: &mut Env, esc_tree: Node, len_text: usize) -> Result<Option
     // Python catches any Exception from either candidate.
     let retry =
         caught(prepare_tree(&r_env, esc_tree).and_then(|(c, b)| extract_and_compare(&mut r_env, c, b, esc_tree)))?;
-    let jt = if opts.fast { None } else { caught(justext_rescue(ctx, esc_tree.deep_copy(ctx)))? };
+    let jt = if opts.fast { None } else { caught(justext_rescue(env, esc_tree.deep_copy(ctx)))? };
     let r_len = retry.as_ref().map_or(0, |r| py::len(&r.1));
     let j_len = jt.as_ref().map_or(0, |j| py::len(&j.1));
     if j_len > r_len && j_len as f64 > ESCALATION_JUSTEXT_RATIO * len_text as f64 {
