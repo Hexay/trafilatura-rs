@@ -52,6 +52,9 @@ _FEATURES = {
     )
     for o, ov in ((o, _FEATURE_OUTPUTS[o]) for o in outputs)
 }
+# target_language (verified_outputs(features=("target_language",))), every focus
+_FEATURES.update({f"lang_{f}_{o}": {"target_language": "en", **fv, **ov} for f, fv in _FOCUS.items()
+                  for o, ov in (("txt", {}), ("json", _OUTPUTS["json"]))})
 CONFIGS = {
     **{k: {**v, "include_comments": False} for k, v in {**_BASE, **_GRID, **_FEATURES}.items()},
     **{f"{k}_comments": {**v, "include_comments": True}
@@ -60,8 +63,8 @@ CONFIGS = {
 
 
 def features(kwargs):
-    """The include_links / include_images options a config turns on."""
-    return tuple(k for k in ("include_links", "include_images") if kwargs.get(k))
+    """The include_links / include_images / target_language options a config turns on."""
+    return tuple(k for k in ("include_links", "include_images", "target_language") if kwargs.get(k))
 
 
 def pages():

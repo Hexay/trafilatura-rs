@@ -63,7 +63,8 @@ other functions. `trafilatura_rs.engine()` returns the trafilatura version being
 - `extract()` on str or bytes, with `output_format` txt, markdown, json, xml, html or csv, with or without metadata,
   comments, `include_links` and `include_images`, and the usual options (`favor_precision`, `favor_recall`,
   `no_fallback`/`fast`, `include_tables`, `deduplicate`, `url`, `options=Extractor(...)`, config files, blacklists,
-  `prune_xpath`, `date_extraction_params`)
+  `prune_xpath`, `date_extraction_params`), and `target_language` with txt and json (a port of py3langid's
+  classifier that answers only when float32 rounding can't change the result; close calls go to Python)
 - metadata: title, author, date (a port of htmldate's `find_date`, with native ports of the dateutil and dateparser
   calls it makes; rare strings go to Python), sitename, categories, tags, license, JSON-LD
 - `html2txt`, `baseline`, `extract_metadata`, `bare_extraction` and htmldate's `find_date`
@@ -71,7 +72,7 @@ other functions. `trafilatura_rs.engine()` returns the trafilatura version being
 
 Python trafilatura still runs:
 
-- `target_language`
+- `target_language` with other outputs or with links/images
 - `with_metadata=True` together with `deduplicate=True`
 - `bare_extraction` with `include_links`, `include_images` or `deduplicate`
 - lxml trees with trafilatura 1.11.0 (it changes the caller's tree; 2.3.1 trees run in Rust) and other
@@ -119,8 +120,8 @@ load). The other rows are the results recorded in the pull request that added th
 | `extract(html)` | 8.8x | 8.5x | 10,666 | [benchmarks](https://github.com/Hexay/trafilatura-rs/blob/main/docs/benchmarks.md) |
 | `output_format="markdown"` | 8.5x | 12.9x | 3,000 | [#7](https://github.com/Hexay/trafilatura-rs/pull/7) |
 | command line (bytes, `options=Extractor()`) | 8.2x | 9.5x | 3,000 | [#7](https://github.com/Hexay/trafilatura-rs/pull/7) |
-| `with_metadata=True, url=...` | 2.6x | 3.5x | 3,000 | [#7](https://github.com/Hexay/trafilatura-rs/pull/7) |
-| `output_format="json", with_metadata=True, include_comments=False` | 3.5x | 4.2x | 3,000 | [#14](https://github.com/Hexay/trafilatura-rs/pull/14) |
+| `with_metadata=True, url=..., include_comments=False` | 4.7x | 4.9x | 3,000 | [#16](https://github.com/Hexay/trafilatura-rs/pull/16) |
+| `output_format="json", with_metadata=True, include_comments=False`, balanced / precision | 5.4x / 6.0x | 4.4x / 6.9x | 3,000 | [#16](https://github.com/Hexay/trafilatura-rs/pull/16) |
 | `output_format` xml, html, csv (`include_comments=False`) | 9.9–10.4x | 8.4–9.2x | 3,000 | [#13](https://github.com/Hexay/trafilatura-rs/pull/13) |
 | `include_links` / `include_images`, without metadata | 7.2–9.8x | 7.4–8.4x | 3,000 | [#13](https://github.com/Hexay/trafilatura-rs/pull/13) |
 | `bare_extraction(html)`, each focus, with and without comments | 6.8–10.1x | 6.2–8.0x | 10,666 | [#10](https://github.com/Hexay/trafilatura-rs/pull/10) |

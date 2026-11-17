@@ -49,6 +49,26 @@ instead of parsing HTML.
 Output equals trafilatura's on 10,562 of 10,562 pages in both. 1.11.0 trees run in Python (see
 [coverage.md](coverage.md#extract)).
 
+## Metadata calls, PR #16
+
+The first 3,000 corpus pages, `BENCH_CFG=<config> PROFILE=release tools/bench.sh 3000`, one run with `ROUNDS=1`,
+measured 2026-11-16 on the shared box under load (CPU times are noisy; instructions are the stable figure). Configs
+are `harness/meta_configs.py`'s, all `include_comments=False` with `url=`: `balanced_meta` is `with_metadata=True`,
+`balanced_json` and `precision_json` add `output_format="json"`. Before is main where this branch started.
+
+| Config | Python ms / Minstr | Before: ms / Minstr | Before speedup (CPU / instr) | After: ms / Minstr | After speedup (CPU / instr) |
+|---|---:|---:|---:|---:|---:|
+| balanced_json, 1.11.0 | 27.35 / 355.7 | 10.41 / 105.3 | 2.6x / 3.4x | 5.08 / 40.1 | 5.4x / 8.9x |
+| balanced_json, 2.3.1 | 25.79 / 354.7 | 7.46 / 99.5 | 3.5x / 3.6x | 5.85 / 46.6 | 4.4x / 7.6x |
+| balanced_meta, 1.11.0 | 22.89 / 313.1 | 11.05 / 104.1 | 2.1x / 3.0x | 4.83 / 38.8 | 4.7x / 8.1x |
+| balanced_meta, 2.3.1 | 28.27 / 353.9 | 7.88 / 99.1 | 3.6x / 3.6x | 5.82 / 46.2 | 4.9x / 7.7x |
+| precision_json, 1.11.0 | 30.07 / 413.5 | 10.79 / 105.3 | 2.8x / 3.9x | 5.04 / 40.0 | 6.0x / 10.3x |
+| precision_json, 2.3.1 | 36.50 / 327.4 | 10.53 / 95.8 | 3.5x / 3.4x | 5.30 / 42.7 | 6.9x / 7.7x |
+
+Output equals trafilatura's on 3,000 of 3,000 pages in every run. Rust instructions per page dropped 2.1 to 2.7x: the
+metadata XPaths now take the DOM fast path, the lookaround-only `fancy_regex` patterns are prefiltered by a `regex`
+scan, and htmldate's date-cue check runs natively.
+
 ## The README chart
 
 `docs/assets/extract-speed.svg` is generated from `docs/assets/extract-speed.json`, which holds the medians above for

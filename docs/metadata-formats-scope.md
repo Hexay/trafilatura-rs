@@ -126,7 +126,8 @@ parity configs.
 
 Whole calls, decided by `trafilatura_rs.supports()`:
 
-- The `xmltei` format, `target_language`, json/xml/html/csv with `include_formatting=True`, `include_links` /
+- The `xmltei` format, `target_language` outside txt and json (see coverage.md), json/xml/html/csv with
+  `include_formatting=True`, `include_links` /
   `include_images` given anything but a bool, input other than str/bytes (lxml trees, responses).
 - `date_extraction_params` with keys beyond `original_date`, `extensive_search`, `max_date` (`"YYYY-MM-DD"`, required)
   and `url`, or a custom `outputformat` / `min_date`.

@@ -15,6 +15,8 @@ REPRODUCES_METADATA = {"htmldate": "1.11.0"}
 # The native date shortcuts (see docs/metadata-formats-scope.md) answer for these versions only; at any other, the
 # dateparser and python-dateutil calls all run in Python, so output still follows the installed packages.
 REPRODUCES_DATES = {"dateparser": "1.5.0", "python-dateutil": "4.0.0"}
+# With target_language, the native py3langid classify (trafilatura_rs/_langid.py) answers for this version only.
+REPRODUCES_LANGID = "0.4.0"
 
 
 @functools.cache  # metadata lookups cost more than a whole Rust extraction; packages don't change mid-process

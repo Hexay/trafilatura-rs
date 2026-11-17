@@ -6,10 +6,16 @@ use super::{cstr, Node, ELEMENT};
 use libxml2_sys as ffi;
 use std::sync::LazyLock;
 
+mod path;
 mod pred;
 mod pred_parse;
 mod resolve;
+#[cfg(test)]
+mod tests;
+use path::Path;
 pub(crate) use pred::{parse_step, Step};
+#[cfg(test)]
+pub(crate) use tests::assert_planned;
 
 pub(crate) static VERIFY: LazyLock<bool> = LazyLock::new(|| std::env::var_os("TRAFILATURA_RS_VERIFY_XPATH").is_some());
 
@@ -26,6 +32,8 @@ pub(crate) enum Plan {
     /// `[.]//processing-instruction()|[.]//*[not(node())]`: PIs and childless elements of the whole document
     /// (absolute) or of the context node's descendants.
     EmptyOrPi { absolute: bool },
+    /// A union of multi-step paths (see path.rs), all absolute or all relative.
+    Paths { absolute: bool, paths: Vec<Path> },
 }
 
 /// `a` or `*[self::a or self::b ...]` -> tag names.
@@ -67,7 +75,11 @@ pub(crate) fn plan(expr: &str) -> Option<Plan> {
         return Some(Plan::NestedUnder(pairs));
     }
     let branches: Option<Vec<Step>> = split_union(&e).iter().map(|b| parse_step(b.trim())).collect();
-    branches.map(Plan::Descendants)
+    branches.map(Plan::Descendants).or_else(|| paths(&e))
+}
+
+fn paths(e: &str) -> Option<Plan> {
+    path::parse_union(&split_union(e)).map(|(absolute, paths)| Plan::Paths { absolute, paths })
 }
 
 /// Whether `n` has an element ancestor named in `tags` strictly below `top`.
@@ -96,7 +108,8 @@ pub(crate) fn plan_first(expr: &str) -> Option<Plan> {
             parse_step(b.trim())
         })
         .collect();
-    steps.map(Plan::Descendants)
+    // a path union's nodes come in document order, so its first is libxml2's first
+    steps.map(Plan::Descendants).or_else(|| paths(&e))
 }
 
 fn is_name(s: &str) -> bool {
@@ -132,20 +145,48 @@ unsafe fn next_below(top: P, n: P) -> P {
     super::iter::traverse_next(top, n)
 }
 
+/// Nodes below `top` in document order that satisfy `keep` (only the first with `first_only`).
+unsafe fn scan(top: P, first_only: bool, keep: impl Fn(P) -> bool) -> Vec<Node> {
+    let mut out = Vec::new();
+    let mut n = next_below(top, top);
+    while !n.is_null() {
+        if keep(n) {
+            out.push(Node::from_raw(n).expect("non-null"));
+            if first_only {
+                break;
+            }
+        }
+        n = next_below(top, n);
+    }
+    out
+}
+
+fn scope(ctx_node: Node, absolute: bool) -> P {
+    if absolute {
+        ctx_node.doc() as P
+    } else {
+        ctx_node.raw()
+    }
+}
+
 impl Plan {
     pub(crate) fn nodes(&self, ctx_node: Node) -> Vec<Node> {
+        self.scan(ctx_node, false)
+    }
+
+    /// First node of `nodes()` without materialising the rest.
+    pub(crate) fn first(&self, ctx_node: Node) -> Option<Node> {
+        self.scan(ctx_node, true).into_iter().next()
+    }
+
+    fn scan(&self, ctx_node: Node, first_only: bool) -> Vec<Node> {
         let mut out = Vec::new();
         unsafe {
             match self {
-                Plan::Descendants(steps) => {
-                    let top = ctx_node.raw();
-                    let mut n = next_below(top, top);
-                    while !n.is_null() {
-                        if matches_any(steps, n) {
-                            out.push(Node::from_raw(n).expect("non-null"));
-                        }
-                        n = next_below(top, n);
-                    }
+                Plan::Descendants(steps) => return scan(ctx_node.raw(), first_only, |n| matches_any(steps, n)),
+                Plan::Paths { absolute, paths } => {
+                    let top = scope(ctx_node, *absolute);
+                    return scan(top, first_only, |n| paths.iter().any(|p| p.matches(n, top)));
                 }
                 Plan::Ancestor(tag) => {
                     let mut p = (*ctx_node.raw()).parent;
@@ -159,27 +200,16 @@ impl Plan {
                 }
                 Plan::NestedUnder(pairs) => {
                     let top = ctx_node.raw();
-                    let mut n = next_below(top, top);
-                    while !n.is_null() {
-                        if (*n).type_ == ELEMENT {
-                            let name = cstr((*n).name);
-                            if pairs.iter().any(|(o, i)| i == name && has_ancestor_below(top, n, o)) {
-                                out.push(Node::from_raw(n).expect("non-null"));
-                            }
-                        }
-                        n = next_below(top, n);
-                    }
+                    return scan(top, first_only, |n| {
+                        (*n).type_ == ELEMENT
+                            && pairs.iter().any(|(o, i)| i == cstr((*n).name) && has_ancestor_below(top, n, o))
+                    });
                 }
                 Plan::EmptyOrPi { absolute } => {
-                    let top = if *absolute { ctx_node.doc() as P } else { ctx_node.raw() };
-                    let mut n = next_below(top, top);
-                    while !n.is_null() {
+                    return scan(scope(ctx_node, *absolute), first_only, |n| {
                         let t = (*n).type_;
-                        if t == super::PI || (t == ELEMENT && (*n).children.is_null()) {
-                            out.push(Node::from_raw(n).expect("non-null"));
-                        }
-                        n = next_below(top, n);
-                    }
+                        t == super::PI || (t == ELEMENT && (*n).children.is_null())
+                    });
                 }
                 Plan::TextUnder { .. } => {}
             }
@@ -187,30 +217,11 @@ impl Plan {
         out
     }
 
-    /// First node of `nodes()` without materialising the rest.
-    pub(crate) fn first(&self, ctx_node: Node) -> Option<Node> {
-        match self {
-            Plan::Descendants(steps) => unsafe {
-                let top = ctx_node.raw();
-                let mut n = next_below(top, top);
-                while !n.is_null() {
-                    if matches_any(steps, n) {
-                        return Node::from_raw(n);
-                    }
-                    n = next_below(top, n);
-                }
-                None
-            },
-            _ => self.nodes(ctx_node).into_iter().next(),
-        }
-    }
-
     pub(crate) fn strings(&self, ctx_node: Node) -> Vec<String> {
         let Plan::TextUnder { absolute, tag } = self else { return Vec::new() };
         let mut out = Vec::new();
         unsafe {
-            let start = if *absolute { ctx_node.doc() as P } else { ctx_node.raw() };
-            collect_text_below(start, false, tag, &mut out);
+            collect_text_below(scope(ctx_node, *absolute), false, tag, &mut out);
         }
         out
     }

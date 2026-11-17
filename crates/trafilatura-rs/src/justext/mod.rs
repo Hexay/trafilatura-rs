@@ -27,6 +27,11 @@ impl Stoplist {
         Stoplist(words.into_iter().map(str::to_lowercase).collect())
     }
 
+    /// A stoplist whose words are already lower-cased by Python (`justext.get_stoplist`).
+    pub fn from_lowercased(words: impl IntoIterator<Item = String>) -> Stoplist {
+        Stoplist(words.into_iter().collect())
+    }
+
     /// trafilatura's `JT_STOPLIST or jt_stoplist_init()`: the union of all jusText stoplists.
     pub fn jt() -> &'static Stoplist {
         &JT_STOPLIST

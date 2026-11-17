@@ -12,7 +12,7 @@ mod cleanup;
 mod copy;
 mod error;
 mod exslt;
-mod fastpath;
+pub(crate) mod fastpath;
 mod html;
 mod iter;
 mod mutate;

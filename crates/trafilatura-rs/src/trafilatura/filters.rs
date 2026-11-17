@@ -19,7 +19,7 @@ pub fn check_metadata(doc: &Document, opts: &Options) -> Result<()> {
 /// `str.lower()`, where Rust's mapping is known to agree: cased letters outside long-stable blocks (case pairs keep
 /// being added after Unicode 15.1, Python 3.13's) are left to Python. Both apply the same Final_Sigma rule to `Σ`, so
 /// it is ported only where its context's Cased/Case_Ignorable properties cannot differ between Unicode versions.
-fn py_lower(s: &str) -> Result<String> {
+pub(crate) fn py_lower(s: &str) -> Result<String> {
     let old_block = |c: u32| c < 0x1c80 || (0x1e00..0x2000).contains(&c) || (0xff21..0xff3b).contains(&c);
     let stable = |c: char| old_block(c as u32) || c.to_lowercase().eq(std::iter::once(c));
     let sigmas_known = s

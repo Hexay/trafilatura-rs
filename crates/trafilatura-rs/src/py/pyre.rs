@@ -10,6 +10,7 @@ pub struct Pattern {
     src: &'static str,
     re: OnceLock<Regex>,
     full: OnceLock<Regex>,
+    pre: OnceLock<Option<regex::Regex>>,
 }
 
 fn build(src: &str) -> Regex {
@@ -24,7 +25,15 @@ fn build(src: &str) -> Regex {
 
 impl Pattern {
     pub const fn new(src: &'static str) -> Pattern {
-        Pattern { src, re: OnceLock::new(), full: OnceLock::new() }
+        Pattern { src, re: OnceLock::new(), full: OnceLock::new(), pre: OnceLock::new() }
+    }
+
+    /// Where a search from `pos` can first match (see py/prefilter.rs); None when it can't match.
+    fn first_start(&self, s: &str, pos: usize) -> Option<usize> {
+        match self.pre.get_or_init(|| super::prefilter::build(self.src)) {
+            Some(pre) => pre.find_at(s, pos).map(|m| m.start()),
+            None => Some(pos),
+        }
     }
 
     fn re(&self) -> &Regex {
@@ -37,7 +46,8 @@ impl Pattern {
 
     /// `pattern.search(s, pos)`; lookbehinds see text before `pos`, `^` only matches at 0.
     pub fn search_from<'t>(&self, s: &'t str, pos: usize) -> Option<Caps<'t>> {
-        Self::run(self.re(), RegexInput::new(s).from_pos(pos))
+        let start = self.first_start(s, pos)?;
+        Self::run(self.re(), RegexInput::new(s).from_pos(start))
     }
 
     pub fn search<'t>(&self, s: &'t str) -> Option<Caps<'t>> {
@@ -45,7 +55,11 @@ impl Pattern {
     }
 
     pub fn is_match(&self, s: &str) -> bool {
-        self.re().is_match(s).expect("regex runtime error")
+        match self.first_start(s, 0) {
+            Some(0) => self.re().is_match(s).expect("regex runtime error"),
+            Some(start) => self.re().find_from_pos(s, start).expect("regex runtime error").is_some(),
+            None => false,
+        }
     }
 
     /// `pattern.match(s, pos)`.

@@ -112,7 +112,8 @@ def test_metadata_date_params():
     assert trafilatura_rs.extract(HTML, **kwargs) == _REF["extract"](HTML, **kwargs)
 
 
-@pytest.mark.parametrize("kwargs", [dict(target_language="en"), dict(include_links=True, output_format="csv"),
+@pytest.mark.parametrize("kwargs", [dict(target_language="en", output_format="xml"),
+                                    dict(include_links=True, output_format="csv"),
                                     dict(output_format="markdown", include_tables=False),
                                     dict(include_comments=False, output_format="xml", include_formatting=True),
                                     dict(output_format="xmltei"),

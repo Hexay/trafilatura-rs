@@ -23,6 +23,16 @@ mod metadata_fields;
 mod metadata_meta;
 #[rustfmt::skip]
 mod metadata_xpaths;
+#[cfg(test)]
+mod metadata_xpaths_test {
+    #[test]
+    fn metadata_xpaths_take_the_fast_path() {
+        use super::metadata_xpaths::*;
+        crate::dom::fastpath::assert_planned(
+            [&TITLE_XPATHS[..], &AUTHOR_XPATHS, &AUTHOR_DISCARD_XPATHS, &CATEGORIES_XPATHS, &TAGS_XPATHS].concat(),
+        );
+    }
+}
 pub mod output;
 pub mod settings;
 pub mod utils;

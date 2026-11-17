@@ -7,6 +7,7 @@ pub mod dom;
 pub mod hooks;
 pub mod htmldate;
 pub mod justext;
+pub mod langid;
 pub mod py;
 pub mod readability;
 pub mod trafilatura;

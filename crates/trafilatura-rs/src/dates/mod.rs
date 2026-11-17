@@ -50,8 +50,13 @@ pub fn external_date(s: &str, today: i64) -> Option<Option<crate::py::datetime::
     dateparser::data_consistent().then(|| dateparser::date_obj(s, today)).flatten()
 }
 
-/// (`unicodedata.unidata_version`, `regex.__version__`) the non-ASCII shortcut was generated for: dateparser reads
-/// strings through both, so it holds only where they are installed.
-pub fn unicode_versions() -> (&'static str, &'static str) {
-    dateparser::versions()
+/// `regex` releases other than the stamped one whose four generated tables are byte-identical to the committed ones
+/// and whose dateparser output equals the port's (CONTRIBUTING.md, after a `regex` bump).
+const SAME_TABLES_REGEX: &[&str] = &["2026.11.15"];
+
+/// Whether the native dateparser holds for this `unicodedata.unidata_version` and `regex.__version__`: dateparser
+/// reads strings through both, so only the versions its tables were generated (or checked) with qualify.
+pub fn unicode_supported(unidata: &str, regex: &str) -> bool {
+    let (stamped_unidata, stamped_regex) = dateparser::versions();
+    unidata == stamped_unidata && (regex == stamped_regex || SAME_TABLES_REGEX.contains(&regex))
 }

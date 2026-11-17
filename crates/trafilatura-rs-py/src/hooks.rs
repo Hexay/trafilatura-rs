@@ -1,12 +1,15 @@
 //! The Python-side leaves of metadata extraction (trafilatura_rs::hooks), called back into the running interpreter.
 //! Functions are looked up at call time in the modules that use them, so test-time patches apply.
-use crate::{dates, memo};
+use crate::{dates, langid, memo};
 use pyo3::exceptions::{PyOverflowError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use std::sync::Arc;
 use trafilatura_rs::dom::{Error, Result};
 use trafilatura_rs::hooks::Hooks;
+use trafilatura_rs::justext::Stoplist;
 use trafilatura_rs::py::datetime::DateTime;
+use trafilatura_rs::py::len as py_len;
 
 pub struct PyHooks;
 
@@ -82,9 +85,16 @@ impl Hooks for PyHooks {
             if dates::external_date_is_none(py, s, min_year, max_year) {
                 return Ok(None);
             }
-            let datetime = func(py, "datetime", "datetime")?;
-            let (lo, hi) = (datetime.call1((min_year, 1, 1))?, datetime.call1((max_year, 1, 1))?);
-            if !func(py, "htmldate.extractors", "has_date_cue")?.call1((s, lo, hi))?.is_truthy()? {
+            let cue = func(py, "htmldate.extractors", "has_date_cue")?;
+            let has_cue = match dates::has_date_cue(py, &cue, s, min_year, max_year)? {
+                Some(native) => native,
+                None => {
+                    let datetime = func(py, "datetime", "datetime")?;
+                    let (lo, hi) = (datetime.call1((min_year, 1, 1))?, datetime.call1((max_year, 1, 1))?);
+                    cue.call1((s, lo, hi))?.is_truthy()?
+                }
+            };
+            if !has_cue {
                 return Ok(None);
             }
             let external = func(py, "htmldate.extractors", "_external_date")?;
@@ -140,5 +150,19 @@ impl Hooks for PyHooks {
 
     fn urljoin(&self, base: &str, url: &str) -> Result<String> {
         call(|py| func(py, "urllib.parse", "urljoin")?.call1((base, url))?.extract())
+    }
+
+    fn language_classifier(&self, text: &str, comments: &str) -> Result<Option<String>> {
+        call(|py| {
+            let chosen = if py_len(text) > py_len(comments) { text } else { comments };
+            if let Some(lang) = langid::classify(py, chosen) {
+                return Ok(Some(lang));
+            }
+            func(py, "trafilatura.utils", "language_classifier")?.call1((text, comments))?.extract()
+        })
+    }
+
+    fn justext_stoplist(&self, lang: &str) -> Result<Option<Arc<Stoplist>>> {
+        call(|py| langid::justext_stoplist(py, lang))
     }
 }
